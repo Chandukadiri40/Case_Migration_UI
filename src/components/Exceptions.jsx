@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2 } from 'lucide-react'
+import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import appsData from '../apps.json'
@@ -22,6 +22,8 @@ export default function Exceptions() {
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(false)
     const [sortConfigs, setSortConfigs] = useState({})
+    const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false)
+    const [selectedObjectId, setSelectedObjectId] = useState(null)
 
     useEffect(() => {
         setApps(appsData)
@@ -59,7 +61,7 @@ export default function Exceptions() {
     const searchExceptions = (e) => {
         e.preventDefault()
         if (!selectedApp) {
-            alert("Please select a Target Object Store before searching.")
+            alert("Please select an Application before searching.")
             return
         }
         if (!selectedDocClass) {
@@ -78,7 +80,16 @@ export default function Exceptions() {
         }
 
         axios.post('http://localhost:8080/api/exceptions/check', criteria)
-            .then(res => setData(res.data))
+            .then(res => {
+                setData(res.data);
+                setIsFiltersCollapsed(true);
+                if (res.data.source && res.data.source.length === 1) {
+                    const objIdKey = Object.keys(res.data.source[0]).find(k => k.toUpperCase() === 'OBJECT_ID');
+                    setSelectedObjectId(res.data.source[0][objIdKey]);
+                } else {
+                    setSelectedObjectId(null);
+                }
+            })
             .catch(console.error)
             .finally(() => setLoading(false))
     }
@@ -112,6 +123,41 @@ export default function Exceptions() {
         XLSX.writeFile(workbook, `${title}_export.xlsx`);
     };
 
+    const cleanColumnName = (col) => {
+        return col.replace(/^(U[0-9A-Fa-f]+_)/i, '');
+    };
+
+    const getMismatchedKeysForSelected = () => {
+        if (!data || !selectedObjectId) return [];
+        const findRow = (rows) => {
+            if (!rows) return null;
+            return rows.find(r => {
+                const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
+                return r[key] === selectedObjectId;
+            });
+        };
+        const sourceRow = findRow(data.source);
+        const stagingRow = findRow(data.staging);
+        const targetRow = findRow(data.target);
+        if (!sourceRow) return [];
+        let mismatched = [];
+        const sourceColumns = Object.keys(sourceRow);
+        const keysToCompare = sourceColumns.filter(k => 
+            !['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE'].includes(k.toUpperCase())
+        );
+        keysToCompare.forEach(key => {
+            const srcVal = String(sourceRow[key] || '');
+            const tgtVal = targetRow ? String(targetRow[key] || '') : null;
+            const stgVal = stagingRow ? String(stagingRow[key] || '') : null;
+            if (tgtVal !== srcVal || (stagingRow && stgVal !== srcVal)) {
+                mismatched.push(key);
+            }
+        });
+        return mismatched;
+    };
+    
+    const activeMismatchedKeys = getMismatchedKeysForSelected();
+
     const renderTable = (title, tableData) => {
         if (!tableData || tableData.length === 0) return null;
         
@@ -131,7 +177,7 @@ export default function Exceptions() {
         const columns = Object.keys(tableData[0]);
 
         return (
-            <div style={{ marginBottom: '20px' }}>
+            <div style={{ marginBottom: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '4px', display: 'inline-block', fontSize: '14px' }}>{title} Table ({tableData.length} records)</h3>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -143,14 +189,14 @@ export default function Exceptions() {
                         </button>
                     </div>
                 </div>
-                <div style={{ overflowX: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
+                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px', fontSize: '11px' }}>
                         <thead>
-                            <tr style={{ background: '#f5f5f5' }}>
+                            <tr style={{ background: '#f1f5f9' }}>
                                 {columns.map(col => (
-                                    <th key={col} onClick={() => handleSort(title, col)} style={{ padding: '8px', borderBottom: '2px solid #ddd', borderRight: '1px solid #e0e0e0', borderLeft: '1px solid #e0e0e0', fontWeight: '600', color: '#333', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                                    <th key={col} onClick={() => handleSort(title, col)} style={{ padding: '6px 8px', borderBottom: '2px solid #cbd5e1', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0', fontWeight: '700', color: '#334155', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            {col.toUpperCase()}
+                                            {cleanColumnName(col).toUpperCase()}
                                             {sortConfig.key === col ? (
                                                 sortConfig.direction === 'ascending' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
                                             ) : null}
@@ -160,15 +206,41 @@ export default function Exceptions() {
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedData.map((row, i) => (
-                                <tr key={i} style={{ borderBottom: '1px solid #eee', background: i % 2 === 0 ? 'white' : '#fafafa' }} onMouseOver={(e) => e.currentTarget.style.background = '#e2e8f0'} onMouseOut={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#fafafa'}>
-                                    {columns.map(col => (
-                                        <td key={col} style={{ padding: '6px 8px', color: '#555', borderRight: '1px solid #e0e0e0', borderLeft: '1px solid #e0e0e0', whiteSpace: 'nowrap' }}>
-                                            {row[col] !== null ? String(row[col]) : <em style={{ color: '#aaa' }}>NULL</em>}
+                            {sortedData.map((row, i) => {
+                                const objIdKey = Object.keys(row).find(k => k.toUpperCase() === 'OBJECT_ID');
+                                const rowObjId = row[objIdKey];
+                                const isSelected = selectedObjectId && rowObjId === selectedObjectId;
+                                return (
+                                <tr 
+                                    key={i} 
+                                    onClick={() => rowObjId ? setSelectedObjectId(rowObjId) : null}
+                                    style={{ 
+                                        borderBottom: '1px solid #f1f5f9', 
+                                        background: isSelected ? '#e0e7ff' : (i % 2 === 0 ? 'white' : '#f8fafc'),
+                                        cursor: 'pointer'
+                                    }} 
+                                    onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = '#f1f5f9' }} 
+                                    onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = (i % 2 === 0 ? 'white' : '#f8fafc') }}
+                                >
+                                    {columns.map(col => {
+                                        const isMismatched = isSelected && activeMismatchedKeys.includes(col);
+                                        return (
+                                        <td key={col} style={{ 
+                                            padding: '4px 6px', 
+                                            color: isMismatched ? '#b91c1c' : '#475569', 
+                                            background: isMismatched ? '#fee2e2' : 'transparent',
+                                            fontWeight: isMismatched ? 'bold' : 'normal',
+                                            borderRight: '1px solid #f1f5f9', 
+                                            borderLeft: '1px solid #f1f5f9', 
+                                            whiteSpace: 'nowrap' 
+                                        }}>
+                                            {row[col] !== null ? String(row[col]) : <em style={{ color: '#94a3b8' }}>NULL</em>}
                                         </td>
-                                    ))}
+                                        )
+                                    })}
                                 </tr>
-                            ))}
+                                )
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -176,20 +248,125 @@ export default function Exceptions() {
         );
     }
 
-    return (
-        <div className="exceptions-container" style={{ padding: '14px', background: '#f8f9fa', minHeight: '100%' }}>
+    const renderInsights = () => {
+        if (!data || (!data.source?.length && !data.staging?.length && !data.target?.length)) return null;
+
+        if (data.source?.length > 1 && !selectedObjectId) {
+            return (
+                <div style={{ padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', color: '#1d4ed8', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <ShieldAlert size={16} /> Multiple records found. Please click a row below to view its insights.
+                </div>
+            );
+        }
+
+        if (!selectedObjectId) return null;
+
+        const findRowByObjectId = (rows) => {
+            if (!rows) return null;
+            return rows.find(r => {
+                const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
+                return r[key] === selectedObjectId;
+            });
+        };
+
+        const sourceRow = findRowByObjectId(data.source);
+        const stagingRow = findRowByObjectId(data.staging);
+        const targetRow = findRowByObjectId(data.target);
+
+        if (!sourceRow) return null;
+
+        let matchStatus = "Matches";
+        let mismatchedKeys = [];
+        
+        const sourceColumns = Object.keys(sourceRow);
+        const keysToCompare = sourceColumns.filter(k => 
+            k.toUpperCase() !== 'OBJECT_ID' && 
+            k.toUpperCase() !== 'MIGRATION_STATUS' && 
+            k.toUpperCase() !== 'MIGRATED_DATE' && 
+            k.toUpperCase() !== 'ERROR_MESSAGE' &&
+            k.toUpperCase() !== 'EXTRACTED_STATUS' &&
+            k.toUpperCase() !== 'EXTRACTED_DATE'
+        );
+        
+        keysToCompare.forEach(key => {
+            const srcVal = String(sourceRow[key] || '');
+            const tgtVal = targetRow ? String(targetRow[key] || '') : null;
+            const stgVal = stagingRow ? String(stagingRow[key] || '') : null;
             
-            <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '14px', background: 'white', padding: '12px 16px', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
-                <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '16px', fontWeight: 'bold' }}>
-                    <ShieldAlert size={20} color="#4f46e5" /> Exceptions and evidence
-                </h2>
+            if (tgtVal !== srcVal || (stagingRow && stgVal !== srcVal)) {
+                mismatchedKeys.push(key);
+            }
+        });
+
+        if (!targetRow || !stagingRow) {
+            matchStatus = "Incomplete Lifecycle";
+        } else if (mismatchedKeys.length > 0) {
+            matchStatus = "Mismatch Found";
+        }
+
+        const isSuccess = matchStatus === "Matches";
+
+        const formatDate = (val) => {
+            if (!val || typeof val !== 'string') return val;
+            return val.includes('T') ? val.replace('T', ' ').split('.')[0] : val;
+        };
+
+        return (
+            <div style={{ padding: '4px 8px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '6px', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 'max-content' }}>
+                    {isSuccess ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
+                    <span style={{ fontSize: '11.5px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
+                        {isSuccess ? 'Metadata Matches' : (matchStatus === 'Incomplete Lifecycle' ? 'Incomplete Lifecycle' : 'Metadata Mismatch')}
+                    </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED DATE:</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_DATE')]) || 'N/A' : 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATION STATUS:</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATED DATE:</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATED_DATE')]) || 'N/A' : 'N/A'}</span>
+                    </div>
+                    {mismatchedKeys.length > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: '#fef2f2', padding: '2px 5px', borderRadius: '4px', border: '1px solid #fecaca', whiteSpace: 'nowrap' }}>
+                            <span style={{ color: '#991b1b', fontWeight: '700' }}>MISMATCH:</span>
+                            <span style={{ color: '#dc2626', fontWeight: '600' }}>{mismatchedKeys.map(k => cleanColumnName(k)).join(', ')}</span>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ fontSize: '10px', color: '#475569', fontWeight: '600', background: 'white', padding: '3px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
+                    GUID: {selectedObjectId}
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="exceptions-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            
+            <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '15px', fontWeight: 'bold' }}>
+                        <ShieldAlert size={18} color="#4f46e5" /> Exceptions and evidence
+                    </h2>
+                </div>
                 
                 <form onSubmit={searchExceptions}>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', alignItems: 'end', width: '100%' }}>
                         <div>
-                            <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>App / Object Store</label>
+                            <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Application</label>
                             <select value={selectedApp} onChange={e => setSelectedApp(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}>
-                                <option value="">-- Select Object Store --</option>
+                                <option value="">-- Select Application --</option>
                                 {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
                             </select>
                         </div>
@@ -219,6 +396,7 @@ export default function Exceptions() {
                         </div>
                     </div>
 
+                    {!isFiltersCollapsed && (
                     <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: customMetadata.length > 0 ? '12px' : '0' }}>
                             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e293b' }}>Custom Metadata Filters</span>
@@ -246,16 +424,26 @@ export default function Exceptions() {
                             </div>
                         ))}
                     </div>
+                    )}
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: isFiltersCollapsed ? '12px' : '16px' }}>
                         <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }} onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }} onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}>
                             <Search size={14} /> Search Exceptions
                         </button>
                     </div>
                 </form>
+
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: isFiltersCollapsed ? '0' : '-10px', marginBottom: '-20px', zIndex: 10 }}>
+                    <button 
+                        onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                        style={{ background: 'white', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '2px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                    >
+                        {isFiltersCollapsed ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+                    </button>
+                </div>
             </div>
 
-            <div className="grid-container" style={{ background: 'white', padding: '14px', borderRadius: '16px', minHeight: '400px', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}>
+            <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {loading ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
                         <Database size={40} className="animate-pulse" />
@@ -266,6 +454,7 @@ export default function Exceptions() {
                         {(!data.source?.length && !data.staging?.length && !data.target?.length) && (
                             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>No records found for the given criteria.</div>
                         )}
+                        {renderInsights()}
                         {renderTable('Source', data.source)}
                         {renderTable('Staging', data.staging)}
                         {renderTable('Target', data.target)}
