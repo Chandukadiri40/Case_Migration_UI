@@ -111,3 +111,12 @@ export async function apiGetChecksumReport({ fromDate, toDate } = {}) {
 export async function apiGetAvailableFields() {
   return request(`/config/available-fields?_t=${Date.now()}`)
 }
+
+// -- Deliverables - Migration Report
+// POST /api/deliverables/migration-report
+export async function apiGetDeliverableMigrationReport(payload) {
+  return request('/deliverables/migration-report', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
