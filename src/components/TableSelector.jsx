@@ -52,7 +52,7 @@ export default function TableSelector({ tableId, onSelect }) {
           <line x1="3" y1="9" x2="21" y2="9"/>
           <line x1="9" y1="21" x2="9" y2="9"/>
         </svg>
-        Data Source Table
+        Data Source
       </label>
 
       <button
@@ -71,7 +71,7 @@ export default function TableSelector({ tableId, onSelect }) {
           </span>
         ) : (
           <span className="ts-placeholder">
-            Select a migration table to begin...
+            Select migration data to begin...
           </span>
         )}
         <svg className="ts-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -81,7 +81,7 @@ export default function TableSelector({ tableId, onSelect }) {
 
       {open && (
         <div className="ts-dropdown" role="listbox">
-          <div className="ts-dropdown-header">Select Migration Table</div>
+          <div className="ts-dropdown-header">Select Migration Data</div>
           {TABLES.map(t => (
             <button
               key={t.id}

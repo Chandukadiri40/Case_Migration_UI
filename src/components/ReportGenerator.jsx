@@ -123,7 +123,7 @@ export default function ReportGenerator() {
           <div className="rg-controls">
             {/* Table */}
             <div className="rg-field">
-              <label className="rg-label">Table</label>
+              <label className="rg-label">Data</label>
               <select className="sp-input" value={tableId} onChange={e => setTableId(e.target.value)}>
                 {TABLES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
               </select>

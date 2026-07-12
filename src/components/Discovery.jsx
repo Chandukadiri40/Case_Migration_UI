@@ -124,9 +124,30 @@ export default function Discovery() {
         });
     }, [data, sortConfig]);
 
+    const formatCellValue = (val) => {
+        if (val === null || val === undefined) return '';
+        const strVal = val.toString();
+        // Remove numeric prefix like "1. ", "10. " used for backend sorting
+        if (/^\d+\.\s+/.test(strVal)) {
+            return strVal.replace(/^\d+\.\s+/, '');
+        }
+        return strVal;
+    };
+
+    const getFormattedDataForExport = () => {
+        if (!sortedData) return [];
+        return sortedData.map(row => {
+            const newRow = {};
+            for (const key in row) {
+                newRow[key] = formatCellValue(row[key]);
+            }
+            return newRow;
+        });
+    };
+
     const exportToCSV = () => {
         if (!sortedData || sortedData.length === 0) return;
-        const csv = Papa.unparse(sortedData);
+        const csv = Papa.unparse(getFormattedDataForExport());
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -138,7 +159,7 @@ export default function Discovery() {
 
     const exportToExcel = () => {
         if (!sortedData || sortedData.length === 0) return;
-        const worksheet = XLSX.utils.json_to_sheet(sortedData);
+        const worksheet = XLSX.utils.json_to_sheet(getFormattedDataForExport());
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
         XLSX.writeFile(workbook, "discovery_export.xlsx");
@@ -296,17 +317,17 @@ export default function Discovery() {
                 </div>
 
                 {/* Table Area */}
-                <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
+                <div className="table-wrap" style={{ flex: 1, overflow: 'auto', padding: '0', border: 'none', borderRadius: 0 }}>
                     {loading ? <div style={{ padding: '14px', color: '#4f46e5', fontWeight: '500' }}>Running query...</div> : (
-                        <table className="discovery-grid" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <table>
                             <thead>
-                                <tr style={{ borderBottom: '2px solid #d0d7de', background: '#f6f8fa' }}>
+                                <tr>
                                     {data.length > 0 && Object.keys(data[0]).map(key => (
-                                        <th key={key} onClick={() => handleSort(key)} style={{ padding: '8px', color: '#24292f', border: '1px solid #d0d7de', cursor: 'pointer', userSelect: 'none' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <th key={key} onClick={() => handleSort(key)}>
+                                            <div className="th-inner">
                                                 {key}
                                                 {sortConfig.key === key ? (
-                                                    sortConfig.direction === 'ascending' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                                                    sortConfig.direction === 'ascending' ? <ArrowUp size={12} className="sort-icon" /> : <ArrowDown size={12} className="sort-icon" />
                                                 ) : null}
                                             </div>
                                         </th>
@@ -315,13 +336,13 @@ export default function Discovery() {
                             </thead>
                             <tbody>
                                 {sortedData.length > 0 ? sortedData.map((row, i) => (
-                                    <tr key={i} style={{ borderBottom: '1px solid #d0d7de', background: i % 2 === 0 ? 'white' : '#fafafa' }} onMouseOver={(e) => e.currentTarget.style.background = '#e2e8f0'} onMouseOut={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#fafafa'}>
+                                    <tr key={i}>
                                         {Object.values(row).map((val, j) => (
-                                            <td key={j} style={{ padding: '8px', color: '#24292f', border: '1px solid #d0d7de' }}>{val?.toString()}</td>
+                                            <td key={j}>{formatCellValue(val)}</td>
                                         ))}
                                     </tr>
                                 )) : (
-                                    <tr><td colSpan="100%" style={{ padding: '14px', color: '#6e7781', textAlign: 'center', border: '1px solid #d0d7de' }}>No data available. Click "Run Report" to load.</td></tr>
+                                    <tr><td colSpan="100%" style={{ textAlign: 'center', padding: '20px', color: '#666' }}>No results to display</td></tr>
                                 )}
                             </tbody>
                         </table>

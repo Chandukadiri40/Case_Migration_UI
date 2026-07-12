@@ -14,9 +14,9 @@
  */
 
 export const TABLES = [
-  { id: 'source',  label: 'Source Table',  description: 'Original document metadata from FileNet' },
-  { id: 'staging', label: 'Staging Table', description: 'Migration tracking and status data' },
-  { id: 'target',  label: 'Target Table',  description: 'Final transformed and migrated data' },
+  { id: 'source',  label: 'Source Data',  description: 'Original document metadata from FileNet' },
+  { id: 'staging', label: 'Staging Data', description: 'Migration tracking and status data' },
+  { id: 'target',  label: 'Target Data',  description: 'Final transformed and migrated data' },
 ]
 
 /**
