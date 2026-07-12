@@ -22,8 +22,8 @@ export default function Exceptions() {
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(false)
     const [sortConfigs, setSortConfigs] = useState({})
-    const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false)
     const [selectedObjectId, setSelectedObjectId] = useState(null)
+    const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false)
 
     useEffect(() => {
         setApps(appsData)
@@ -83,9 +83,14 @@ export default function Exceptions() {
             .then(res => {
                 setData(res.data);
                 setIsFiltersCollapsed(true);
-                if (res.data.source && res.data.source.length === 1) {
-                    const objIdKey = Object.keys(res.data.source[0]).find(k => k.toUpperCase() === 'OBJECT_ID');
-                    setSelectedObjectId(res.data.source[0][objIdKey]);
+                let singleRec = null;
+                if (res.data.source && res.data.source.length === 1) singleRec = res.data.source[0];
+                else if (res.data.staging && res.data.staging.length === 1) singleRec = res.data.staging[0];
+                else if (res.data.target && res.data.target.length === 1) singleRec = res.data.target[0];
+
+                if (singleRec) {
+                    const objIdKey = Object.keys(singleRec).find(k => k.toUpperCase() === 'OBJECT_ID');
+                    setSelectedObjectId(singleRec[objIdKey]);
                 } else {
                     setSelectedObjectId(null);
                 }
@@ -179,26 +184,26 @@ export default function Exceptions() {
         return (
             <div style={{ marginBottom: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '4px', display: 'inline-block', fontSize: '14px' }}>{title} Table ({tableData.length} records)</h3>
+                    <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '2px', display: 'inline-block', fontSize: '12px' }}>{title} Data ({tableData.length} records)</h3>
                     <div style={{ display: 'flex', gap: '8px' }}>
                         <button onClick={() => exportTableToCSV(title, sortedData)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
                             <Download size={12} /> CSV
                         </button>
-                        <button onClick={() => exportTableToExcel(title, sortedData)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
+                        <button onClick={() => exportTableToExcel(title, sortedData)} className="export-excel-btn">
                             <Download size={12} /> Excel
                         </button>
                     </div>
                 </div>
-                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px', fontSize: '11px' }}>
+                <div className="table-wrap">
+                    <table>
                         <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
+                            <tr>
                                 {columns.map(col => (
-                                    <th key={col} onClick={() => handleSort(title, col)} style={{ padding: '6px 8px', borderBottom: '2px solid #cbd5e1', borderRight: '1px solid #e2e8f0', borderLeft: '1px solid #e2e8f0', fontWeight: '700', color: '#334155', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            {cleanColumnName(col).toUpperCase()}
+                                    <th key={col} onClick={() => handleSort(title, col)}>
+                                        <div className="th-inner">
+                                            {cleanColumnName(col)}
                                             {sortConfig.key === col ? (
-                                                sortConfig.direction === 'ascending' ? <ArrowUp size={12} /> : <ArrowDown size={12} />
+                                                sortConfig.direction === 'ascending' ? <ArrowUp size={12} className="sort-icon" /> : <ArrowDown size={12} className="sort-icon" />
                                             ) : null}
                                         </div>
                                     </th>
@@ -215,26 +220,25 @@ export default function Exceptions() {
                                     key={i} 
                                     onClick={() => rowObjId ? setSelectedObjectId(rowObjId) : null}
                                     style={{ 
-                                        borderBottom: '1px solid #f1f5f9', 
-                                        background: isSelected ? '#e0e7ff' : (i % 2 === 0 ? 'white' : '#f8fafc'),
+                                        background: isSelected ? '#e0e7ff' : undefined,
                                         cursor: 'pointer'
                                     }} 
-                                    onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = '#f1f5f9' }} 
-                                    onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = (i % 2 === 0 ? 'white' : '#f8fafc') }}
                                 >
                                     {columns.map(col => {
                                         const isMismatched = isSelected && activeMismatchedKeys.includes(col);
                                         return (
                                         <td key={col} style={{ 
-                                            padding: '4px 6px', 
-                                            color: isMismatched ? '#b91c1c' : '#475569', 
-                                            background: isMismatched ? '#fee2e2' : 'transparent',
-                                            fontWeight: isMismatched ? 'bold' : 'normal',
+                                            color: isMismatched ? '#b91c1c' : undefined, 
+                                            background: isMismatched ? '#fee2e2' : undefined,
                                             borderRight: '1px solid #f1f5f9', 
                                             borderLeft: '1px solid #f1f5f9', 
-                                            whiteSpace: 'nowrap' 
+                                            whiteSpace: 'nowrap',
+                                            fontWeight: isMismatched ? '700' : 'normal',
+                                            maxWidth: 250,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis'
                                         }}>
-                                            {row[col] !== null ? String(row[col]) : <em style={{ color: '#94a3b8' }}>NULL</em>}
+                                            {row[col] !== null && row[col] !== undefined ? String(row[col]) : <em className="cell-empty">NULL</em>}
                                         </td>
                                         )
                                     })}
@@ -406,18 +410,18 @@ export default function Exceptions() {
                         </div>
                         
                         {customMetadata.map((cm, idx) => (
-                            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 2fr auto', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                                <select value={cm.field} onChange={(e) => updateCustomMetadata(idx, 'field', e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
+                            <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                <select value={cm.field} onChange={(e) => updateCustomMetadata(idx, 'field', e.target.value)} style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
                                     <option value="">-- Select Field --</option>
                                     {metadataFields.map(f => <option key={f} value={f}>{f}</option>)}
                                 </select>
-                                <select value={cm.operator} onChange={(e) => updateCustomMetadata(idx, 'operator', e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
+                                <select value={cm.operator} onChange={(e) => updateCustomMetadata(idx, 'operator', e.target.value)} style={{ padding: '5px 8px', width: '120px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
                                     <option value="EQUALS">Equals</option>
                                     <option value="CONTAINS">Contains</option>
                                     <option value="STARTS_WITH">Starts With</option>
                                     <option value="ENDS_WITH">Ends With</option>
                                 </select>
-                                <input type="text" value={cm.value} onChange={(e) => updateCustomMetadata(idx, 'value', e.target.value)} placeholder="Value..." style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box' }} />
+                                <input type="text" value={cm.value} onChange={(e) => updateCustomMetadata(idx, 'value', e.target.value)} placeholder="Value..." style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box' }} />
                                 <button type="button" onClick={() => removeCustomMetadata(idx)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Trash2 size={14} />
                                 </button>
@@ -425,7 +429,7 @@ export default function Exceptions() {
                         ))}
                     </div>
                     )}
-
+                    
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: isFiltersCollapsed ? '12px' : '16px' }}>
                         <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }} onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }} onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}>
                             <Search size={14} /> Search Exceptions
