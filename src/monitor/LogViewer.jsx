@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { getLogDates, getLogs } from './api'
 import { RefreshCw, Download, Search, AlertCircle } from 'lucide-react'
+import LogConfig from './LogConfig'
 
-export default function LogViewer({ config }) {
+export default function LogViewer({ config, onConfigSaved }) {
   const [dates, setDates] = useState([])
   const [selectedDate, setSelectedDate] = useState('')
   const [logs, setLogs] = useState([])
@@ -11,6 +12,15 @@ export default function LogViewer({ config }) {
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [levelFilter, setLevelFilter] = useState('ALL')
+
+  const formatLogDate = (filename) => {
+    if (!filename) return '';
+    const appErrMatch = filename.match(/AppErr(\d{2})(\d{2})(\d{4})/i);
+    if (appErrMatch) return `${appErrMatch[1]}-${appErrMatch[2]}-${appErrMatch[3]}`;
+    const stdMatch = filename.match(/(\d{4}-\d{2}-\d{2})/);
+    if (stdMatch) return stdMatch[1];
+    return filename;
+  }
 
   const fetchDates = async () => {
     setLoadingDates(true)
@@ -65,57 +75,65 @@ export default function LogViewer({ config }) {
   const levels = ['ALL', 'INFO', 'WARN', 'ERROR', 'DEBUG', 'TRACE']
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-      {/* Controls */}
-      <div className="control-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-          <div className="rg-field">
-            <label className="rg-label">Select Date</label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, minHeight: 0 }}>
+      <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'white', padding: '8px 16px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', marginBottom: '0' }}>
+        <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>Logs</h1>
+        <div style={{ display: 'grid', gridTemplateColumns: '2.1fr 0.7fr 0.6fr 2.1fr auto', gap: '12px', alignItems: 'end' }}>
+          
+          <LogConfig config={config} onConfigSaved={onConfigSaved} />
+
+          <div>
+            <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Select Date</label>
             <select 
-              className="auth-input" 
-              style={{ padding: '8px 12px', minWidth: '150px' }}
+              style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', height: '28px' }}
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               disabled={loadingDates || dates.length === 0}
+              onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
             >
-              {dates.length === 0 && <option value="">No dates available</option>}
-              {dates.map(d => <option key={d} value={d}>{d}</option>)}
+              {dates.length === 0 && <option value="">-- No dates --</option>}
+              {dates.map(d => <option key={d} value={d}>{formatLogDate(d)}</option>)}
             </select>
           </div>
           
-          <div className="rg-field">
-            <label className="rg-label">Log Level</label>
+          <div>
+            <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Log Level</label>
             <select 
-              className="auth-input" 
-              style={{ padding: '8px 12px' }}
+              style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', height: '28px' }}
               value={levelFilter}
               onChange={(e) => setLevelFilter(e.target.value)}
+              onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
             >
               {levels.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
 
-          <div className="rg-field" style={{ minWidth: '250px' }}>
-            <label className="rg-label">Search</label>
-            <div className="auth-input-wrap">
-              <Search className="auth-input-icon" size={16} style={{ left: '10px' }} />
+          <div>
+            <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Search</label>
+            <div style={{ position: 'relative' }}>
+              <Search size={12} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input 
                 type="text" 
-                className="auth-input" 
-                style={{ padding: '8px 12px 8px 32px' }}
-                placeholder="Search message, logger..."
+                style={{ padding: '5px 8px 5px 24px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', height: '28px', boxSizing: 'border-box' }}
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}
               />
             </div>
           </div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn" style={{ background: 'white', border: '1px solid var(--gray-300)' }} onClick={() => fetchLogs(selectedDate)} disabled={!selectedDate || loading}>
-            <RefreshCw size={16} className={loading ? 'spin' : ''} />
-            Refresh
-          </button>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <button
+              onClick={() => fetchLogs(selectedDate)}
+              disabled={loading || !selectedDate}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '5px 14px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', height: '28px', fontSize: '9px', transition: 'all 0.2s', width: '100%', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: (loading || !selectedDate) ? 0.6 : 1 }}
+              onMouseOver={(e) => { if(!loading && selectedDate) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }}
+              onMouseOut={(e) => { if(!loading && selectedDate) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
+            >
+              <RefreshCw size={12} className={loading ? 'spin' : ''} /> {loading ? 'Loading...' : 'Refresh Logs'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -126,16 +144,16 @@ export default function LogViewer({ config }) {
         </div>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: '400px' }}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, marginBottom: 0 }}>
         {loading ? (
           <div className="loading-card" style={{ height: '100%', minHeight: '200px' }}>
             <span className="spinner" />
             <span>Parsing logs...</span>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto', flex: 1 }}>
+          <div style={{ overflow: 'auto', flex: 1, minHeight: 0 }}>
             <table className="results-table" style={{ width: '100%' }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
                 <tr>
                   <th style={{ width: '160px' }}>Timestamp</th>
                   <th style={{ width: '80px' }}>Level</th>
@@ -173,7 +191,7 @@ export default function LogViewer({ config }) {
             </table>
           </div>
         )}
-        <div style={{ padding: '12px 16px', background: 'var(--gray-50)', borderTop: '1px solid var(--gray-200)', fontSize: '12px', color: 'var(--gray-600)', display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ padding: '6px 16px', background: 'var(--gray-50)', borderTop: '1px solid var(--gray-200)', fontSize: '11px', color: 'var(--gray-600)', display: 'flex', justifyContent: 'space-between' }}>
           <span>Showing {filteredLogs.length} entries</span>
         </div>
       </div>

@@ -24,7 +24,6 @@ export default function Discovery() {
     const categories = [
         { id: 'doc_classes', label: 'Document Classes', icon: <FolderOpen size={18} /> },
         { id: 'custom_objects', label: 'Custom Objects', icon: <Layers size={18} /> },
-        { id: 'case_classes', label: 'Case Classes', icon: <Database size={18} /> },
         { id: 'doc_count', label: 'Document Counts', icon: <FileText size={18} /> },
         { id: 'annotations', label: 'Annotations', icon: <CheckCircle size={18} /> },
         { id: 'content_size', label: 'Content Sizes', icon: <HardDrive size={18} /> },
@@ -40,9 +39,6 @@ export default function Discovery() {
         ],
         'custom_objects': [
             { id: 'trend', label: 'Count & Trend Analysis', endpoint: 'custom-object-trend' }
-        ],
-        'case_classes': [
-            { id: 'breakdown', label: 'Year × Month Breakdown', endpoint: 'case-class-breakdown' }
         ],
         'doc_count': [
             { id: 'by_class', label: 'Overall Class Summary', endpoint: 'doc-count' },
@@ -69,8 +65,7 @@ export default function Discovery() {
             { id: 'distribution', label: 'Version Distribution', endpoint: 'version-distribution' }
         ],
         'properties': [
-            { id: 'definitions', label: 'Property Definitions', endpoint: 'property-defs' },
-            { id: 'summary', label: 'Property Count Summary', endpoint: 'property-summary' }
+            { id: 'definitions', label: 'Property Definitions', endpoint: 'property-defs' }
         ]
     };
 

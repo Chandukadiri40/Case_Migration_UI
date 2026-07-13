@@ -24,6 +24,8 @@ export default function Exceptions() {
     const [sortConfigs, setSortConfigs] = useState({})
     const [selectedObjectId, setSelectedObjectId] = useState(null)
     const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false)
+    const [showExportModal, setShowExportModal] = useState(false)
+    const [exportOptions, setExportOptions] = useState({ format: 'excel', source: true, staging: true, target: true })
 
     useEffect(() => {
         setApps(appsData)
@@ -110,22 +112,51 @@ export default function Exceptions() {
         });
     };
 
-    const exportTableToCSV = (title, sortedData) => {
-        const csv = Papa.unparse(sortedData);
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', `${title}_export.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const exportTableToExcel = (title, sortedData) => {
-        const worksheet = XLSX.utils.json_to_sheet(sortedData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-        XLSX.writeFile(workbook, `${title}_export.xlsx`);
+    const handleBulkExport = () => {
+        const { format, source, staging, target } = exportOptions;
+        
+        if (format === 'excel') {
+            const workbook = XLSX.utils.book_new();
+            if (source && data?.source?.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.source), "Source - Data");
+            }
+            if (staging && data?.staging?.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.staging), "Staging - Data");
+            }
+            if (target && data?.target?.length > 0) {
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.target), "Target - Data");
+            }
+            
+            if (workbook.SheetNames.length === 0) {
+                alert("No data available to export for selected options.");
+                return;
+            }
+            XLSX.writeFile(workbook, "Data_Comparison_Export.xlsx");
+        } else if (format === 'csv') {
+            let combinedCSV = "";
+            const appendToCSV = (title, tableData) => {
+                if (!tableData || tableData.length === 0) return;
+                combinedCSV += `--- ${title} Data ---\n`;
+                combinedCSV += Papa.unparse(tableData) + "\n\n";
+            };
+            if (source) appendToCSV("Source", data?.source);
+            if (staging) appendToCSV("Staging", data?.staging);
+            if (target) appendToCSV("Target", data?.target);
+            
+            if (!combinedCSV) {
+                alert("No data available to export for selected options.");
+                return;
+            }
+            
+            const blob = new Blob([combinedCSV], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `Data_Comparison_Export.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        setShowExportModal(false);
     };
 
     const cleanColumnName = (col) => {
@@ -185,14 +216,7 @@ export default function Exceptions() {
             <div style={{ marginBottom: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '2px', display: 'inline-block', fontSize: '12px' }}>{title} Data ({tableData.length} records)</h3>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => exportTableToCSV(title, sortedData)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
-                            <Download size={12} /> CSV
-                        </button>
-                        <button onClick={() => exportTableToExcel(title, sortedData)} className="export-excel-btn">
-                            <Download size={12} /> Excel
-                        </button>
-                    </div>
+                    <div></div>
                 </div>
                 <div className="table-wrap">
                     <table>
@@ -257,7 +281,7 @@ export default function Exceptions() {
 
         if (data.source?.length > 1 && !selectedObjectId) {
             return (
-                <div style={{ padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', color: '#1d4ed8', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                <div style={{ padding: '8px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', color: '#1d4ed8', fontSize: '12px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <ShieldAlert size={16} /> Multiple records found. Please click a row below to view its insights.
                 </div>
             );
@@ -316,46 +340,44 @@ export default function Exceptions() {
         };
 
         return (
-            <div style={{ padding: '4px 8px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '6px', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 'max-content' }}>
-                    {isSuccess ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
-                    <span style={{ fontSize: '11.5px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
+            <div style={{ padding: '8px 12px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'white', borderRadius: '6px', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, minWidth: 'max-content', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    {isSuccess ? <CheckCircle size={16} color="#16a34a" /> : <XCircle size={16} color="#dc2626" />}
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
                         {isSuccess ? 'Metadata Matches' : (matchStatus === 'Incomplete Lifecycle' ? 'Incomplete Lifecycle' : 'Metadata Mismatch')}
                     </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, flexWrap: 'nowrap', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
-                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
+
+                <div style={{ display: 'flex', gap: '16px', flex: 1, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Object ID</span>
+                        <span style={{ fontSize: '11px', color: '#0f172a', fontWeight: '600', fontFamily: 'monospace' }}>{selectedObjectId}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+
+                    <div style={{ width: '1px', height: '24px', background: '#cbd5e1' }}></div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content max-content', columnGap: '8px', rowGap: '6px', fontSize: '10px' }}>
+                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '12px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
+                        
                         <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED DATE:</span>
                         <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_DATE')]) || 'N/A' : 'N/A'}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        
                         <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATION STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: 'white', padding: '2px 5px', borderRadius: '4px', border: '1px solid #e2e8f0', whiteSpace: 'nowrap' }}>
+                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '12px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
+                        
                         <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATED DATE:</span>
                         <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATED_DATE')]) || 'N/A' : 'N/A'}</span>
                     </div>
-                    {mismatchedKeys.length > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '9.5px', background: '#fef2f2', padding: '2px 5px', borderRadius: '4px', border: '1px solid #fecaca', whiteSpace: 'nowrap' }}>
-                            <span style={{ color: '#991b1b', fontWeight: '700' }}>MISMATCH:</span>
-                            <span style={{ color: '#dc2626', fontWeight: '600' }}>{mismatchedKeys.map(k => cleanColumnName(k)).join(', ')}</span>
-                        </div>
-                    )}
                 </div>
 
-                <div style={{ fontSize: '10px', color: '#475569', fontWeight: '600', background: 'white', padding: '3px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', whiteSpace: 'nowrap' }}>
-                    GUID: {selectedObjectId}
-                </div>
+
             </div>
         );
     };
 
     return (
+        <>
         <div className="exceptions-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             
             <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
@@ -366,10 +388,10 @@ export default function Exceptions() {
                 </div>
                 
                 <form onSubmit={searchExceptions}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', alignItems: 'end', width: '100%' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '0.65fr 0.85fr 1.15fr 0.75fr 0.75fr max-content', gap: '12px', alignItems: 'end', width: '100%' }}>
                         <div>
                             <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Application</label>
-                            <select value={selectedApp} onChange={e => setSelectedApp(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}>
+                            <select value={selectedApp} onChange={e => setSelectedApp(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}>
                                 <option value="">-- Select Application --</option>
                                 {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
                             </select>
@@ -377,7 +399,7 @@ export default function Exceptions() {
                         
                         <div>
                             <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Document Class</label>
-                            <select value={selectedDocClass} onChange={e => setSelectedDocClass(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}>
+                            <select value={selectedDocClass} onChange={e => setSelectedDocClass(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'}>
                                 <option value="">-- Select Document Class --</option>
                                 <option value="All">All Classes</option>
                                 {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
@@ -398,53 +420,57 @@ export default function Exceptions() {
                             <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>End Date</label>
                             <input type="date" value={createdTo} onChange={e => setCreatedTo(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }} onFocus={(e) => e.target.style.borderColor = '#4f46e5'} onBlur={(e) => e.target.style.borderColor = '#cbd5e1'} />
                         </div>
+
+                        <div>
+                            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '5.5px 16px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }} onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }} onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}>
+                                <Search size={14} /> Search
+                            </button>
+                        </div>
                     </div>
 
-                    {!isFiltersCollapsed && (
                     <div style={{ marginTop: '16px', borderTop: '1px solid #e2e8f0', paddingTop: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: customMetadata.length > 0 ? '12px' : '0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '8px', marginBottom: (!isFiltersCollapsed && customMetadata.length > 0) ? '12px' : '0' }}>
                             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#1e293b' }}>Custom Metadata Filters</span>
-                            <button type="button" onClick={addCustomField} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '10px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', transition: 'background 0.2s' }} onMouseOver={(e) => e.target.style.background='#c7d2fe'} onMouseOut={(e) => e.target.style.background='#e0e7ff'}>
+                            <button type="button" onClick={() => { addCustomField(); setIsFiltersCollapsed(false); }} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '10px', background: '#e0e7ff', color: '#4f46e5', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', transition: 'background 0.2s' }} onMouseOver={(e) => e.target.style.background='#c7d2fe'} onMouseOut={(e) => e.target.style.background='#e0e7ff'}>
                                 <Plus size={12} /> Add Field
                             </button>
                         </div>
                         
-                        {customMetadata.map((cm, idx) => (
-                            <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                                <select value={cm.field} onChange={(e) => updateCustomMetadata(idx, 'field', e.target.value)} style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
-                                    <option value="">-- Select Field --</option>
-                                    {metadataFields.map(f => <option key={f} value={f}>{f}</option>)}
-                                </select>
-                                <select value={cm.operator} onChange={(e) => updateCustomMetadata(idx, 'operator', e.target.value)} style={{ padding: '5px 8px', width: '120px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
-                                    <option value="EQUALS">Equals</option>
-                                    <option value="CONTAINS">Contains</option>
-                                    <option value="STARTS_WITH">Starts With</option>
-                                    <option value="ENDS_WITH">Ends With</option>
-                                </select>
-                                <input type="text" value={cm.value} onChange={(e) => updateCustomMetadata(idx, 'value', e.target.value)} placeholder="Value..." style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box' }} />
-                                <button type="button" onClick={() => removeCustomMetadata(idx)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Trash2 size={14} />
-                                </button>
+                        {!isFiltersCollapsed && customMetadata.length > 0 && (
+                            <div>
+                                {customMetadata.map((cm, idx) => (
+                                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                        <select value={cm.field} onChange={(e) => updateCustomMetadata(idx, 'field', e.target.value)} style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
+                                            <option value="">-- Select Field --</option>
+                                            {metadataFields.map(f => <option key={f} value={f}>{f}</option>)}
+                                        </select>
+                                        <select value={cm.operator} onChange={(e) => updateCustomMetadata(idx, 'operator', e.target.value)} style={{ padding: '5px 8px', width: '120px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
+                                            <option value="EQUALS">Equals</option>
+                                            <option value="CONTAINS">Contains</option>
+                                            <option value="STARTS_WITH">Starts With</option>
+                                            <option value="ENDS_WITH">Ends With</option>
+                                        </select>
+                                        <input type="text" value={cm.value} onChange={(e) => updateCustomMetadata(idx, 'value', e.target.value)} placeholder="Value..." style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box' }} />
+                                        <button type="button" onClick={() => removeCustomMetadata(idx)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-                    )}
-                    
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: isFiltersCollapsed ? '12px' : '16px' }}>
-                        <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }} onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }} onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}>
-                            <Search size={14} /> Search Exceptions
-                        </button>
+                        )}
                     </div>
                 </form>
 
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: isFiltersCollapsed ? '0' : '-10px', marginBottom: '-20px', zIndex: 10 }}>
-                    <button 
-                        onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
-                        style={{ background: 'white', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '2px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-                    >
-                        {isFiltersCollapsed ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-                    </button>
-                </div>
+                {customMetadata.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', marginTop: isFiltersCollapsed ? '0' : '-10px', marginBottom: '-20px', zIndex: 10 }}>
+                        <button 
+                            onClick={() => setIsFiltersCollapsed(!isFiltersCollapsed)}
+                            style={{ background: 'white', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '2px 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
+                        >
+                            {isFiltersCollapsed ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -458,7 +484,16 @@ export default function Exceptions() {
                         {(!data.source?.length && !data.staging?.length && !data.target?.length) && (
                             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>No records found for the given criteria.</div>
                         )}
-                        {renderInsights()}
+                        {(data.source?.length > 0 || data.staging?.length > 0 || data.target?.length > 0) && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px', marginTop: '2px' }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    {renderInsights()}
+                                </div>
+                                <button onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', boxShadow: '0 1px 4px rgba(16, 185, 129, 0.2)', flexShrink: 0 }}>
+                                    <Download size={12} /> Export Results
+                                </button>
+                            </div>
+                        )}
                         {renderTable('Source', data.source)}
                         {renderTable('Staging', data.staging)}
                         {renderTable('Target', data.target)}
@@ -470,5 +505,40 @@ export default function Exceptions() {
                 )}
             </div>
         </div>
+
+        {showExportModal && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                <div style={{ background: 'white', padding: '14px', borderRadius: '10px', width: '260px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#1e293b' }}>Export Options</h3>
+                    
+                    <div style={{ marginBottom: '12px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Format</label>
+                        <select value={exportOptions.format} onChange={e => setExportOptions({...exportOptions, format: e.target.value})} style={{ padding: '4px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '12px' }}>
+                            <option value="excel">Excel</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </div>
+
+                    <div style={{ marginBottom: '14px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Include Tables</label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '12px' }}>
+                            <input type="checkbox" checked={exportOptions.source} onChange={e => setExportOptions({...exportOptions, source: e.target.checked})} /> Source Data
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '12px' }}>
+                            <input type="checkbox" checked={exportOptions.staging} onChange={e => setExportOptions({...exportOptions, staging: e.target.checked})} /> Staging Data
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                            <input type="checkbox" checked={exportOptions.target} onChange={e => setExportOptions({...exportOptions, target: e.target.checked})} /> Target Data
+                        </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button onClick={() => setShowExportModal(false)} style={{ padding: '4px 10px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}>Cancel</button>
+                        <button onClick={handleBulkExport} style={{ padding: '4px 14px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}><Download size={12} /> Export</button>
+                    </div>
+                </div>
+            </div>
+        )}
+    </>
     )
 }
