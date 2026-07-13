@@ -34,8 +34,6 @@ async function request(path, options = {}) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-// POST /api/auth/login  { username, password }
-// Response: { status, message, username, name, role, token }
 export async function apiLogin(username, password) {
   return request('/auth/login', {
     method: 'POST',
@@ -44,30 +42,19 @@ export async function apiLogin(username, password) {
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
-// GET /api/config/tables  → [{ key, label }, ...]
 export async function apiGetTables() {
   return request('/config/tables')
 }
 
-// GET /api/config/custom-columns?table=source|staging|target  → string[]
 export async function apiGetCustomColumns(tableKey) {
   return request(`/config/custom-columns?table=${tableKey}&_t=${Date.now()}`)
 }
 
-// GET /api/config/system-columns  → string[]
 export async function apiGetSystemColumns() {
   return request('/config/system-columns')
 }
 
 // ── Search (filter panel) ─────────────────────────────────────────────────────
-// POST /api/search
-// Body: SearchRequest {
-//   table, status, fromDate, toDate,
-//   docIds: string[],
-//   systemFilters: { [key]: value },
-//   customFilters: { [col]: value }
-// }
-// Response: List<Map<String, Object>>
 export async function apiSearch(payload) {
   return request('/search', {
     method: 'POST',
@@ -76,8 +63,6 @@ export async function apiSearch(payload) {
 }
 
 // ── Query executor ────────────────────────────────────────────────────────────
-// POST /api/search/execute-query  { sql: string }
-// Response: List<Map<String, Object>>
 export async function apiExecuteQuery(sql) {
   return request('/search/execute-query', {
     method: 'POST',
@@ -90,33 +75,25 @@ export async function apiGetColumnConfig() {
   return request('/config/columns')
 }
 
-// GET /api/checksum/report
-// Body: { fromDate?: string, toDate?: string }
-// Response: {
-//   summary: { total, completed, pending, migratedInStaging },
-//   records: [{
-//     documentId, fileName, checksumBefore, checksumAfter,
-//     checksumStatus, migrationStatus, migratedDate
-//   }]
-// }
-export async function apiGetChecksumReport({ fromDate, toDate } = {}) {
+export async function apiGetChecksumReport(payload) {
   return request('/checksum/report', {
     method: 'POST',
-    body: JSON.stringify({ fromDate: fromDate || null, toDate: toDate || null }),
+    body: JSON.stringify(payload),
   })
 }
 
-// ── Available dynamic metadata fields ───────────────────────────────────────
-// GET /api/config/available-fields  → [{ columnName, symbolicName, displayName }]
 export async function apiGetAvailableFields() {
   return request(`/config/available-fields?_t=${Date.now()}`)
 }
 
 // -- Deliverables - Migration Report
-// POST /api/deliverables/migration-report
 export async function apiGetDeliverableMigrationReport(payload) {
   return request('/deliverables/migration-report', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export async function apiGetReconciliationProperties() {
+  return request('/config/reconciliation-properties')
 }
