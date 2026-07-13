@@ -72,7 +72,7 @@ export default function LogViewer({ config, onConfigSaved }) {
     return matchLevel && matchSearch
   })
 
-  const levels = ['ALL', 'INFO', 'WARN', 'ERROR', 'DEBUG', 'TRACE']
+  const levels = ['ALL', 'DEBUG', 'INFO', 'WARN', 'ERROR']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, minHeight: 0 }}>

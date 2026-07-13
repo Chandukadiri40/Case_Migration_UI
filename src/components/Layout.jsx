@@ -19,14 +19,6 @@ export default function Layout() {
         </div>
 
         <nav className="sidebar-nav">
-          <NavLink to="/reports" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Reports">
-            <FileText size={18} />
-            {!isCollapsed && <span>Reports</span>}
-          </NavLink>
-          <NavLink to="/monitor" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Logs">
-            <Monitor size={18} />
-            {!isCollapsed && <span>Logs</span>}
-          </NavLink>
           <NavLink to="/discovery" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="System study">
             <Search size={18} />
             {!isCollapsed && <span>System study</span>}
@@ -38,6 +30,14 @@ export default function Layout() {
           <NavLink to="/deliverables" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Deliverables">
             <Package size={18} />
             {!isCollapsed && <span>Deliverables</span>}
+          </NavLink>
+          <NavLink to="/reports" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Reports">
+            <FileText size={18} />
+            {!isCollapsed && <span>Reports</span>}
+          </NavLink>
+          <NavLink to="/monitor" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Logs">
+            <Monitor size={18} />
+            {!isCollapsed && <span>Logs</span>}
           </NavLink>
         </nav>
 
