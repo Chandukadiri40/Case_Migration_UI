@@ -15,7 +15,7 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user } = useAuth()
-  return user ? <Navigate to="/reports" replace /> : children
+  return user ? <Navigate to="/discovery" replace /> : children
 }
 
 export default function App() {
@@ -26,13 +26,13 @@ export default function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="reports" replace />} />
+            <Route index element={<Navigate to="discovery" replace />} />
             <Route path="reports" element={<Dashboard />} />
             <Route path="monitor" element={<Monitor />} />
             <Route path="discovery" element={<Discovery />} />
             <Route path="exceptions" element={<Exceptions />} />
             <Route path="deliverables" element={<Deliverables />} />
-            <Route path="*" element={<Navigate to="reports" replace />} />
+            <Route path="*" element={<Navigate to="discovery" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>
