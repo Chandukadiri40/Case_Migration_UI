@@ -1,74 +1,141 @@
-﻿import * as XLSX from 'xlsx'
+import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
-const HEADERS = [
+const AGGREGATED_HEADERS = [
   'S.No', 'Object Stores', 'Documentation Class',
   'Total No Documents', 'Total Files Size (in GB)', 'No. Extracted(FileNet)',
   'No. Extraction Failed', 'No. Remaining', 'Extracted File Size (in GB)',
   '% Completion', '% Failed'
 ]
 
-function buildRows(data) {
-  let sno = 1
-  let lastApp = null
-  return data.map(r => {
-    const appCell = r.objectStore !== lastApp ? r.objectStore : ''
-    lastApp = r.objectStore
-    return [
-      sno++,
-      appCell,
-      r.documentClass,
-      r.totalDocuments,
-      Number(r.totalFileSizeGb).toFixed(2),
-      r.extractedFileNet,
-      r.extractionFailed,
-      r.remaining,
-      Number(r.extractedFileSizeGb).toFixed(2),
-      Number(r.percentCompletion).toFixed(1) + '%',
-      Number(r.percentFailed).toFixed(1) + '%',
-    ]
-  })
+function getRecordColumns(data, meta) {
+  if (!data || data.length === 0) return []
+  const reconProps = meta?.reconProps || {
+    systemProperties: ['mime_type', 'create_date', 'modify_date', 'object_class_id'],
+    customMetadata: ['u1708_documenttitle', 'ua8c8_user_name', 'ud5e8_address', 'uc7a6_order_no']
+  }
+  const formatHeader = (key) => {
+    const k = key.toLowerCase()
+    if (k === 'mime_type') return 'Mime Type'
+    if (k === 'create_date') return 'Created Date'
+    if (k === 'modify_date') return 'Modified Date'
+    if (k === 'object_class_id') return 'Document Class'
+    if (k === 'filefullpath') return 'File Path'
+    if (k.startsWith('u') && k.includes('_')) {
+      return k.substring(k.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase()
+    }
+    return key.replace(/_/g, ' ').toUpperCase()
+  }
+  const systemCols = (reconProps.systemProperties || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
+  const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
+  const customCols = hasWildcard
+    ? (() => {
+        const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        const keys = Object.keys(data[0]).filter(isCustomCol);
+        return keys.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+      })()
+    : (reconProps.customMetadata || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
+  const hasFailed = data.some(r => String(r.migration_status ?? '').toLowerCase() === 'failed')
+
+  return [
+    { key: 'objectStore', label: 'Object Store' },
+    { key: 'object_id', label: 'Document ID' },
+    { key: 'migration_status', label: 'Status' },
+    { key: 'migrated_date', label: 'Migrated Date' },
+    ...systemCols,
+    ...customCols,
+    ...(hasFailed ? [{ key: 'error_info', label: 'Error Info' }] : [])
+  ]
+}
+
+function buildRows(data, meta) {
+  if (!data || data.length === 0) return { headers: [], rows: [] }
+  const isAggregated = data[0].isAggregated ?? true
+
+  if (isAggregated) {
+    let sno = 1
+    let lastApp = null
+    const rows = data.map(r => {
+      const appCell = r.objectStore !== lastApp ? r.objectStore : ''
+      lastApp = r.objectStore
+      return [
+        sno++,
+        appCell,
+        r.documentClass,
+        r.totalDocuments,
+        Number(r.totalFileSizeGb).toFixed(2),
+        r.extractedFileNet,
+        r.extractionFailed,
+        r.remaining,
+        Number(r.extractedFileSizeGb).toFixed(2),
+        Number(r.percentCompletion).toFixed(1) + '%',
+        Number(r.percentFailed).toFixed(1) + '%',
+      ]
+    })
+    return { headers: AGGREGATED_HEADERS, rows }
+  } else {
+    const cols = getRecordColumns(data, meta)
+    const headers = ['S.No', ...cols.map(c => c.label)]
+    let sno = 1
+    const rows = data.map(r => {
+      return [
+        sno++,
+        ...cols.map(c => {
+          const val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
+          if (val == null) return ''
+          return String(val)
+        })
+      ]
+    })
+    return { headers, rows }
+  }
 }
 
 export function exportDeliverableExcel(data, meta = {}) {
-  const rows = buildRows(data)
-  const titleRow = ['FileNet to Alfresco Migration']
+  const { headers, rows } = buildRows(data, meta)
+  const isAggregated = data && data[0] && (data[0].isAggregated ?? true)
+  const titleText = isAggregated ? 'Total control Reconciliation Report' : 'Migration Reconciliation Records'
+  const titleRow = [titleText]
   const blankRow = []
-  const ws = XLSX.utils.aoa_to_sheet([titleRow, blankRow, HEADERS, ...rows])
+  const ws = XLSX.utils.aoa_to_sheet([titleRow, blankRow, headers, ...rows])
 
   // Merge title across all columns
-  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: HEADERS.length - 1 } }]
-  ws['!cols'] = HEADERS.map((h, i) => ({ wch: i === 2 ? 32 : i === 1 ? 20 : 18 }))
+  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
+  ws['!cols'] = headers.map((h, i) => ({ wch: i === 2 ? 32 : i === 1 ? 20 : 18 }))
 
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Migration Report')
-  XLSX.writeFile(wb, 'migration_deliverable_report.xlsx')
+  XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation Report')
+  XLSX.writeFile(wb, 'total_control_reconciliation_report.xlsx')
 }
 
 export function exportDeliverableCSV(data, meta = {}) {
-  const rows = buildRows(data)
+  const { headers, rows } = buildRows(data, meta)
+  const isAggregated = data && data[0] && (data[0].isAggregated ?? true)
+  const titleText = isAggregated ? 'Total control Reconciliation Report' : 'Migration Reconciliation Records'
   const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
   const lines = [
-    ['FileNet to Alfresco Migration'].map(escape).join(','),
+    [titleText].map(escape).join(','),
     '',
-    HEADERS.map(escape).join(','),
+    headers.map(escape).join(','),
     ...rows.map(r => r.map(escape).join(',')),
   ]
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = url; a.download = 'migration_deliverable_report.csv'; a.click()
+  a.href = url; a.download = 'total_control_reconciliation_report.csv'; a.click()
   URL.revokeObjectURL(url)
 }
 
 export function exportDeliverablePDF(data, meta = {}) {
-  const rows = buildRows(data)
+  const { headers, rows } = buildRows(data)
+  const isAggregated = data && data[0] && (data[0].isAggregated ?? true)
+  const titleText = isAggregated ? 'Total control Reconciliation Report' : 'Migration Reconciliation Records'
   const doc = new jsPDF({ orientation: 'landscape' })
 
   doc.setFontSize(14)
   doc.setTextColor(31, 41, 55)
-  doc.text('FileNet to Alfresco Migration', 14, 16)
+  doc.text(titleText, 14, 16)
 
   if (meta.generatedAt) {
     doc.setFontSize(8)
@@ -77,7 +144,7 @@ export function exportDeliverablePDF(data, meta = {}) {
   }
 
   autoTable(doc, {
-    head: [HEADERS],
+    head: [headers],
     body: rows,
     startY: 26,
     styles: { fontSize: 6.5, cellPadding: 2 },
@@ -85,11 +152,11 @@ export function exportDeliverablePDF(data, meta = {}) {
     alternateRowStyles: { fillColor: [249, 250, 251] },
     margin: { left: 10, right: 10 },
     didParseCell(data) {
-      if (data.section === 'body' && data.column.index === 1 && data.cell.raw !== '') {
+      if (isAggregated && data.section === 'body' && data.column.index === 1 && data.cell.raw !== '') {
         data.cell.styles.fontStyle = 'bold'
       }
     },
   })
 
-  doc.save('migration_deliverable_report.pdf')
+  doc.save('total_control_reconciliation_report.pdf')
 }

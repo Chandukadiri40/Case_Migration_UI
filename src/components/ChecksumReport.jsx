@@ -1,22 +1,77 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
 import { apiGetChecksumReport } from '../utils/api'
-import { generateChecksumExcel, generateChecksumCSV, generateChecksumPDF } from '../utils/checksumExport'
-import { FileSpreadsheet, Download, Search, Database, ArrowDown, ArrowUp } from 'lucide-react'
+import { generateChecksumExcel, generateChecksumCSV } from '../utils/checksumExport'
+import appsData from '../apps.json'
+import { Download, Search, Database } from 'lucide-react'
 
-export default function ChecksumReport({ onTabChange, tab }) {
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate]     = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
-  const [data, setData]         = useState(null)
+const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+const fieldStyle = {
+  padding: '5px 8px',
+  width: '100%',
+  borderRadius: '8px',
+  border: '1px solid #cbd5e1',
+  background: '#f8fafc',
+  color: '#0f172a',
+  fontSize: '9px',
+  outline: 'none',
+  boxSizing: 'border-box',
+  transition: 'border-color 0.2s',
+}
+
+const labelStyle = {
+  fontSize: '9px',
+  fontWeight: '700',
+  color: '#64748b',
+  display: 'block',
+  marginBottom: '4px',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+}
+
+export default function ChecksumReport() {
+  const [apps]                          = useState(appsData)
+  const [selectedApp, setSelectedApp]   = useState('')
+  const [docClasses, setDocClasses]     = useState([])
+  const [selectedDocClass, setSelectedDocClass] = useState('')
+  const [fromDate, setFromDate]         = useState('')
+  const [toDate, setToDate]             =             useState('')
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState('')
+  const [migrationStatus, setMigrationStatus] = useState('All')
+  const [data, setData]                 = useState(null)
+  const [docClassLoading, setDocClassLoading] = useState(false)
+
+  // Local pagination states
+  const [page, setPage]                 = useState(1)
+  const [pageSize, setPageSize]         = useState(100)
+
+  // Load doc classes when app changes
+  useEffect(() => {
+    if (!selectedApp) { setDocClasses([]); setSelectedDocClass(''); return }
+    setDocClassLoading(true)
+    axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}`)
+      .then(res => { setDocClasses(res.data); setSelectedDocClass('') })
+      .catch(console.error)
+      .finally(() => setDocClassLoading(false))
+  }, [selectedApp])
 
   async function handleFetch() {
+    if (!selectedApp) {
+      setError('Please select an application.')
+      return
+    }
     setError('')
     setLoading(true)
+    setPage(1)
     try {
       const result = await apiGetChecksumReport({
+        appId: selectedApp,
+        documentClass: selectedDocClass && selectedDocClass !== 'All' ? selectedDocClass : null,
         fromDate: fromDate ? fromDate + 'T00:00:00' : null,
         toDate:   toDate   ? toDate   + 'T23:59:59' : null,
+        migrationStatus: migrationStatus
       })
       setData(result)
     } catch (e) {
@@ -27,7 +82,15 @@ export default function ChecksumReport({ onTabChange, tab }) {
   }
 
   function handleReset() {
-    setFromDate(''); setToDate(''); setData(null); setError('')
+    setSelectedApp('')
+    setSelectedDocClass('')
+    setDocClasses([])
+    setFromDate('')
+    setToDate('')
+    setMigrationStatus('All')
+    setData(null)
+    setError('')
+    setPage(1)
   }
 
   const meta = { fromDate, toDate, generatedAt: new Date().toLocaleString() }
@@ -36,27 +99,97 @@ export default function ChecksumReport({ onTabChange, tab }) {
   const completed = s.completed ?? 0
   const pending   = s.pending   ?? 0
 
+  // Discover custom staging columns from result records
+  const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath';
+  const customKeys = data && data.records && data.records.length > 0 
+      ? Object.keys(data.records[0]).filter(isCustomCol) 
+      : [];
+
+  const formatHeader = (key) => {
+    if (key === 'filefullpath') return 'File Path';
+    if (key.startsWith('u') && key.includes('_')) {
+      const part = key.substring(key.indexOf('_') + 1);
+      return part.replace(/_/g, ' ').toUpperCase();
+    }
+    return key.replace(/_/g, ' ').toUpperCase();
+  }
+
+  const recordCols = [
+    { key: 'documentid', label: 'Document ID' },
+    ...customKeys.map(k => ({ key: k, label: formatHeader(k) })),
+    { key: 'filename', label: 'File Name' },
+    { key: 'checksumbefore', label: 'Checksum Before' },
+    { key: 'checksumafter', label: 'Checksum After' },
+    { key: 'checksum_status', label: 'Status' }
+  ];
+
+  // Pagination calculations
+  const totalPages = Math.max(1, Math.ceil((data?.records || []).length / pageSize))
+  const pageData   = (data?.records || []).slice((page - 1) * pageSize, page * pageSize)
+
+  function pageNums() {
+    const nums = []
+    for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) nums.push(i)
+    return nums
+  }
+
   return (
-    <div className="deliverables-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '15px', fontWeight: 'bold' }}>
-                  <FileSpreadsheet size={18} color="#4f46e5" /> Deliverables
-              </h2>
-              <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
-                  <button onClick={() => onTabChange('migration')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', border: 'none', cursor: 'pointer', background: tab === 'migration' ? '#ffffff' : 'transparent', color: tab === 'migration' ? '#4f46e5' : '#64748b', boxShadow: tab === 'migration' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>Migration Report</button>
-                  <button onClick={() => onTabChange('checksum')} style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', border: 'none', cursor: 'pointer', background: tab === 'checksum' ? '#ffffff' : 'transparent', color: tab === 'checksum' ? '#4f46e5' : '#64748b', boxShadow: tab === 'checksum' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>Checksum Report</button>
-              </div>
-          </div>
-          
-          <div style={{ display: 'flex', gap: 12, alignItems: 'end', marginTop: 8 }}>
-            <div style={{ flex: 1, maxWidth: 200 }}>
-              <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>From Date</label>
-              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+            <div>
+              <label style={labelStyle}>Application</label>
+              <select
+                value={selectedApp}
+                onChange={e => setSelectedApp(e.target.value)}
+                style={fieldStyle}
+                onFocus={e => e.target.style.borderColor = '#4f46e5'}
+                onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+              >
+                <option value="">-- Select Object Store --</option>
+                {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
+              </select>
             </div>
-            <div style={{ flex: 1, maxWidth: 200 }}>
-              <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>To Date</label>
-              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+
+            <div>
+              <label style={labelStyle}>Document Class</label>
+              <select
+                value={selectedDocClass}
+                onChange={e => setSelectedDocClass(e.target.value)}
+                style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
+                disabled={!selectedApp || docClassLoading}
+                onFocus={e => e.target.style.borderColor = '#4f46e5'}
+                onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+              >
+                <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
+                {docClasses.length > 0 && <option value="All">All Classes</option>}
+                {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label style={labelStyle}>Start Date</label>
+              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+            </div>
+
+            <div>
+              <label style={labelStyle}>End Date</label>
+              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+            </div>
+
+            <div>
+              <label style={labelStyle}>Migration Status</label>
+              <select 
+                value={migrationStatus} 
+                onChange={e => setMigrationStatus(e.target.value)} 
+                style={fieldStyle}
+                onFocus={e => e.target.style.borderColor = '#4f46e5'}
+                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+              >
+                <option value="All">All</option>
+                <option value="Success">Success</option>
+                <option value="Failed">Failed</option>
+              </select>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -85,6 +218,13 @@ export default function ChecksumReport({ onTabChange, tab }) {
           </div>
       </div>
 
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: 14 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {error}
+        </div>
+      )}
+
       {/* Results */}
       <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
       
@@ -102,7 +242,7 @@ export default function ChecksumReport({ onTabChange, tab }) {
         )}
 
         {!loading && data && data.records.length > 0 && (
-          <>
+          <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div className="cs-summary-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
               <SummaryTile
                 label="Total Records"
@@ -124,7 +264,7 @@ export default function ChecksumReport({ onTabChange, tab }) {
               />
             </div>
 
-            <div style={{ overflow: 'hidden' }}>
+            <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '4px', display: 'inline-block', fontSize: '14px' }}>Checksum Results ({data.records.length} records)</h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -137,51 +277,90 @@ export default function ChecksumReport({ onTabChange, tab }) {
                 </div>
               </div>
 
-              <div className="table-wrap">
+              <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 <table>
                   <thead>
                     <tr>
-                      <th>Document ID</th>
-                      <th>Document Title</th>
-                      <th>Document Class</th>
-                      <th>File Name</th>
-                      <th>Checksum Before</th>
-                      <th>Checksum After</th>
-                      <th>Status</th>
+                      <th>S.No</th>
+                      {recordCols.map(col => <th key={col.key}>{col.label}</th>)}
                     </tr>
                   </thead>
                   <tbody>
-                  {data.records.length === 0 ? (
-                    <tr><td colSpan={7}>
-                      <div className="empty-state" style={{ padding: 32, textAlign: 'center' }}>
-                        <p>No records found for the selected period.</p>
-                      </div>
-                    </td></tr>
-                  ) : data.records.map((r, i) => (
-                    <tr key={i}>
-                      <td><span className="cell-mono">{r.documentId}</span></td>
-                      <td>{r.documentTitle ?? r.u1708_documenttitle ?? <em className="cell-empty">NULL</em>}</td>
-                      <td>{r.documentClass ?? r.objectClassId ?? r.object_class_id ?? <em className="cell-empty">NULL</em>}</td>
-                      <td style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.fileName || <em className="cell-empty">NULL</em>}</td>
-                      <td><span className="cell-mono">{r.checksumBefore?.slice(0, 16)}…</span></td>
-                      <td><span className="cell-mono">{r.checksumAfter?.slice(0, 16)}…</span></td>
-                      <td>
-                        <span className={ r.checksumStatus?.toLowerCase() === 'completed' ? 'status-badge status-success' : 'status-badge status-pending' }>
-                          {r.checksumStatus || '—'}
-                        </span>
-                      </td>
+                  {pageData.map((r, i) => (
+                    <tr key={r.documentid ?? i}>
+                      <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
+                      {recordCols.map(col => {
+                        const val = r[col.key]
+                        if (col.key === 'checksum_status') {
+                          return (
+                            <td key={col.key}>
+                              <span className={ val?.toLowerCase() === 'completed' ? 'status-badge status-success' : 'status-badge status-pending' }>
+                                {val || '—'}
+                              </span>
+                            </td>
+                          )
+                        }
+                        if (col.key === 'checksumbefore' || col.key === 'checksumafter') {
+                          return (
+                            <td key={col.key}>
+                              <span className="cell-mono">{val ? val.slice(0, 16) + '…' : '—'}</span>
+                            </td>
+                          )
+                        }
+                        if (col.key === 'documentid') {
+                          return <td key={col.key} className="cell-mono" style={{ fontSize: '9px' }}>{val || '—'}</td>
+                        }
+                        if (col.key === 'filename') {
+                          return <td key={col.key} style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || <em className="cell-empty">NULL</em>}</td>
+                        }
+                        return (
+                          <td key={col.key}>
+                            {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
+                          </td>
+                        )
+                      })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             </div>
-          </>
+
+            {/* Pagination Controls */}
+            <div className="pagination" style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+              <div className="pagination-left">
+                <span className="pagination-info" style={{ fontSize: '10px' }}>
+                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, data.records.length)} of{' '}
+                  <strong>{data.records.length.toLocaleString()}</strong>
+                </span>
+                <div className="page-size-select">
+                  <select value={pageSize}
+                    onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                    aria-label="Rows per page"
+                    style={{ fontSize: '10px' }}>
+                    {[100, 500, 1000].map(n => <option key={n} value={n}>{n} / page</option>)}
+                  </select>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </div>
+              </div>
+              <div className="pagination-controls">
+                <button className="page-btn" onClick={() => setPage(1)} disabled={page === 1} aria-label="First">«</button>
+                <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1} aria-label="Prev">‹</button>
+                {pageNums().map(n => (
+                  <button key={n} className={'page-btn' + (n === page ? ' active' : '')} onClick={() => setPage(n)} style={{ fontSize: '10px', minWidth: '22px', height: '22px' }}>{n}</button>
+                ))}
+                <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages} aria-label="Next">›</button>
+                <button className="page-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages} aria-label="Last">»</button>
+              </div>
+            </div>
+          </div>
         )}
 
         {!data && !loading && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-            Select dates and click Search to load the Checksum Report.
+            Select an application, document class, date ranges, and click Search.
           </div>
         )}
       </div>
