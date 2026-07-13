@@ -39,7 +39,6 @@ export default function ChecksumReport() {
   const [toDate, setToDate]             =             useState('')
   const [loading, setLoading]           = useState(false)
   const [error, setError]               = useState('')
-  const [migrationStatus, setMigrationStatus] = useState('All')
   const [data, setData]                 = useState(null)
   const [docClassLoading, setDocClassLoading] = useState(false)
 
@@ -71,7 +70,7 @@ export default function ChecksumReport() {
         documentClass: selectedDocClass && selectedDocClass !== 'All' ? selectedDocClass : null,
         fromDate: fromDate ? fromDate + 'T00:00:00' : null,
         toDate:   toDate   ? toDate   + 'T23:59:59' : null,
-        migrationStatus: migrationStatus
+        migrationStatus: 'Success'
       })
       setData(result)
     } catch (e) {
@@ -87,7 +86,6 @@ export default function ChecksumReport() {
     setDocClasses([])
     setFromDate('')
     setToDate('')
-    setMigrationStatus('All')
     setData(null)
     setError('')
     setPage(1)
@@ -116,6 +114,7 @@ export default function ChecksumReport() {
 
   const recordCols = [
     { key: 'documentid', label: 'Document ID' },
+    { key: 'object_class_id', label: 'Document Class' },
     ...customKeys.map(k => ({ key: k, label: formatHeader(k) })),
     { key: 'filename', label: 'File Name' },
     { key: 'checksumbefore', label: 'Checksum Before' },
@@ -136,7 +135,7 @@ export default function ChecksumReport() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
             <div>
               <label style={labelStyle}>Application</label>
               <select
@@ -146,7 +145,7 @@ export default function ChecksumReport() {
                 onFocus={e => e.target.style.borderColor = '#4f46e5'}
                 onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
               >
-                <option value="">-- Select Object Store --</option>
+                <option value="">-- Select Application --</option>
                 {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
               </select>
             </div>
@@ -175,21 +174,6 @@ export default function ChecksumReport() {
             <div>
               <label style={labelStyle}>End Date</label>
               <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Migration Status</label>
-              <select 
-                value={migrationStatus} 
-                onChange={e => setMigrationStatus(e.target.value)} 
-                style={fieldStyle}
-                onFocus={e => e.target.style.borderColor = '#4f46e5'}
-                onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-              >
-                <option value="All">All</option>
-                <option value="Success">Success</option>
-                <option value="Failed">Failed</option>
-              </select>
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
@@ -243,7 +227,7 @@ export default function ChecksumReport() {
 
         {!loading && data && data.records.length > 0 && (
           <div style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <div className="cs-summary-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
+            <div className="cs-summary-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '8px' }}>
               <SummaryTile
                 label="Total Records"
                 value={total}
@@ -370,10 +354,12 @@ export default function ChecksumReport() {
 
 function SummaryTile({ label, value, color, sub }) {
   return (
-    <div style={{ background: 'white', border: `1px solid ${color}33`, borderRadius: '8px', padding: '12px', borderLeft: `4px solid ${color}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: '24px', fontWeight: 'bold', color: color, lineHeight: '1' }}>{(value ?? 0).toLocaleString()}</div>
-      {sub && <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>{sub}</div>}
+    <div style={{ background: 'white', border: `1px solid ${color}33`, borderRadius: '6px', padding: '6px 10px', borderLeft: `3px solid ${color}`, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+      <div style={{ fontSize: '9px', color: '#64748b', fontWeight: '600', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 'bold', color: color, lineHeight: '1' }}>{(value ?? 0).toLocaleString()}</div>
+        {sub && <div style={{ fontSize: '9px', color: '#94a3b8', fontWeight: '500' }}>{sub}</div>}
+      </div>
     </div>
   )
 }
