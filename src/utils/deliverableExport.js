@@ -97,8 +97,7 @@ export function exportDeliverableExcel(data, meta = {}) {
   const isAggregated = data && data[0] && (data[0].isAggregated ?? true)
   const titleText = isAggregated ? 'Total control Reconciliation Report' : 'Migration Reconciliation Records'
   const titleRow = [titleText]
-  const blankRow = []
-  const ws = XLSX.utils.aoa_to_sheet([titleRow, blankRow, headers, ...rows])
+  const ws = XLSX.utils.aoa_to_sheet([titleRow, headers, ...rows])
 
   // Merge title across all columns
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
@@ -116,7 +115,6 @@ export function exportDeliverableCSV(data, meta = {}) {
   const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
   const lines = [
     [titleText].map(escape).join(','),
-    '',
     headers.map(escape).join(','),
     ...rows.map(r => r.map(escape).join(',')),
   ]

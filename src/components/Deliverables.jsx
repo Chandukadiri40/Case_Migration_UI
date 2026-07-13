@@ -218,6 +218,7 @@ function MigrationReportTab() {
               onFocus={e => e.target.style.borderColor = '#4f46e5'}
               onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
             >
+              <option value="" disabled hidden>Select Status</option>
               {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>

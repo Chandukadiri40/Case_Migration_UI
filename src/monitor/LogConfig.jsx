@@ -27,39 +27,40 @@ export default function LogConfig({ config, onConfigSaved }) {
   }
 
   return (
-    <div className="log-config-container" style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, maxWidth: '600px' }}>
-        <label className="auth-label" style={{ marginBottom: '4px' }}>Windows Log Directory Path</label>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            type="text"
-            className={`auth-input ${error ? 'auth-input--error' : ''}`}
-            placeholder="e.g. C:\logs\application"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            disabled={!isEditing || loading}
-          />
-          {isEditing ? (
-            <button className="btn" style={{ background: 'var(--primary)', color: 'white' }} onClick={handleSave} disabled={loading}>
-              {loading ? <span className="spinner" style={{ width: '14px', height: '14px', borderBottomColor: 'transparent', margin: 0 }} /> : <Save size={16} />}
-              Save
-            </button>
-          ) : (
-            <button className="btn" style={{ background: 'var(--gray-200)', color: 'var(--gray-700)' }} onClick={() => setIsEditing(true)}>
-              <Edit2 size={16} />
-              Edit
-            </button>
-          )}
-        </div>
-        {error && (
-          <div style={{ color: 'var(--danger)', fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <AlertCircle size={14} /> {error}
-          </div>
+    <div style={{ width: '100%' }}>
+      <label style={{ fontSize: '9px', fontWeight: '700', color: '#64748b', display: 'flex', justifyContent: 'space-between', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <span>Log Path</span>
+        {!isEditing && <span style={{ color: '#10b981', textTransform: 'none', letterSpacing: 'normal' }}>✓ OK</span>}
+      </label>
+      <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+        <input
+          type="text"
+          placeholder="e.g. C:\logs"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+          disabled={!isEditing || loading}
+          style={{ padding: '5px 8px', width: '100%', borderRadius: '8px', border: error ? '1px solid #ef4444' : '1px solid #cbd5e1', background: (!isEditing || loading) ? '#f1f5f9' : '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none', transition: 'border-color 0.2s', height: '28px', boxSizing: 'border-box' }}
+          onFocus={(e) => { if(isEditing) e.target.style.borderColor = '#4f46e5' }} onBlur={(e) => { if(isEditing) e.target.style.borderColor = '#cbd5e1' }}
+        />
+        {isEditing ? (
+          <button 
+            onClick={handleSave} disabled={loading}
+            style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '0 8px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            {loading ? '...' : 'Save'}
+          </button>
+        ) : (
+          <button 
+            onClick={() => setIsEditing(true)}
+            style={{ background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', padding: '0 8px', fontSize: '9px', fontWeight: 'bold', cursor: 'pointer', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            Edit
+          </button>
         )}
       </div>
-      {!isEditing && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontSize: '13px', fontWeight: 500 }}>
-          <Check size={16} /> Configured
+      {error && (
+        <div style={{ color: '#ef4444', fontSize: '9px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+          <AlertCircle size={10} /> {error}
         </div>
       )}
     </div>
