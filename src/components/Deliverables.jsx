@@ -128,10 +128,10 @@ function MigrationReportTab() {
         return keys.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
       })()
     : (reconProps.customMetadata || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
-  const isFailedView = migrationStatus === 'Failed';
+  const isFailedView = data && data.length > 0 && !isAggregated && data.some(r => r.migration_status?.toLowerCase() === 'failed');
 
   const recordCols = [
-    { key: 'objectStore', label: 'Object Store' },
+    { key: 'objectStore', label: 'Application Type' },
     { key: 'object_id', label: 'Document ID' },
     { key: 'migration_status', label: 'Status' },
     { key: 'migrated_date', label: 'Migrated Date' },
@@ -164,7 +164,7 @@ function MigrationReportTab() {
               onFocus={e => e.target.style.borderColor = '#4f46e5'}
               onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
             >
-              <option value="">-- Select Object Store --</option>
+              <option value="">-- Select Application --</option>
               {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
             </select>
           </div>
@@ -294,7 +294,7 @@ function MigrationReportTab() {
                 <thead>
                   <tr>
                     <th>S.No</th>
-                    <th>Object Stores</th>
+                    <th>Application Type</th>
                     <th>Documentation Class</th>
                     <th>Total No Documents</th>
                     <th>Total Files Size (in GB)</th>
@@ -370,21 +370,26 @@ function MigrationReportTab() {
                         }
                         if (col.key === 'error_info') {
                           return (
-                            <td key={col.key} style={{ maxWidth: '300px' }}>
-                              <pre style={{ 
-                                margin: 0, 
-                                whiteSpace: 'pre-wrap', 
-                                wordBreak: 'break-word', 
-                                fontFamily: 'monospace', 
-                                fontSize: '8.5px', 
-                                color: '#e11d48',
-                                background: '#fff1f2',
-                                padding: '4px 6px',
-                                borderRadius: '4px',
-                                border: '1px solid #ffe4e6'
-                              }}>
-                                {val || '—'}
-                              </pre>
+                            <td key={col.key}>
+                              <span 
+                                title={val || 'No error info'} 
+                                style={{ 
+                                  cursor: 'pointer', 
+                                  color: '#e11d48',
+                                  background: '#fff1f2',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #ffe4e6',
+                                  fontSize: '9px',
+                                  display: 'inline-block',
+                                  maxWidth: '240px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—'}
+                              </span>
                             </td>
                           )
                         }

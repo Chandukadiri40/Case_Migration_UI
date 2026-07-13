@@ -14,6 +14,7 @@ function getRecordColumns(records) {
 
   return [
     { key: 'documentid', label: 'Document ID' },
+    { key: 'object_class_id', label: 'Document Class' },
     ...customKeys.map(k => ({ key: k, label: formatHeader(k) })),
     { key: 'filename', label: 'File Name' },
     { key: 'checksumbefore', label: 'Checksum Before' },
