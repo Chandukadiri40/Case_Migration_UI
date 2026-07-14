@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import ChecksumReport from './ChecksumReport'
 import { apiGetDeliverableMigrationReport, apiGetReconciliationProperties } from '../utils/api'
 import { exportDeliverableExcel, exportDeliverableCSV } from '../utils/deliverableExport'
 import appsData from '../apps.json'
-import { FileSpreadsheet, Download, Search, Database } from 'lucide-react'
+import { FileSpreadsheet, Download, Search, Database, Settings } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -59,8 +59,24 @@ function MigrationReportTab() {
   const [docClassLoading, setDocClassLoading] = useState(false)
 
   // Pagination states for records view
-  const [page, setPage]                 = useState(1)
-  const [pageSize, setPageSize]         = useState(100)
+  const [page, setPage]                 = React.useState(1)
+  const [pageSize, setPageSize]         = React.useState(100)
+
+  // Column visibility states
+  const [allCustomColumns, setAllCustomColumns] = React.useState([])
+  const [visibleCustomColumns, setVisibleCustomColumns] = useState(new Set())
+  const [showColumnSettings, setShowColumnSettings] = useState(false)
+  const columnSettingsRef = React.useRef(null)
+
+  useEffect(() => {
+    function handleOutside(e) {
+      if (columnSettingsRef.current && !columnSettingsRef.current.contains(e.target)) {
+        setShowColumnSettings(false);
+      }
+    }
+    if (showColumnSettings) document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showColumnSettings]);
 
   // Load doc classes when app changes -- same as Exceptions
   useEffect(() => {
@@ -87,6 +103,20 @@ function MigrationReportTab() {
       if (migrationStatus && migrationStatus !== 'All') payload.migrationStatus = migrationStatus
       const result = await apiGetDeliverableMigrationReport(payload)
       setData(result)
+
+      const isAgg = result && result.length > 0 && (result[0].isAggregated ?? true);
+      if (!isAgg && result && result.length > 0) {
+          const isCustomCol = k => {
+            if (k.toLowerCase().includes('objectstorename')) return false;
+            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        };
+          const keys = Object.keys(result[0]).filter(isCustomCol);
+          setAllCustomColumns(keys);
+          setVisibleCustomColumns(new Set(keys));
+      } else {
+          setAllCustomColumns([]);
+          setVisibleCustomColumns(new Set());
+      }
     } catch(e) {
       setError(e.message || 'Failed to fetch migration report.')
     } finally {
@@ -107,35 +137,39 @@ function MigrationReportTab() {
   // Columns for record details view
   const formatHeader = (key) => {
     const k = key.toLowerCase();
-    if (k === 'mime_type') return 'Mime Type';
-    if (k === 'create_date') return 'Created Date';
-    if (k === 'modify_date') return 'Modified Date';
-    if (k === 'object_class_id') return 'Document Class';
     if (k === 'filefullpath') return 'File Path';
     if (k.startsWith('u') && k.includes('_')) {
-      const part = k.substring(k.indexOf('_') + 1);
-      return part.replace(/_/g, ' ').toUpperCase();
+      return k.substring(k.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase();
     }
     return key.replace(/_/g, ' ').toUpperCase();
-  }
+  };
 
-  const systemCols = (reconProps.systemProperties || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+  const explicitCols = [
+    { key: 'application', label: 'Application' },
+    { key: 'objectStore', label: 'Object Store' },
+    { key: 'object_id', label: 'Source Document GUID' },
+    { key: 'mime_type', label: 'MIME Type' },
+    { key: 'content_size', label: 'Size (KB)' },
+    { key: 'migrated_date', label: 'Migration Date' },
+    { key: 'p8_doc_id', label: 'Target Document GUID' },
+    { key: 'migration_status', label: 'Migration Status' }
+  ];
   const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
   const customCols = hasWildcard
     ? (() => {
-        const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        const isCustomCol = k => {
+            if (k.toLowerCase().includes('objectstorename')) return false;
+            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        };
         const keys = !isAggregated && data && data.length > 0 ? Object.keys(data[0]).filter(isCustomCol) : [];
-        return keys.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+        return keys.filter(k => visibleCustomColumns.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
       })()
-    : (reconProps.customMetadata || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+    : (reconProps.customMetadata || []).filter(k => visibleCustomColumns.has(k.toLowerCase()) || visibleCustomColumns.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+  
   const isFailedView = data && data.length > 0 && !isAggregated && data.some(r => r.migration_status?.toLowerCase() === 'failed');
 
   const recordCols = [
-    { key: 'objectStore', label: 'Application Type' },
-    { key: 'object_id', label: 'Document ID' },
-    { key: 'migration_status', label: 'Status' },
-    { key: 'migrated_date', label: 'Migrated Date' },
-    ...systemCols,
+    ...explicitCols,
     ...customCols,
     ...(isFailedView ? [{ key: 'error_info', label: 'Error Info' }] : [])
   ];
@@ -149,6 +183,9 @@ function MigrationReportTab() {
     for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) nums.push(i)
     return nums
   }
+
+  const tdStyle = { fontSize: '9px', padding: '6px' };
+  const selectedAppName = apps.find(a => String(a.appId) === String(selectedApp))?.appName || '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -266,6 +303,13 @@ function MigrationReportTab() {
           </div>
       )}
 
+      {!loading && !data && (
+        <div className="empty-state" style={{ padding: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', color: '#94a3b8' }}>
+          <Database size={32} style={{ opacity: 0.5 }} />
+          <span>Apply filters to generate Deliverables Workspace Report</span>
+        </div>
+      )}
+
       {!loading && data && data.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
           No records found for the given criteria.
@@ -279,10 +323,42 @@ function MigrationReportTab() {
               {isAggregated ? 'Total control Reconciliation' : 'Migration Reconciliation Records'} ({data.length} records)
             </h3>
             <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => exportDeliverableCSV(data, { ...meta, reconProps })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+                {!isAggregated && (
+                    <div ref={columnSettingsRef} style={{ position: 'relative' }}>
+                        <button onClick={() => setShowColumnSettings(!showColumnSettings)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px 8px', height: '24px', boxSizing: 'border-box', background: 'white', color: '#4b5563', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }} title="Column Settings">
+                            <Settings size={14} />
+                        </button>
+                        
+                        {showColumnSettings && (
+                            <div style={{ position: 'absolute', top: '100%', right: '0', marginTop: '4px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', zIndex: 50, minWidth: '200px', maxHeight: '300px', overflowY: 'auto' }}>
+                                <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase' }}>Custom Metadata Fields</div>
+                                {allCustomColumns.length === 0 ? (
+                                    <div style={{ fontSize: '11px', color: '#94a3b8', padding: '4px 0' }}>No custom fields found.</div>
+                                ) : (
+                                    allCustomColumns.map(col => (
+                                        <label key={col} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#334155', padding: '4px 0', cursor: 'pointer' }}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={visibleCustomColumns.has(col)} 
+                                                onChange={() => {
+                                                    const newSet = new Set(visibleCustomColumns);
+                                                    if (newSet.has(col)) newSet.delete(col);
+                                                    else newSet.add(col);
+                                                    setVisibleCustomColumns(newSet);
+                                                }}
+                                            />
+                                            {formatHeader(col)}
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+                <button onClick={() => exportDeliverableCSV(data, { ...meta, selectedAppName, reconProps, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
                     <Download size={12} /> CSV
                 </button>
-                <button onClick={() => exportDeliverableExcel(data, { ...meta, reconProps })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
+                <button onClick={() => exportDeliverableExcel(data, { ...meta, selectedAppName, reconProps, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
                     <Download size={12} /> Excel
                 </button>
             </div>
@@ -363,22 +439,23 @@ function MigrationReportTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {pageData.map((row, i) => (
-                    <tr key={row.object_id ?? i}>
+                  {pageData.map((r, i) => (
+                    <tr key={i}>
                       <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
-                      {recordCols.map(col => {
-                        const val = row[col.key]
-                        if (col.key === 'migration_status') {
-                          const statusCls = val?.toLowerCase() === 'success' ? 'status-badge status-success' : 'status-badge status-failed'
+                      {recordCols.map(c => {
+                        let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()];
+                        if (c.key === 'application' && !val && selectedAppName) val = selectedAppName;
+                        if (c.key === 'migration_status') {
+                          const statusCls = (val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated') ? 'status-badge status-success' : 'status-badge status-failed'
                           return (
-                            <td key={col.key}>
+                            <td key={c.key} style={tdStyle}>
                               <span className={statusCls}>{val || '—'}</span>
                             </td>
                           )
                         }
-                        if (col.key === 'error_info') {
+                        if (c.key === 'error_info') {
                           return (
-                            <td key={col.key}>
+                            <td key={c.key} style={tdStyle}>
                               <span 
                                 title={val || 'No error info'} 
                                 style={{ 
@@ -401,14 +478,14 @@ function MigrationReportTab() {
                             </td>
                           )
                         }
-                        if (col.key === 'object_id') {
-                          return <td key={col.key} className="cell-mono" style={{ fontSize: '9px' }}>{val || '—'}</td>
+                        if (c.key === 'object_id' || c.key === 'p8_doc_id') {
+                          return <td key={c.key} className="cell-mono" style={{ ...tdStyle }}>{val || '—'}</td>
                         }
-                        if (col.key === 'migrated_date') {
-                          return <td key={col.key} style={{ fontSize: '9px', whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>
+                        if (c.key === 'migrated_date') {
+                          return <td key={c.key} style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>
                         }
                         return (
-                          <td key={col.key}>
+                          <td key={c.key} style={tdStyle} title={val}>
                             {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
                           </td>
                         )
@@ -474,7 +551,7 @@ export default function Deliverables() {
       {/* Page Header with tabs stacked vertically */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', padding: '0 4px' }}>
           <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '15px', fontWeight: 'bold' }}>
-              <FileSpreadsheet size={18} color="#4f46e5" /> Deliverables
+              <FileSpreadsheet size={18} color="#4f46e5" /> Deliverables Workspace
           </h2>
           <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '8px', alignSelf: 'flex-start' }}>
               <button 

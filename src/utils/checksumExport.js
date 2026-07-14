@@ -2,8 +2,7 @@ import * as XLSX from 'xlsx'
 
 function getRecordColumns(records) {
   if (!records || records.length === 0) return []
-  const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath'
-  const customKeys = Object.keys(records[0]).filter(isCustomCol)
+  // No custom metadata as requested
   const formatHeader = (key) => {
     if (key === 'filefullpath') return 'File Path'
     if (key.startsWith('u') && key.includes('_')) {
@@ -13,37 +12,43 @@ function getRecordColumns(records) {
   }
 
   return [
-    { key: 'documentid', label: 'Document ID' },
-    { key: 'object_class_id', label: 'Document Class' },
-    ...customKeys.map(k => ({ key: k, label: formatHeader(k) })),
-    { key: 'filename', label: 'File Name' },
-    { key: 'checksumbefore', label: 'Checksum Before' },
-    { key: 'checksumafter', label: 'Checksum After' },
-    { key: 'checksum_status', label: 'Status' }
+    { key: 'application', label: 'Application' },
+    { key: 'object_store', label: 'Object Store' },
+    { key: 'documentid', label: 'Source Document GUID' },
+    { key: 'mime_type', label: 'MIME Type' },
+    { key: 'content_size', label: 'Size (KB)' },
+    { key: 'migrated_date', label: 'Migration Date' },
+    { key: 'p8_doc_id', label: 'Target Document GUID' },
+    { key: 'checksumbefore', label: 'Source CheckSum' },
+    { key: 'checksumafter', label: 'Target CheckSum' },
+    { key: 'checksum_status', label: 'Validation Status' }
   ]
 }
 
-function buildRows(records) {
+function buildRows(records, meta) {
   if (!records || records.length === 0) return { headers: [], rows: [] }
   const cols = getRecordColumns(records)
-  const headers = ['S.No', ...cols.map(c => c.label)]
-  let sno = 1
+  const headers = cols.map(c => c.label)
   const rows = records.map(r => {
-    return [
-      sno++,
-      ...cols.map(c => {
-        const val = r[c.key]
-        if (val == null) return ''
-        return String(val)
-      })
-    ]
+    return cols.map(c => {
+      let val = r[c.key] || r[c.key?.toUpperCase()] || r[c.key?.toLowerCase()]
+      if (c.key === 'application' && !val && meta?.selectedAppName) val = meta.selectedAppName;
+      if (c.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
+      if (c.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
+      if (c.key === 'checksum_status') {
+          const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
+          val = isMatched ? 'Matched' : 'MisMatched';
+      }
+      if (val == null) return ''
+      return String(val)
+    })
   })
   return { headers, rows }
 }
 
 export function generateChecksumExcel({ records }, meta) {
-  const { headers, rows } = buildRows(records)
-  const titleRow = ['Checksum Validation Records']
+  const { headers, rows } = buildRows(records, meta)
+  const titleRow = ['CheckSum Validation Report']
   const blankRow = []
   const ws = XLSX.utils.aoa_to_sheet([titleRow, blankRow, headers, ...rows])
 
@@ -57,7 +62,7 @@ export function generateChecksumExcel({ records }, meta) {
 }
 
 export function generateChecksumCSV({ records }, meta) {
-  const { headers, rows } = buildRows(records)
+  const { headers, rows } = buildRows(records, meta)
   const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
   const lines = [
     ['Checksum Validation Records'].map(escape).join(','),

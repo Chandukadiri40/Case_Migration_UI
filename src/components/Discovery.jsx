@@ -119,12 +119,20 @@ export default function Discovery() {
         });
     }, [data, sortConfig]);
 
-    const formatCellValue = (val) => {
+    const formatCellValue = (key, val) => {
         if (val === null || val === undefined) return '';
-        const strVal = val.toString();
+        let strVal = val.toString();
         // Remove numeric prefix like "1. ", "10. " used for backend sorting
         if (/^\d+\.\s+/.test(strVal)) {
-            return strVal.replace(/^\d+\.\s+/, '');
+            strVal = strVal.replace(/^\d+\.\s+/, '');
+        }
+        
+        if (key && key.toLowerCase() === 'creation_month' && !isNaN(val)) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const monthIdx = parseInt(val, 10) - 1;
+            if (monthIdx >= 0 && monthIdx < 12) {
+                return months[monthIdx];
+            }
         }
         return strVal;
     };
@@ -134,7 +142,7 @@ export default function Discovery() {
         return sortedData.map(row => {
             const newRow = {};
             for (const key in row) {
-                newRow[key] = formatCellValue(row[key]);
+                newRow[key] = formatCellValue(key, row[key]);
             }
             return newRow;
         });
@@ -215,7 +223,7 @@ export default function Discovery() {
 
             {/* Top Filter Bar */}
             <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'white', padding: '12px 16px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', marginBottom: '0' }}>
-                <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>System study</h1>
+                <h1 style={{ fontSize: '18px', fontWeight: 'bold', color: '#1f2937', margin: 0 }}>Migration Insights (AS-IS)</h1>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', alignItems: 'end' }}>
 
@@ -332,8 +340,8 @@ export default function Discovery() {
                             <tbody>
                                 {sortedData.length > 0 ? sortedData.map((row, i) => (
                                     <tr key={i}>
-                                        {Object.values(row).map((val, j) => (
-                                            <td key={j}>{formatCellValue(val)}</td>
+                                        {Object.entries(row).map(([key, val], j) => (
+                                            <td key={j}>{formatCellValue(key, val)}</td>
                                         ))}
                                     </tr>
                                 )) : (

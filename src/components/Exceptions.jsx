@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react'
+import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle, Settings } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import appsData from '../apps.json'
@@ -25,6 +25,13 @@ export default function Exceptions() {
     const [selectedObjectId, setSelectedObjectId] = useState(null)
     const [isFiltersCollapsed, setIsFiltersCollapsed] = useState(false)
     const [showExportModal, setShowExportModal] = useState(false)
+    
+    // Custom column settings
+    const [allCustomColumns, setAllCustomColumns] = useState([])
+    const [visibleCustomColumns, setVisibleCustomColumns] = useState(new Set())
+    const [showColumnSettings, setShowColumnSettings] = useState(false)
+    const columnSettingsRef = useRef(null)
+
     const [exportOptions, setExportOptions] = useState({ format: 'excel', source: true, staging: true, target: true })
 
     useEffect(() => {
@@ -85,6 +92,25 @@ export default function Exceptions() {
             .then(res => {
                 setData(res.data);
                 setIsFiltersCollapsed(true);
+                
+                // Discover custom columns
+                const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
+                const customKeys = new Set();
+                const addKeys = (rows) => {
+                    if (!rows) return;
+                    rows.forEach(r => Object.keys(r).forEach(k => {
+                        const normalizedK = k.toUpperCase().replace(/[ _]/g, '');
+                        const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedK);
+                        if (!isSysField) customKeys.add(k);
+                    }));
+                };
+                addKeys(res.data.source);
+                addKeys(res.data.target);
+                
+                const customColsArray = Array.from(customKeys).sort();
+                setAllCustomColumns(customColsArray);
+                setVisibleCustomColumns(new Set(customColsArray));
+
                 let singleRec = null;
                 if (res.data.source && res.data.source.length === 1) singleRec = res.data.source[0];
                 else if (res.data.staging && res.data.staging.length === 1) singleRec = res.data.staging[0];
@@ -101,6 +127,16 @@ export default function Exceptions() {
             .finally(() => setLoading(false))
     }
 
+    useEffect(() => {
+        function handleOutside(e) {
+            if (columnSettingsRef.current && !columnSettingsRef.current.contains(e.target)) {
+                setShowColumnSettings(false);
+            }
+        }
+        if (showColumnSettings) document.addEventListener('mousedown', handleOutside);
+        return () => document.removeEventListener('mousedown', handleOutside);
+    }, [showColumnSettings]);
+
     const handleSort = (title, key) => {
         setSortConfigs(prev => {
             const current = prev[title] || { key: null, direction: 'ascending' };
@@ -113,45 +149,121 @@ export default function Exceptions() {
     };
 
     const handleBulkExport = () => {
-        const { format, source, staging, target } = exportOptions;
-        
+        const { format } = exportOptions; // Ignore source/staging/target options, we always generate unified report
+
+        if (!data || !data.source) {
+            alert("No data available to export.");
+            return;
+        }
+
+        const sourceRecords = data.source || [];
+        const stagingRecords = data.staging || [];
+        const targetRecords = data.target || [];
+
+        // Build a map for target records by object_id
+        const targetMap = {};
+        targetRecords.forEach(tr => {
+            const trKey = Object.keys(tr).find(k => k.toUpperCase() === 'OBJECT_ID');
+            if (trKey && tr[trKey]) {
+                targetMap[tr[trKey]] = tr;
+            }
+        });
+
+        // Build a map for staging records by object_id
+        const stagingMap = {};
+        stagingRecords.forEach(sr => {
+            const srKey = Object.keys(sr).find(k => k.toUpperCase() === 'OBJECT_ID');
+            if (srKey && sr[srKey]) {
+                stagingMap[sr[srKey]] = sr;
+            }
+        });
+
+        const rows = sourceRecords.map(srcRow => {
+            const srcKey = Object.keys(srcRow).find(k => k.toUpperCase() === 'OBJECT_ID');
+            const objId = srcKey ? srcRow[srcKey] : '';
+            const tgtRow = targetMap[objId] || {};
+            const stgRow = stagingMap[objId] || {};
+
+            const getSrc = (field) => {
+                const normField = field.toUpperCase().replace(/[ _]/g, '');
+                const k = Object.keys(srcRow).find(x => x.toUpperCase().replace(/[ _]/g, '') === normField);
+                return k ? srcRow[k] : '';
+            };
+            const getTgt = (field) => {
+                const normField = field.toUpperCase().replace(/[ _]/g, '');
+                const k = Object.keys(tgtRow).find(x => x.toUpperCase().replace(/[ _]/g, '') === normField);
+                return k ? tgtRow[k] : '';
+            };
+            const getStg = (field) => {
+                const normField = field.toUpperCase().replace(/[ _]/g, '');
+                const k = Object.keys(stgRow).find(x => x.toUpperCase().replace(/[ _]/g, '') === normField);
+                return k ? stgRow[k] : '';
+            };
+
+            const appLabel = apps.find(a => String(a.appId) === String(selectedApp))?.appName || selectedApp || '';
+            const row = {
+                'Application': appLabel,
+                'Object Store': getSrc('object_store') || '',
+                'Source Document GUID': objId,
+                'MIME Type': getSrc('mime_type'),
+                'Size (KB)': getSrc('content_size') ? (Number(getSrc('content_size')) / 1024).toFixed(2) : '',
+                'Migration Date': getTgt('migrated_date') || getStg('migrated_date') || getSrc('migrated_date') || '',
+                'Target Document GUID': getTgt('p8_doc_id') || getTgt('object_id') || getStg('p8_doc_id') || '',
+            };
+
+            let isMismatched = false;
+
+            // Only export visible custom columns
+            const customKeys = Object.keys(srcRow).filter(k => visibleCustomColumns.has(k));
+
+            customKeys.forEach(k => {
+                const cleanK = cleanColumnName(k);
+                const sVal = String(srcRow[k] || '');
+                // Find matching key in target (case insensitive)
+                const tK = Object.keys(tgtRow).find(x => x.toUpperCase() === k.toUpperCase());
+                const tVal = tK ? String(tgtRow[tK] || '') : '';
+                
+                row[`Source Mapping ${cleanK}`] = sVal;
+                row[`Target Mapping ${cleanK}`] = tVal;
+
+                if (sVal !== tVal) {
+                    isMismatched = true;
+                }
+            });
+
+            row['Validation Status'] = isMismatched ? 'MisMatched' : 'Matched';
+
+            return row;
+        });
+
         if (format === 'excel') {
             const workbook = XLSX.utils.book_new();
-            if (source && data?.source?.length > 0) {
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.source), "Source - Data");
-            }
-            if (staging && data?.staging?.length > 0) {
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.staging), "Staging - Data");
-            }
-            if (target && data?.target?.length > 0) {
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(data.target), "Target - Data");
-            }
             
-            if (workbook.SheetNames.length === 0) {
-                alert("No data available to export for selected options.");
-                return;
+            // Build Array of Arrays to allow inserting a Title Row
+            const headers = Object.keys(rows[0] || {});
+            const aoa = [
+                ['Data Validation Report'],
+                headers,
+                ...rows.map(r => headers.map(h => r[h]))
+            ];
+
+            const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+            
+            // Merge title row
+            if (headers.length > 0) {
+                worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
             }
-            XLSX.writeFile(workbook, "Data_Comparison_Export.xlsx");
+            // Add some color to title and header
+            worksheet['!cols'] = headers.map(() => ({ wch: 25 }));
+            
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Validation Report");
+            XLSX.writeFile(workbook, "Data_Validation_Report.xlsx");
         } else if (format === 'csv') {
-            let combinedCSV = "";
-            const appendToCSV = (title, tableData) => {
-                if (!tableData || tableData.length === 0) return;
-                combinedCSV += `--- ${title} Data ---\n`;
-                combinedCSV += Papa.unparse(tableData) + "\n\n";
-            };
-            if (source) appendToCSV("Source", data?.source);
-            if (staging) appendToCSV("Staging", data?.staging);
-            if (target) appendToCSV("Target", data?.target);
-            
-            if (!combinedCSV) {
-                alert("No data available to export for selected options.");
-                return;
-            }
-            
-            const blob = new Blob([combinedCSV], { type: 'text/csv;charset=utf-8;' });
+            const csv = Papa.unparse(rows);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.setAttribute('download', `Data_Comparison_Export.csv`);
+            link.setAttribute('download', `Data_Validation_Report.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -160,7 +272,11 @@ export default function Exceptions() {
     };
 
     const cleanColumnName = (col) => {
-        return col.replace(/^(U[0-9A-Fa-f]+_)/i, '');
+        const cleaned = col.replace(/^(U[0-9A-Fa-f]+_)/i, '');
+        if (cleaned.toLowerCase() === 'targetobjectstorename') {
+            return 'Object Store';
+        }
+        return cleaned;
     };
 
     const getMismatchedKeysForSelected = () => {
@@ -210,7 +326,14 @@ export default function Exceptions() {
             });
         }
         
-        const columns = Object.keys(tableData[0]);
+        let columns = Object.keys(tableData[0]);
+        // Filter out hidden custom columns
+        const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
+        columns = columns.filter(col => {
+            const normalizedCol = col.toUpperCase().replace(/[ _]/g, '');
+            const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedCol);
+            return isSysField || visibleCustomColumns.has(col);
+        });
 
         return (
             <div style={{ marginBottom: '6px' }}>
@@ -340,38 +463,36 @@ export default function Exceptions() {
         };
 
         return (
-            <div style={{ padding: '8px 12px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'white', borderRadius: '6px', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, minWidth: 'max-content', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                    {isSuccess ? <CheckCircle size={16} color="#16a34a" /> : <XCircle size={16} color="#dc2626" />}
-                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
+            <div style={{ padding: '6px 10px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: 'white', borderRadius: '6px', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, minWidth: 'max-content', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    {isSuccess ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
+                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
                         {isSuccess ? 'Metadata Matches' : (matchStatus === 'Incomplete Lifecycle' ? 'Incomplete Lifecycle' : 'Metadata Mismatch')}
                     </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '16px', flex: 1, alignItems: 'center' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 'max-content' }}>
                         <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Object ID</span>
                         <span style={{ fontSize: '11px', color: '#0f172a', fontWeight: '600', fontFamily: 'monospace' }}>{selectedObjectId}</span>
                     </div>
 
-                    <div style={{ width: '1px', height: '24px', background: '#cbd5e1' }}></div>
+                    <div style={{ width: '1px', height: '24px', background: '#cbd5e1', display: 'none', '@media (min-width: 768px)': { display: 'block' } }}></div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content max-content', columnGap: '8px', rowGap: '6px', fontSize: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content auto', columnGap: '6px', rowGap: '4px', fontSize: '10px', minWidth: 0 }}>
                         <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '12px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
                         
                         <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED DATE:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_DATE')]) || 'N/A' : 'N/A'}</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_DATE')]) || 'N/A' : 'N/A'}</span>
                         
                         <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATION STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '12px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
                         
                         <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATED DATE:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATED_DATE')]) || 'N/A' : 'N/A'}</span>
+                        <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATED_DATE')]) || 'N/A' : 'N/A'}</span>
                     </div>
                 </div>
-
-
             </div>
         );
     };
@@ -383,7 +504,7 @@ export default function Exceptions() {
             <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '15px', fontWeight: 'bold' }}>
-                        <ShieldAlert size={18} color="#4f46e5" /> Exceptions and evidence
+                        <ShieldAlert size={18} color="#4f46e5" /> Exception Governance
                     </h2>
                 </div>
                 
@@ -485,13 +606,45 @@ export default function Exceptions() {
                             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>No records found for the given criteria.</div>
                         )}
                         {(data.source?.length > 0 || data.staging?.length > 0 || data.target?.length > 0) && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '8px', marginTop: '2px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '12px', marginBottom: '8px', marginTop: '2px' }}>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     {renderInsights()}
                                 </div>
-                                <button onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', boxShadow: '0 1px 4px rgba(16, 185, 129, 0.2)', flexShrink: 0 }}>
-                                    <Download size={12} /> Export Results
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative', flexShrink: 0 }}>
+                                    <div ref={columnSettingsRef} style={{ position: 'relative' }}>
+                                        <button onClick={() => setShowColumnSettings(!showColumnSettings)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 8px', height: '26px', boxSizing: 'border-box', background: 'white', color: '#4b5563', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', flexShrink: 0 }} title="Column Settings">
+                                            <Settings size={14} />
+                                        </button>
+                                        
+                                        {showColumnSettings && (
+                                            <div style={{ position: 'absolute', top: '100%', right: '0', marginTop: '4px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)', zIndex: 50, minWidth: '200px', maxHeight: '300px', overflowY: 'auto' }}>
+                                                <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase' }}>Custom Metadata Fields</div>
+                                                {allCustomColumns.length === 0 ? (
+                                                    <div style={{ fontSize: '11px', color: '#94a3b8', padding: '4px 0' }}>No custom fields found.</div>
+                                                ) : (
+                                                    allCustomColumns.map(col => (
+                                                        <label key={col} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#334155', padding: '4px 0', cursor: 'pointer' }}>
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={visibleCustomColumns.has(col)} 
+                                                                onChange={() => {
+                                                                    const newSet = new Set(visibleCustomColumns);
+                                                                    if (newSet.has(col)) newSet.delete(col);
+                                                                    else newSet.add(col);
+                                                                    setVisibleCustomColumns(newSet);
+                                                                }}
+                                                            />
+                                                            {cleanColumnName(col)}
+                                                        </label>
+                                                    ))
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button onClick={() => setShowExportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', boxShadow: '0 1px 4px rgba(16, 185, 129, 0.2)', flexShrink: 0 }}>
+                                        <Download size={12} /> Export Results
+                                    </button>
+                                </div>
                             </div>
                         )}
                         {renderTable('Source', data.source)}
@@ -511,25 +664,12 @@ export default function Exceptions() {
                 <div style={{ background: 'white', padding: '14px', borderRadius: '10px', width: '260px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
                     <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#1e293b' }}>Export Options</h3>
                     
-                    <div style={{ marginBottom: '12px' }}>
+                    <div style={{ marginBottom: '14px' }}>
                         <label style={{ fontSize: '10px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Format</label>
                         <select value={exportOptions.format} onChange={e => setExportOptions({...exportOptions, format: e.target.value})} style={{ padding: '4px 8px', width: '100%', borderRadius: '6px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '12px' }}>
                             <option value="excel">Excel</option>
                             <option value="csv">CSV</option>
                         </select>
-                    </div>
-
-                    <div style={{ marginBottom: '14px' }}>
-                        <label style={{ fontSize: '10px', fontWeight: '700', color: '#64748b', display: 'block', marginBottom: '6px', textTransform: 'uppercase' }}>Include Tables</label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '12px' }}>
-                            <input type="checkbox" checked={exportOptions.source} onChange={e => setExportOptions({...exportOptions, source: e.target.checked})} /> Source Data
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '12px' }}>
-                            <input type="checkbox" checked={exportOptions.staging} onChange={e => setExportOptions({...exportOptions, staging: e.target.checked})} /> Staging Data
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                            <input type="checkbox" checked={exportOptions.target} onChange={e => setExportOptions({...exportOptions, target: e.target.checked})} /> Target Data
-                        </label>
                     </div>
 
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>

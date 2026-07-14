@@ -19,17 +19,17 @@ export default function Layout() {
         </div>
 
         <nav className="sidebar-nav">
-          <NavLink to="/discovery" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="System study">
+          <NavLink to="/discovery" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Migration Insights (AS-IS)">
             <Search size={18} />
-            {!isCollapsed && <span>System study</span>}
+            {!isCollapsed && <span>Migration Insights (AS-IS)</span>}
           </NavLink>
-          <NavLink to="/exceptions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Exceptions and evidence">
+          <NavLink to="/exceptions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Exception Governance">
             <Database size={18} />
-            {!isCollapsed && <span>Exceptions and Evidence</span>}
+            {!isCollapsed && <span>Exception Governance</span>}
           </NavLink>
-          <NavLink to="/deliverables" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Deliverables">
+          <NavLink to="/deliverables" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Deliverables Workspace">
             <Package size={18} />
-            {!isCollapsed && <span>Deliverables</span>}
+            {!isCollapsed && <span>Deliverables Workspace</span>}
           </NavLink>
           <NavLink to="/reports" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Reports">
             <FileText size={18} />
