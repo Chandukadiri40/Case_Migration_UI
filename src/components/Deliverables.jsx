@@ -305,6 +305,7 @@ function MigrationReportTab() {
                     <th>Extracted File Size (in GB)</th>
                     <th>% Completion</th>
                     <th>% Failed</th>
+                    <th>Run Time</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -338,6 +339,12 @@ function MigrationReportTab() {
                             {(r.percentFailed ?? 0) > 0
                               ? <span className="status-badge status-failed">{Number(r.percentFailed ?? 0).toFixed(1)}%</span>
                               : <span className="cell-empty">0.0%</span>
+                            }
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {r.runTimeDays != null && r.runTimeDays > 0
+                              ? `${Number(r.runTimeDays).toFixed(2)} days`
+                              : <span className="cell-empty">0.00 days</span>
                             }
                           </td>
                         </tr>
