@@ -97,11 +97,7 @@ export default function ChecksumReport() {
   const completed = s.completed ?? 0
   const pending   = s.pending   ?? 0
 
-  // Discover custom staging columns from result records
-  const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath';
-  const customKeys = data && data.records && data.records.length > 0 
-      ? Object.keys(data.records[0]).filter(isCustomCol) 
-      : [];
+  // No custom metadata for Checksum report as requested
 
   const formatHeader = (key) => {
     if (key === 'filefullpath') return 'File Path';
@@ -113,14 +109,19 @@ export default function ChecksumReport() {
   }
 
   const recordCols = [
-    { key: 'documentid', label: 'Document ID' },
-    { key: 'object_class_id', label: 'Document Class' },
-    ...customKeys.map(k => ({ key: k, label: formatHeader(k) })),
-    { key: 'filename', label: 'File Name' },
-    { key: 'checksumbefore', label: 'Checksum Before' },
-    { key: 'checksumafter', label: 'Checksum After' },
-    { key: 'checksum_status', label: 'Status' }
+    { key: 'application', label: 'Application' },
+    { key: 'object_store', label: 'Object Store' },
+    { key: 'documentid', label: 'Source Document GUID' },
+    { key: 'mime_type', label: 'MIME Type' },
+    { key: 'content_size', label: 'Size (KB)' },
+    { key: 'migrated_date', label: 'Migration Date' },
+    { key: 'p8_doc_id', label: 'Target Document GUID' },
+    { key: 'checksumbefore', label: 'Source CheckSum' },
+    { key: 'checksumafter', label: 'Target CheckSum' },
+    { key: 'checksum_status', label: 'Validation Status' }
   ];
+
+  const selectedAppName = apps.find(a => String(a.appId) === String(selectedApp))?.appName || '';
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil((data?.records || []).length / pageSize))
@@ -274,12 +275,18 @@ export default function ChecksumReport() {
                     <tr key={r.documentid ?? i}>
                       <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
                       {recordCols.map(col => {
-                        const val = r[col.key]
+                        let val = r[col.key] || r[col.key?.toUpperCase()] || r[col.key?.toLowerCase()];
+                        if (col.key === 'application' && !val && selectedAppName) val = selectedAppName;
+                        if (col.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
+                        if (col.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
+
                         if (col.key === 'checksum_status') {
+                          const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
+                          const displayVal = isMatched ? 'Matched' : 'MisMatched';
                           return (
                             <td key={col.key}>
-                              <span className={ val?.toLowerCase() === 'completed' ? 'status-badge status-success' : 'status-badge status-pending' }>
-                                {val || '—'}
+                              <span style={{ fontWeight: 'bold', color: isMatched ? '#10b981' : '#ef4444' }}>
+                                {displayVal}
                               </span>
                             </td>
                           )
@@ -287,18 +294,15 @@ export default function ChecksumReport() {
                         if (col.key === 'checksumbefore' || col.key === 'checksumafter') {
                           return (
                             <td key={col.key}>
-                              <span className="cell-mono">{val ? val.slice(0, 16) + '…' : '—'}</span>
+                              <span className="cell-mono" title={val}>{val ? val.slice(0, 16) + '…' : '—'}</span>
                             </td>
                           )
                         }
-                        if (col.key === 'documentid') {
+                        if (col.key === 'documentid' || col.key === 'p8_doc_id') {
                           return <td key={col.key} className="cell-mono" style={{ fontSize: '9px' }}>{val || '—'}</td>
                         }
-                        if (col.key === 'filename') {
-                          return <td key={col.key} style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || <em className="cell-empty">NULL</em>}</td>
-                        }
                         return (
-                          <td key={col.key}>
+                          <td key={col.key} title={val}>
                             {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
                           </td>
                         )

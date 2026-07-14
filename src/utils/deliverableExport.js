@@ -12,38 +12,40 @@ const AGGREGATED_HEADERS = [
 function getRecordColumns(data, meta) {
   if (!data || data.length === 0) return []
   const reconProps = meta?.reconProps || {
-    systemProperties: ['mime_type', 'create_date', 'modify_date', 'object_class_id'],
-    customMetadata: ['u1708_documenttitle', 'ua8c8_user_name', 'ud5e8_address', 'uc7a6_order_no']
+    customMetadata: []
   }
   const formatHeader = (key) => {
     const k = key.toLowerCase()
-    if (k === 'mime_type') return 'Mime Type'
-    if (k === 'create_date') return 'Created Date'
-    if (k === 'modify_date') return 'Modified Date'
-    if (k === 'object_class_id') return 'Document Class'
     if (k === 'filefullpath') return 'File Path'
     if (k.startsWith('u') && k.includes('_')) {
       return k.substring(k.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase()
     }
     return key.replace(/_/g, ' ').toUpperCase()
   }
-  const systemCols = (reconProps.systemProperties || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
   const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
+  const visible = meta.visibleCustomColumns || new Set();
+  
   const customCols = hasWildcard
     ? (() => {
-        const isCustomCol = k => (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        const isCustomCol = k => {
+            if (k.toLowerCase().includes('objectstorename')) return false;
+            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+        };
         const keys = Object.keys(data[0]).filter(isCustomCol);
-        return keys.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+        return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
       })()
-    : (reconProps.customMetadata || []).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
+    : (reconProps.customMetadata || []).filter(k => visible.size === 0 || visible.has(k.toLowerCase()) || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
   const hasFailed = data.some(r => String(r.migration_status ?? '').toLowerCase() === 'failed')
 
   return [
+    { key: 'application', label: 'Application' },
     { key: 'objectStore', label: 'Object Store' },
-    { key: 'object_id', label: 'Document ID' },
-    { key: 'migration_status', label: 'Status' },
-    { key: 'migrated_date', label: 'Migrated Date' },
-    ...systemCols,
+    { key: 'object_id', label: 'Source Document GUID' },
+    { key: 'mime_type', label: 'MIME Type' },
+    { key: 'content_size', label: 'Size (KB)' },
+    { key: 'migrated_date', label: 'Migration Date' },
+    { key: 'p8_doc_id', label: 'Target Document GUID' },
+    { key: 'migration_status', label: 'Migration Status' },
     ...customCols,
     ...(hasFailed ? [{ key: 'error_info', label: 'Error Info' }] : [])
   ]
@@ -76,17 +78,14 @@ function buildRows(data, meta) {
     return { headers: AGGREGATED_HEADERS, rows }
   } else {
     const cols = getRecordColumns(data, meta)
-    const headers = ['S.No', ...cols.map(c => c.label)]
-    let sno = 1
+    const headers = cols.map(c => c.label)
     const rows = data.map(r => {
-      return [
-        sno++,
-        ...cols.map(c => {
-          const val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
-          if (val == null) return ''
-          return String(val)
-        })
-      ]
+      return cols.map(c => {
+        let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
+        if (c.key === 'application' && !val && meta.selectedAppName) val = meta.selectedAppName;
+        if (val == null) return ''
+        return String(val)
+      })
     })
     return { headers, rows }
   }
