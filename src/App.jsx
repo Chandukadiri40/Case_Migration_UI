@@ -7,6 +7,7 @@ import Monitor from './monitor/Monitor'
 import Discovery from './components/Discovery'
 import Exceptions from './components/Exceptions'
 import Deliverables from './components/Deliverables'
+import Configuration from './components/Configuration'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="discovery" element={<Discovery />} />
             <Route path="exceptions" element={<Exceptions />} />
             <Route path="deliverables" element={<Deliverables />} />
+            <Route path="configuration" element={<Configuration />} />
             <Route path="*" element={<Navigate to="discovery" replace />} />
           </Route>
         </Routes>

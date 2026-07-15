@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import ChecksumReport from './ChecksumReport'
-import { apiGetDeliverableMigrationReport, apiGetReconciliationProperties } from '../utils/api'
+import { apiGetDeliverableMigrationReport, apiGetReconciliationProperties, apiGetTenantConfig } from '../utils/api'
 import { exportDeliverableExcel, exportDeliverableCSV } from '../utils/deliverableExport'
-import appsData from '../apps.json'
 import { FileSpreadsheet, Download, Search, Database, Settings } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -35,12 +34,23 @@ const labelStyle = {
 
 // -- Migration Report Tab --
 function MigrationReportTab() {
-  const [apps]                          = useState(appsData)
+  const [apps, setApps]                 = useState([])
   const [selectedApp, setSelectedApp]   = useState('')
   const [reconProps, setReconProps]     = useState({
     systemProperties: ['mime_type', 'create_date', 'modify_date', 'object_class_id'],
     customMetadata: ['u1708_documenttitle', 'ua8c8_user_name', 'ud5e8_address', 'uc7a6_order_no']
   })
+
+  // Load configured apps
+  useEffect(() => {
+    apiGetTenantConfig()
+      .then(res => {
+        if (res && res.applications) {
+          setApps(res.applications)
+        }
+      })
+      .catch(console.error)
+  }, [])
 
   // Load configured reconciliation columns
   useEffect(() => {

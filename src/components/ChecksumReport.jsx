@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { apiGetChecksumReport } from '../utils/api'
+import { apiGetChecksumReport, apiGetTenantConfig } from '../utils/api'
 import { generateChecksumExcel, generateChecksumCSV } from '../utils/checksumExport'
-import appsData from '../apps.json'
 import { Download, Search, Database } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -31,7 +30,7 @@ const labelStyle = {
 }
 
 export default function ChecksumReport() {
-  const [apps]                          = useState(appsData)
+  const [apps, setApps]                 = useState([])
   const [selectedApp, setSelectedApp]   = useState('')
   const [docClasses, setDocClasses]     = useState([])
   const [selectedDocClass, setSelectedDocClass] = useState('')
@@ -45,6 +44,17 @@ export default function ChecksumReport() {
   // Local pagination states
   const [page, setPage]                 = useState(1)
   const [pageSize, setPageSize]         = useState(100)
+
+  // Load configured apps
+  useEffect(() => {
+    apiGetTenantConfig()
+      .then(res => {
+        if (res && res.applications) {
+          setApps(res.applications)
+        }
+      })
+      .catch(console.error)
+  }, [])
 
   // Load doc classes when app changes
   useEffect(() => {

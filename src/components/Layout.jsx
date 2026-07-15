@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { FileText, Monitor, LogOut, Menu, Search, Database, Package } from 'lucide-react'
+import { FileText, Monitor, LogOut, Menu, Search, Database, Package, Settings } from 'lucide-react'
 
 export default function Layout() {
   const { logout } = useAuth()
@@ -38,6 +38,10 @@ export default function Layout() {
           <NavLink to="/monitor" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Logs">
             <Monitor size={18} />
             {!isCollapsed && <span>Logs</span>}
+          </NavLink>
+          <NavLink to="/configuration" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Settings">
+            <Settings size={18} />
+            {!isCollapsed && <span>Settings</span>}
           </NavLink>
         </nav>
 

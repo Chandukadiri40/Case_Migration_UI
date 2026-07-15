@@ -3,7 +3,7 @@ import axios from 'axios'
 import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle, Settings } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import appsData from '../apps.json'
+import { apiGetTenantConfig, BASE } from '../utils/api'
 
 export default function Exceptions() {
     const [apps, setApps] = useState([])
@@ -35,20 +35,26 @@ export default function Exceptions() {
     const [exportOptions, setExportOptions] = useState({ format: 'excel', source: true, staging: true, target: true })
 
     useEffect(() => {
-        setApps(appsData)
+        apiGetTenantConfig()
+            .then(res => {
+                if (res && res.applications) {
+                    setApps(res.applications)
+                }
+            })
+            .catch(err => console.error("Failed to load apps:", err))
     }, [])
 
     // Fetch Doc Classes when App changes
     useEffect(() => {
         if (!selectedApp) return;
-        axios.get(`http://localhost:8080/api/discovery/doc-classes?appId=${selectedApp}`)
+        axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}`)
             .then(res => {
                 setDocClasses(res.data);
                 setSelectedDocClass('');
             })
             .catch(console.error);
             
-        axios.get(`http://localhost:8080/api/exceptions/metadata-fields?appId=${selectedApp}`)
+        axios.get(`${BASE}/exceptions/metadata-fields?appId=${selectedApp}`)
             .then(res => setMetadataFields(res.data))
             .catch(console.error);
     }, [selectedApp]);
@@ -88,7 +94,7 @@ export default function Exceptions() {
             criteria.customMetadata = customMetadata.filter(m => m.field && m.value);
         }
 
-        axios.post('http://localhost:8080/api/exceptions/check', criteria)
+        axios.post(`${BASE}/exceptions/check`, criteria)
             .then(res => {
                 setData(res.data);
                 setIsFiltersCollapsed(true);

@@ -6,6 +6,7 @@ import { SYSTEM_FIELDS, TABLE_METADATA } from '../config/tableConfig'
 function makeDefaults(tableId) {
   return {
     tableId,
+    appId: '',
     status: 'Total',
     startDate: '',
     endDate: '',
@@ -20,6 +21,7 @@ function makeDefaults(tableId) {
  * Builds the SearchRequest body matching the backend DTO:
  * {
  *   table:         "source" | "staging" | "target",
+ *   appId:         "ccol" | "lynx_bss",
  *   status:        "Success" | "Failed" | "total",
  *   fromDate:      "YYYY-MM-DD" | null,
  *   toDate:        "YYYY-MM-DD" | null,
@@ -51,7 +53,7 @@ function buildPayload(filters) {
 
   // Custom metadata filters - all keys in filters that are not system keys and have a value
   const customFilters = {}
-  const systemKeys = ['tableId', 'status', 'startDate', 'endDate', 'doc-id', 'created-date', 'content-size', 'mime-type']
+  const systemKeys = ['tableId', 'appId', 'status', 'startDate', 'endDate', 'doc-id', 'created-date', 'content-size', 'mime-type']
   Object.keys(filters).forEach(key => {
     if (!systemKeys.includes(key)) {
       const val = filters[key]
@@ -63,11 +65,10 @@ function buildPayload(filters) {
 
   return {
     table:         filters.tableId,
-    status:        (!filters.status || filters.status === 'Total')
-                     ? 'total'
-                     : filters.status === 'Success' ? 'Migrated' : filters.status,
-    fromDate:      filters.startDate ? filters.startDate + 'T00:00:00' : null,
-    toDate:        filters.endDate   ? filters.endDate   + 'T23:59:59' : null,
+    appId:         filters.appId,
+    status:        filters.status === 'Total' ? '' : filters.status,
+    fromDate:      filters.startDate || null,
+    toDate:        filters.endDate || null,
     docIds:        docIds.length > 0 ? docIds : null,
     systemFilters: Object.keys(systemFilters).length > 0 ? systemFilters : null,
     customFilters: Object.keys(customFilters).length > 0 ? customFilters : null,

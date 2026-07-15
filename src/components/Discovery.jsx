@@ -3,7 +3,7 @@ import axios from 'axios'
 import { Search, Database, Layers, CheckCircle, FolderOpen, Calendar, HardDrive, FileText, FileSearch, Hash, ArrowDown, ArrowUp, Download } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
-import appsData from '../apps.json'
+import { apiGetTenantConfig, BASE } from '../utils/api'
 
 export default function Discovery() {
     const [apps, setApps] = useState([])
@@ -32,7 +32,7 @@ export default function Discovery() {
         { id: 'properties', label: 'Properties', icon: <FileSearch size={18} /> }
     ];
 
-    // Sub Reports Definition
+    //Sub Reports Definition
     const subReports = {
         'doc_classes': [
             { id: 'list', label: 'Document Class List', endpoint: 'doc-class-list' }
@@ -70,7 +70,13 @@ export default function Discovery() {
     };
 
     useEffect(() => {
-        setApps(appsData);
+        apiGetTenantConfig()
+            .then(res => {
+                if (res && res.applications) {
+                    setApps(res.applications)
+                }
+            })
+            .catch(err => console.error("Failed to load apps:", err))
     }, []);
 
     useEffect(() => {
@@ -90,7 +96,7 @@ export default function Discovery() {
     // Fetch Document Classes when App changes
     useEffect(() => {
         if (!selectedApp) return;
-        axios.get(`http://localhost:8080/api/discovery/doc-classes?appId=${selectedApp}`)
+        axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}`)
             .then(res => {
                 setDocClasses(res.data);
                 setSelectedDocClass('');
@@ -126,7 +132,7 @@ export default function Discovery() {
         if (/^\d+\.\s+/.test(strVal)) {
             strVal = strVal.replace(/^\d+\.\s+/, '');
         }
-        
+
         if (key && key.toLowerCase() === 'creation_month' && !isNaN(val)) {
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const monthIdx = parseInt(val, 10) - 1;
@@ -208,7 +214,7 @@ export default function Discovery() {
             criteria.documentClasses = [selectedDocClass];
         }
 
-        axios.post(`http://localhost:8080/api/discovery/${endpoint}`, criteria)
+        axios.post(`${BASE}/discovery/${endpoint}`, criteria)
             .then(res => setData(res.data))
             .catch(err => {
                 console.error("Endpoint error:", err)
