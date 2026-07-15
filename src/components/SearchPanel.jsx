@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { SYSTEM_FIELDS, TABLE_METADATA, STATUS_OPTIONS } from '../config/tableConfig'
 import BulkUpload from './BulkUpload'
-import { apiGetCustomColumns, apiGetAvailableFields } from '../utils/api'
+import { apiGetCustomColumns, apiGetAvailableFields, apiGetTenantConfig } from '../utils/api'
 
 export default function SearchPanel({ tableId, filters, setFilters, onSearch, onReset, loading, error }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -15,6 +15,8 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
   const [defaultConfiguredKeys, setDefaultConfiguredKeys] = useState([])
   const [availableDbFields, setAvailableDbFields] = useState([])
   const [apiLoading, setApiLoading] = useState(false)
+  
+  const [appsData, setAppsData] = useState([])
 
   // Custom dropdown states
   const [addFieldDropdownOpen, setAddFieldDropdownOpen] = useState(false)
@@ -30,6 +32,14 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
       .catch(err => {
         console.error("Failed to load available fields mappings:", err)
       })
+      
+    apiGetTenantConfig()
+      .then(res => {
+        if (res && res.applications) {
+          setAppsData(res.applications)
+        }
+      })
+      .catch(err => console.error("Failed to load tenant apps:", err))
   }, [])
 
   // Fetch configured columns for the current table when tableId changes or DB available fields load
@@ -237,8 +247,26 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
           {/* ── Main filter grid — all sections in one horizontal row ── */}
           <div className="sp-filter-row">
 
-            {/* COL 1 — Status (staging only) + Date Range */}
+            {/* COL 1 — Application + Status (staging only) + Date Range */}
             <div className="sp-col sp-col--narrow">
+              
+              <div className="sp-field-group">
+                <div className="sp-group-label">Application (Object Store)</div>
+                <div className="sp-field">
+                  <select
+                    name="appId"
+                    className="sp-input"
+                    value={filters.appId || ''}
+                    onChange={e => setFilters(prev => ({ ...prev, appId: e.target.value }))}
+                  >
+                    <option value="">Select App</option>
+                    {appsData.map(a => (
+                      <option key={a.appId} value={a.appId}>{a.appName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Status — only for staging table */}
               {tableId === 'staging' && (
                 <div className="sp-field-group">

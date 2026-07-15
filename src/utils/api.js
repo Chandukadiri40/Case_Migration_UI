@@ -2,7 +2,7 @@
  * Central API client.
  * VITE_API_BASE_URL in .env → set to backend IP, e.g. http://192.168.10.31:8080/api
  */
-const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+export const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 function getToken() {
   return sessionStorage.getItem('mrd_token')
@@ -96,4 +96,20 @@ export async function apiGetDeliverableMigrationReport(payload) {
 
 export async function apiGetReconciliationProperties() {
   return request('/config/reconciliation-properties')
+}
+
+// -- Tenant Configuration
+export async function apiGetTenantConfig() {
+  return request('/config')
+}
+
+export async function apiSaveTenantConfig(payload) {
+  return request('/config', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function apiGetDbMetadata(schema) {
+  return request(`/config/db-metadata?schema=${schema}`)
 }

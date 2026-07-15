@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api/monitor', // Assuming default spring boot port
+  baseURL: (import.meta.env.VITE_API_BASE_URL || '/api') + '/monitor',
   withCredentials: true
 })
 
