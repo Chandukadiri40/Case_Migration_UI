@@ -18,7 +18,7 @@ const MODES = [
 ]
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
+  const { logout } = useAuth()
   const [mode, setMode] = useState('filter')
 
   const {
@@ -34,16 +34,14 @@ export default function Dashboard() {
   const [queryResults, setQueryResults]   = useState([])
   const [queryColumns, setQueryColumns]   = useState([])
   const [querySearched, setQuerySearched] = useState(false)
-  const [querySQL, setQuerySQL]           = useState('')
 
-  function handleQueryResults(records, sql) {
+  function handleQueryResults(records) {
     setQueryResults(records)
     setQuerySearched(true)
-    setQuerySQL(sql || '')
   }
   function handleQueryColumns(cols) { setQueryColumns(cols) }
   function handleQueryClear() {
-    setQueryResults([]); setQueryColumns([]); setQuerySearched(false); setQuerySQL('')
+    setQueryResults([]); setQueryColumns([]); setQuerySearched(false);
   }
 
   const getStatus = r => r.migration_status ?? r.status ?? ''

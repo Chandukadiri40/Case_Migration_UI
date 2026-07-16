@@ -3,6 +3,19 @@ import { getLogDates, getLogs } from './api'
 import { RefreshCw, Download, Search, AlertCircle } from 'lucide-react'
 import LogConfig from './LogConfig'
 
+const getRowStyle = (level) => {
+  if (level === 'ERROR') return { background: 'var(--danger-light)' };
+  if (level === 'WARN') return { background: 'var(--warning-light)' };
+  return { background: 'transparent' };
+}
+
+const getLevelStyle = (level) => {
+  if (level === 'ERROR') return 'var(--danger)';
+  if (level === 'WARN') return 'var(--warning)';
+  if (level === 'INFO') return 'var(--primary)';
+  return 'var(--gray-600)';
+}
+
 export default function LogViewer({ config, onConfigSaved }) {
   const [dates, setDates] = useState([])
   const [selectedDate, setSelectedDate] = useState('')
@@ -171,12 +184,12 @@ export default function LogViewer({ config, onConfigSaved }) {
                   </tr>
                 ) : (
                   filteredLogs.map((log, idx) => (
-                    <tr key={idx} style={{ background: log.level === 'ERROR' ? 'var(--danger-light)' : log.level === 'WARN' ? 'var(--warning-light)' : 'transparent' }}>
+                    <tr key={`${log.timestamp}-${idx}`} style={getRowStyle(log.level)}>
                       <td style={{ whiteSpace: 'nowrap', color: 'var(--gray-600)' }}>{log.timestamp}</td>
                       <td>
                         <span style={{ 
                           fontWeight: 600, 
-                          color: log.level === 'ERROR' ? 'var(--danger)' : log.level === 'WARN' ? 'var(--warning)' : log.level === 'INFO' ? 'var(--primary)' : 'var(--gray-600)' 
+                          color: getLevelStyle(log.level)
                         }}>
                           {log.level}
                         </span>

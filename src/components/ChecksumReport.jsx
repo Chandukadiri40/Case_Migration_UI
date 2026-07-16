@@ -29,6 +29,40 @@ const labelStyle = {
   letterSpacing: '0.06em',
 }
 
+function renderTableCell(r, col, selectedAppName) {
+  let val = r[col.key] || r[col.key?.toUpperCase()] || r[col.key?.toLowerCase()];
+  if (col.key === 'application' && !val && selectedAppName) val = selectedAppName;
+  if (col.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
+  if (col.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
+
+  if (col.key === 'checksum_status') {
+    const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
+    const displayVal = isMatched ? 'Matched' : 'MisMatched';
+    return (
+      <td key={col.key}>
+        <span style={{ fontWeight: 'bold', color: isMatched ? '#10b981' : '#ef4444' }}>
+          {displayVal}
+        </span>
+      </td>
+    );
+  }
+  if (col.key === 'checksumbefore' || col.key === 'checksumafter') {
+    return (
+      <td key={col.key}>
+        <span className="cell-mono" title={val}>{val ? val.slice(0, 16) + '…' : '—'}</span>
+      </td>
+    );
+  }
+  if (col.key === 'documentid' || col.key === 'p8_doc_id') {
+    return <td key={col.key} className="cell-mono" style={{ fontSize: '9px' }}>{val || '—'}</td>;
+  }
+  return (
+    <td key={col.key} title={val}>
+      {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
+    </td>
+  );
+}
+
 export default function ChecksumReport() {
   const [apps, setApps]                 = useState([])
   const [selectedApp, setSelectedApp]   = useState('')
@@ -284,39 +318,7 @@ export default function ChecksumReport() {
                   {pageData.map((r, i) => (
                     <tr key={r.documentid ?? i}>
                       <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
-                      {recordCols.map(col => {
-                        let val = r[col.key] || r[col.key?.toUpperCase()] || r[col.key?.toLowerCase()];
-                        if (col.key === 'application' && !val && selectedAppName) val = selectedAppName;
-                        if (col.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
-                        if (col.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
-
-                        if (col.key === 'checksum_status') {
-                          const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
-                          const displayVal = isMatched ? 'Matched' : 'MisMatched';
-                          return (
-                            <td key={col.key}>
-                              <span style={{ fontWeight: 'bold', color: isMatched ? '#10b981' : '#ef4444' }}>
-                                {displayVal}
-                              </span>
-                            </td>
-                          )
-                        }
-                        if (col.key === 'checksumbefore' || col.key === 'checksumafter') {
-                          return (
-                            <td key={col.key}>
-                              <span className="cell-mono" title={val}>{val ? val.slice(0, 16) + '…' : '—'}</span>
-                            </td>
-                          )
-                        }
-                        if (col.key === 'documentid' || col.key === 'p8_doc_id') {
-                          return <td key={col.key} className="cell-mono" style={{ fontSize: '9px' }}>{val || '—'}</td>
-                        }
-                        return (
-                          <td key={col.key} title={val}>
-                            {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
-                          </td>
-                        )
-                      })}
+                      {recordCols.map(col => renderTableCell(r, col, selectedAppName))}
                     </tr>
                   ))}
                 </tbody>

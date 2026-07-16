@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { saveLogConfig } from './api'
-import { Check, Edit2, Save, AlertCircle } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 
 export default function LogConfig({ config, onConfigSaved }) {
   const [path, setPath] = useState(config?.logPath || '')

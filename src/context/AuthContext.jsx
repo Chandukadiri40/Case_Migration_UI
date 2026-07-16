@@ -1,5 +1,5 @@
-import { createContext, useContext, useState } from 'react'
-import { apiLogin } from '../utils/api'
+import { createContext, useContext, useState, useMemo } from 'react'
+import { apiLogin, apiRegister } from '../utils/api'
 
 const AuthContext = createContext(null)
 
@@ -33,14 +33,25 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function register(username, password) {
+    try {
+      await apiRegister(username, password)
+      return { success: true }
+    } catch (err) {
+      return { success: false, message: err.message || 'Registration failed.' }
+    }
+  }
+
   function logout() {
     sessionStorage.removeItem('mrd_token')
     sessionStorage.removeItem('mrd_user')
     setUser(null)
   }
 
+  const value = useMemo(() => ({ user, login, register, logout }), [user]);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

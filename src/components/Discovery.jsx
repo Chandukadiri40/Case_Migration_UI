@@ -345,9 +345,9 @@ export default function Discovery() {
                             </thead>
                             <tbody>
                                 {sortedData.length > 0 ? sortedData.map((row, i) => (
-                                    <tr key={i}>
-                                        {Object.entries(row).map(([key, val], j) => (
-                                            <td key={j}>{formatCellValue(key, val)}</td>
+                                    <tr key={row.documentid || row.id || `row-${i}`}>
+                                        {Object.entries(row).map(([key, val]) => (
+                                            <td key={key}>{formatCellValue(key, val)}</td>
                                         ))}
                                     </tr>
                                 )) : (

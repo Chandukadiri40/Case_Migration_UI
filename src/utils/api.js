@@ -41,9 +41,34 @@ export async function apiLogin(username, password) {
   })
 }
 
+export async function apiRegister(username, password) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 export async function apiGetTables() {
   return request('/config/tables')
+}
+
+export async function apiGetDbConfig() {
+  return request('/config/db')
+}
+
+export async function apiSaveDbConfig(config) {
+  return request('/config/db', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export async function apiTestDbConnection(config) {
+  return request('/config/db/test', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
 }
 
 export async function apiGetCustomColumns(tableKey) {

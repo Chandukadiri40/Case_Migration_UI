@@ -31,7 +31,7 @@ export default function QueryExecutor({ onResults, onColumns, onClear }) {
   const [sql, setSql] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [execInfo, setExecInfo] = useState(null)   // { rowCount, duration }
+  const [execInfo, setExecInfo] = useState(null)
   const [collapsed, setCollapsed] = useState(false)
   const [copied, setCopied] = useState(false)
   const textareaRef = useRef()
@@ -175,7 +175,7 @@ export default function QueryExecutor({ onResults, onColumns, onClear }) {
             {/* Line numbers — based on actual typed content, minimum 1 */}
             <div className="qe-gutter" aria-hidden="true">
               {(sql ? sql.split('\n') : ['']).map((_, i) => (
-                <div key={i} className="qe-line-num">{i + 1}</div>
+                <div key={`line-${i}`} className="qe-line-num">{i + 1}</div>
               ))}
             </div>
 

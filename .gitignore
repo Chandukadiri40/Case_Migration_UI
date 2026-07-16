@@ -1,6 +1,9 @@
 HELP.md
-### Node.js ###
+### Node.js & Build ###
 node_modules/
+dist/
+dist-ssr/
+*.local
 
 
 ### STS ###

@@ -3,13 +3,6 @@ import * as XLSX from 'xlsx'
 function getRecordColumns(records) {
   if (!records || records.length === 0) return []
   // No custom metadata as requested
-  const formatHeader = (key) => {
-    if (key === 'filefullpath') return 'File Path'
-    if (key.startsWith('u') && key.includes('_')) {
-      return key.substring(key.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase()
-    }
-    return key.replace(/_/g, ' ').toUpperCase()
-  }
 
   return [
     { key: 'application', label: 'Application' },
@@ -25,22 +18,25 @@ function getRecordColumns(records) {
   ]
 }
 
+const processCellValue = (r, c, val, meta) => {
+  if (c.key === 'application' && !val && meta?.selectedAppName) return meta.selectedAppName;
+  if (c.key === 'object_store' && !val && r['objectstorename']) return r['objectstorename'];
+  if (c.key === 'content_size' && val) return (Number(val) / 1024).toFixed(2);
+  if (c.key === 'checksum_status') {
+      const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
+      return isMatched ? 'Matched' : 'MisMatched';
+  }
+  return val == null ? '' : String(val);
+}
+
 function buildRows(records, meta) {
   if (!records || records.length === 0) return { headers: [], rows: [] }
   const cols = getRecordColumns(records)
   const headers = cols.map(c => c.label)
   const rows = records.map(r => {
     return cols.map(c => {
-      let val = r[c.key] || r[c.key?.toUpperCase()] || r[c.key?.toLowerCase()]
-      if (c.key === 'application' && !val && meta?.selectedAppName) val = meta.selectedAppName;
-      if (c.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
-      if (c.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
-      if (c.key === 'checksum_status') {
-          const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
-          val = isMatched ? 'Matched' : 'MisMatched';
-      }
-      if (val == null) return ''
-      return String(val)
+      const val = r[c.key] || r[c.key?.toUpperCase()] || r[c.key?.toLowerCase()];
+      return processCellValue(r, c, val, meta);
     })
   })
   return { headers, rows }

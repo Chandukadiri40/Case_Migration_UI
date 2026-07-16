@@ -9,32 +9,34 @@ const AGGREGATED_HEADERS = [
   '% Completion', '% Failed'
 ]
 
+function formatHeader(key) {
+  const k = key.toLowerCase()
+  if (k === 'filefullpath') return 'File Path'
+  if (k.startsWith('u') && k.includes('_')) {
+    return k.substring(k.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase()
+  }
+  return key.replace(/_/g, ' ').toUpperCase()
+}
+
+function getCustomColumns(data, reconProps, visible) {
+  const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
+  if (hasWildcard) {
+    const isCustomCol = k => {
+        if (k.toLowerCase().includes('objectstorename')) return false;
+        return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+    };
+    const keys = Object.keys(data[0]).filter(isCustomCol);
+    return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+  }
+  return (reconProps.customMetadata || []).filter(k => visible.size === 0 || visible.has(k.toLowerCase()) || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+}
+
 function getRecordColumns(data, meta) {
   if (!data || data.length === 0) return []
-  const reconProps = meta?.reconProps || {
-    customMetadata: []
-  }
-  const formatHeader = (key) => {
-    const k = key.toLowerCase()
-    if (k === 'filefullpath') return 'File Path'
-    if (k.startsWith('u') && k.includes('_')) {
-      return k.substring(k.indexOf('_') + 1).replace(/_/g, ' ').toUpperCase()
-    }
-    return key.replace(/_/g, ' ').toUpperCase()
-  }
-  const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
+  const reconProps = meta?.reconProps || { customMetadata: [] }
   const visible = meta.visibleCustomColumns || new Set();
   
-  const customCols = hasWildcard
-    ? (() => {
-        const isCustomCol = k => {
-            if (k.toLowerCase().includes('objectstorename')) return false;
-            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
-        };
-        const keys = Object.keys(data[0]).filter(isCustomCol);
-        return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
-      })()
-    : (reconProps.customMetadata || []).filter(k => visible.size === 0 || visible.has(k.toLowerCase()) || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }))
+  const customCols = getCustomColumns(data, reconProps, visible);
   const hasFailed = data.some(r => String(r.migration_status ?? '').toLowerCase() === 'failed')
 
   return [
@@ -51,43 +53,51 @@ function getRecordColumns(data, meta) {
   ]
 }
 
+function buildAggregatedRows(data) {
+  let sno = 1
+  let lastApp = null
+  const rows = data.map(r => {
+    const appCell = r.objectStore !== lastApp ? r.objectStore : ''
+    lastApp = r.objectStore
+    return [
+      sno++,
+      appCell,
+      r.documentClass,
+      r.totalDocuments,
+      Number(r.totalFileSizeGb).toFixed(2),
+      r.extractedFileNet,
+      r.extractionFailed,
+      r.remaining,
+      Number(r.extractedFileSizeGb).toFixed(2),
+      Number(r.percentCompletion).toFixed(1) + '%',
+      Number(r.percentFailed).toFixed(1) + '%',
+    ]
+  })
+  return { headers: AGGREGATED_HEADERS, rows }
+}
+
+function buildRecordRows(data, meta) {
+  const cols = getRecordColumns(data, meta)
+  const headers = cols.map(c => c.label)
+  const rows = data.map(r => {
+    return cols.map(c => {
+      let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
+      if (c.key === 'application' && !val && meta.selectedAppName) val = meta.selectedAppName;
+      if (val == null) return ''
+      return String(val)
+    })
+  })
+  return { headers, rows }
+}
+
 function buildRows(data, meta) {
   if (!data || data.length === 0) return { headers: [], rows: [] }
   const isAggregated = data[0].isAggregated ?? true
 
   if (isAggregated) {
-    let sno = 1
-    let lastApp = null
-    const rows = data.map(r => {
-      const appCell = r.objectStore !== lastApp ? r.objectStore : ''
-      lastApp = r.objectStore
-      return [
-        sno++,
-        appCell,
-        r.documentClass,
-        r.totalDocuments,
-        Number(r.totalFileSizeGb).toFixed(2),
-        r.extractedFileNet,
-        r.extractionFailed,
-        r.remaining,
-        Number(r.extractedFileSizeGb).toFixed(2),
-        Number(r.percentCompletion).toFixed(1) + '%',
-        Number(r.percentFailed).toFixed(1) + '%',
-      ]
-    })
-    return { headers: AGGREGATED_HEADERS, rows }
+    return buildAggregatedRows(data);
   } else {
-    const cols = getRecordColumns(data, meta)
-    const headers = cols.map(c => c.label)
-    const rows = data.map(r => {
-      return cols.map(c => {
-        let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
-        if (c.key === 'application' && !val && meta.selectedAppName) val = meta.selectedAppName;
-        if (val == null) return ''
-        return String(val)
-      })
-    })
-    return { headers, rows }
+    return buildRecordRows(data, meta);
   }
 }
 
@@ -100,7 +110,12 @@ export function exportDeliverableExcel(data, meta = {}) {
 
   // Merge title across all columns
   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }]
-  ws['!cols'] = headers.map((h, i) => ({ wch: i === 2 ? 32 : i === 1 ? 20 : 18 }))
+  ws['!cols'] = headers.map((h, i) => {
+    let width = 18;
+    if (i === 1) width = 20;
+    if (i === 2) width = 32;
+    return { wch: width };
+  })
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation Report')
