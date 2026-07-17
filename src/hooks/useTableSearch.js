@@ -75,6 +75,52 @@ function buildPayload(filters) {
   }
 }
 
+function validateField(key, val) {
+  if (!val || typeof val !== 'string' || !val.trim()) return null;
+  const trimmed = val.trim();
+  const keyLower = key.toLowerCase();
+  
+  if (keyLower.includes('date') || keyLower.includes('time')) {
+    if (isNaN(Date.parse(trimmed)) && !/^\d{4}$/.test(trimmed)) {
+      return `Field "${key.replace(/_/g, ' ')}" must be a valid date (e.g. YYYY-MM-DD).`;
+    }
+  }
+  
+  if (keyLower.includes('size') || keyLower.includes('number') || keyLower.includes('count')) {
+    if (isNaN(Number(trimmed))) {
+      return `Field "${key.replace(/_/g, ' ')}" must be a valid number.`;
+    }
+  }
+  return null;
+}
+
+function validateFilters(filters) {
+  for (const [key, val] of Object.entries(filters)) {
+    const errorMsg = validateField(key, val);
+    if (errorMsg) return errorMsg;
+  }
+  return null;
+}
+
+function validatePayload(payload) {
+  const hasOverallFilter = 
+    (payload.docIds && payload.docIds.length > 0) ||
+    payload.fromDate ||
+    payload.toDate ||
+    (payload.systemFilters && Object.keys(payload.systemFilters).length > 0) ||
+    (payload.customFilters && Object.keys(payload.customFilters).length > 0);
+
+  if (!hasOverallFilter) return 'Please fill at least one field to search.';
+
+  const hasSystemProperty = 
+    (payload.docIds && payload.docIds.length > 0) ||
+    (payload.systemFilters && Object.keys(payload.systemFilters).length > 0);
+
+  if (!hasSystemProperty) return 'Please fill at least one field in System Properties to search.';
+
+  return null;
+}
+
 export function useTableSearch() {
   const [tableId, setTableIdState] = useState('')
   const [filters, setFiltersState] = useState({})
@@ -103,53 +149,17 @@ export function useTableSearch() {
     const active = overrideFilters || filters
     if (!active.tableId) { setError('Please select a table first.'); return }
 
-    // Client-side type validation before sending query
-    for (const [key, val] of Object.entries(active)) {
-      if (!val || typeof val !== 'string' || !val.trim()) continue
-      const trimmed = val.trim()
-
-      // 1. Date Field Validation (includes system dates or custom fields with 'date' or 'time' in name/label)
-      const isDateField = key.toLowerCase().includes('date') || key.toLowerCase().includes('time')
-      if (isDateField) {
-        const parsed = Date.parse(trimmed)
-        // Allow a simple 4-digit year search (e.g. "2026"), but anything else must be a valid date format
-        if (isNaN(parsed) && !/^\d{4}$/.test(trimmed)) {
-          setError(`Field "${key.replace(/_/g, ' ')}" must be a valid date (e.g. YYYY-MM-DD).`)
-          return
-        }
-      }
-
-      // 2. Numeric Field Validation (includes custom fields with 'size', 'number', or 'count' in name/label)
-      const isNumberField = key.toLowerCase().includes('size') || key.toLowerCase().includes('number') || key.toLowerCase().includes('count')
-      if (isNumberField) {
-        if (isNaN(Number(trimmed))) {
-          setError(`Field "${key.replace(/_/g, ' ')}" must be a valid number.`)
-          return
-        }
-      }
+    const validationError = validateFilters(active);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
-    const payload = buildPayload(active)
-
-    const hasOverallFilter = 
-      (payload.docIds && payload.docIds.length > 0) ||
-      payload.fromDate ||
-      payload.toDate ||
-      (payload.systemFilters && Object.keys(payload.systemFilters).length > 0) ||
-      (payload.customFilters && Object.keys(payload.customFilters).length > 0)
-
-    if (!hasOverallFilter) {
-      setError('Please fill at least one field to search.')
-      return
-    }
-
-    const hasSystemProperty = 
-      (payload.docIds && payload.docIds.length > 0) ||
-      (payload.systemFilters && Object.keys(payload.systemFilters).length > 0)
-
-    if (!hasSystemProperty) {
-      setError('Please fill at least one field in System Properties to search.')
-      return
+    const payload = buildPayload(active);
+    const payloadError = validatePayload(payload);
+    if (payloadError) {
+      setError(payloadError);
+      return;
     }
 
     setError('')

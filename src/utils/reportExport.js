@@ -49,9 +49,13 @@ function buildSummaryRows({ tableLabel, reportType, fromDate, toDate, totalRecor
   const periodSuccess = periodRecords.filter(r => isSuccess(r)).length
   const periodFailed  = failedRecords.length
   const periodPending = periodRecords.filter(r => isPending(r)).length
-  const periodRange   = fromDate
-    ? `${fromDate}${toDate && toDate !== fromDate ? ' to ' + toDate : ''}`
-    : 'All time'
+  let periodRange = 'All time';
+  if (fromDate) {
+    periodRange = fromDate;
+    if (toDate && toDate !== fromDate) {
+      periodRange += ' to ' + toDate;
+    }
+  }
 
   return {
     generatedAt, overallTotal, periodTotal, periodSuccess, periodFailed, periodPending, periodRange,

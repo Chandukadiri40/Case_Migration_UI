@@ -1,7 +1,80 @@
 import { useState, useEffect, useRef } from 'react'
-import { SYSTEM_FIELDS, TABLE_METADATA, STATUS_OPTIONS } from '../config/tableConfig'
+import { SYSTEM_FIELDS, STATUS_OPTIONS } from '../config/tableConfig'
 import BulkUpload from './BulkUpload'
 import { apiGetCustomColumns, apiGetAvailableFields, apiGetTenantConfig } from '../utils/api'
+
+const resolveFieldType = (dbField) => {
+  const dispLower = dbField.displayName.toLowerCase();
+  if (dbField.dataType === 3 || dispLower.includes('date') || dispLower.includes('time')) {
+    return 'date';
+  }
+  if (dbField.dataType === 2) {
+    return 'boolean';
+  }
+  if (dbField.dataType === 4 || dbField.dataType === 6 || dispLower.includes('number') || dispLower.includes('size')) {
+    return 'number';
+  }
+  return 'text';
+};
+
+const processFields = (availableDbFields, configKeysLower) => {
+  const defaultFields = []
+  const remainingFields = []
+  const seenLabels = new Set()
+  const seenKeys = new Set()
+
+  if (availableDbFields && availableDbFields.length > 0) {
+    availableDbFields.forEach(dbField => {
+      if (!dbField.columnName || !dbField.displayName) return
+
+      const labelKey = dbField.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')
+      const colKey = dbField.columnName.toLowerCase().trim()
+      if (seenLabels.has(labelKey) || seenKeys.has(colKey)) return
+      seenLabels.add(labelKey)
+      seenKeys.add(colKey)
+
+      const colNameLower = colKey
+      const resolvedType = resolveFieldType(dbField);
+
+      const fieldDef = {
+        key: colNameLower,
+        label: dbField.displayName,
+        type: resolvedType,
+        placeholder: `Search ${dbField.displayName}`
+      }
+
+      if (configKeysLower.includes(colNameLower)) {
+        defaultFields.push(fieldDef)
+      } else {
+        remainingFields.push(fieldDef)
+      }
+    })
+  }
+
+  defaultFields.sort((a, b) => a.label.localeCompare(b.label))
+  remainingFields.sort((a, b) => a.label.localeCompare(b.label))
+  
+  return { defaultFields, remainingFields }
+}
+
+const renderFieldInput = (field, filters, handleChange) => {
+  if (field.type === 'date') {
+    return <input type="date" name={field.label} className="sp-input" value={filters[field.label] || ''} onChange={handleChange} />;
+  }
+  if (field.type === 'boolean') {
+    return (
+      <select name={field.label} className="sp-input" value={filters[field.label] || ''} onChange={handleChange} aria-label={`Select ${field.label}`}>
+        <option value="">Any</option>
+        <option value="true">True</option>
+        <option value="false">False</option>
+      </select>
+    );
+  }
+  if (field.type === 'number') {
+    return <input type="number" name={field.label} className="sp-input" placeholder={field.placeholder || 'Search ' + field.label} value={filters[field.label] || ''} onChange={handleChange} />;
+  }
+  return <input type="text" name={field.label} className="sp-input" placeholder={field.placeholder || 'Search ' + field.label} value={filters[field.label] || ''} onChange={handleChange} />;
+}
 
 export default function SearchPanel({ tableId, filters, setFilters, onSearch, onReset, loading, error }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -53,54 +126,7 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
         const configKeysLower = (configuredKeys || []).map(k => k.toLowerCase())
         setDefaultConfiguredKeys(configKeysLower)
         
-        const defaultFields = []
-        const remainingFields = []
-        const seenLabels = new Set()
-        const seenKeys = new Set()
-
-        // Build active and dropdown fields dynamically from database-loaded mappings
-        if (availableDbFields && availableDbFields.length > 0) {
-          availableDbFields.forEach(dbField => {
-            if (!dbField.columnName || !dbField.displayName) return
-
-            // Deduplicate by both display name AND column name
-            const labelKey = dbField.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')
-            const colKey = dbField.columnName.toLowerCase().trim()
-            if (seenLabels.has(labelKey) || seenKeys.has(colKey)) return
-            seenLabels.add(labelKey)
-            seenKeys.add(colKey)
-
-            const colNameLower = colKey
-            
-            // Map integer datatype or field display name to input type
-            let resolvedType = 'text'
-            const dispLower = dbField.displayName.toLowerCase()
-            if (dbField.dataType === 3 || dispLower.includes('date') || dispLower.includes('time')) {
-              resolvedType = 'date'
-            } else if (dbField.dataType === 2) {
-              resolvedType = 'boolean'
-            } else if (dbField.dataType === 4 || dbField.dataType === 6 || dispLower.includes('number') || dispLower.includes('size')) {
-              resolvedType = 'number'
-            }
-
-            const fieldDef = {
-              key: colNameLower,
-              label: dbField.displayName,
-              type: resolvedType,
-              placeholder: `Search ${dbField.displayName}`
-            }
-
-            if (configKeysLower.includes(colNameLower)) {
-              defaultFields.push(fieldDef)
-            } else {
-              remainingFields.push(fieldDef)
-            }
-          })
-        }
-
-        // Sort both lists alphabetically by display name for a premium user experience
-        defaultFields.sort((a, b) => a.label.localeCompare(b.label))
-        remainingFields.sort((a, b) => a.label.localeCompare(b.label))
+        const { defaultFields, remainingFields } = processFields(availableDbFields, configKeysLower);
 
         setActiveFields(defaultFields)
         setDropdownFields(remainingFields)
@@ -451,16 +477,18 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
                   )}
                 </div>
                 
-                {apiLoading ? (
+                {apiLoading && (
                   <div style={{ padding: '12px 0', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span className="spinner spinner--dark" />
                     <span>Loading metadata fields...</span>
                   </div>
-                ) : activeFields.length === 0 ? (
+                )}
+                {!apiLoading && activeFields.length === 0 && (
                   <div style={{ padding: '16px', color: 'var(--gray-400)', textAlign: 'center', fontStyle: 'italic', border: '1px dashed var(--gray-200)', borderRadius: '6px' }}>
                     No metadata fields configured.
                   </div>
-                ) : (
+                )}
+                {!apiLoading && activeFields.length > 0 && (
                   <div className="sp-fields-grid">
                     {activeFields.map(field => (
                       <div className="sp-field" key={field.key}>
@@ -489,45 +517,7 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
                             </button>
                           )}
                         </div>
-                        {field.type === 'date' ? (
-                          <input
-                            type="date"
-                            name={field.label}
-                            className="sp-input"
-                            value={filters[field.label] || ''}
-                            onChange={handleChange}
-                          />
-                        ) : field.type === 'boolean' ? (
-                          <select
-                            name={field.label}
-                            className="sp-input"
-                            value={filters[field.label] || ''}
-                            onChange={handleChange}
-                            aria-label={`Select ${field.label}`}
-                          >
-                            <option value="">Any</option>
-                            <option value="true">True</option>
-                            <option value="false">False</option>
-                          </select>
-                        ) : field.type === 'number' ? (
-                          <input
-                            type="number"
-                            name={field.label}
-                            className="sp-input"
-                            placeholder={field.placeholder || 'Search ' + field.label}
-                            value={filters[field.label] || ''}
-                            onChange={handleChange}
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            name={field.label}
-                            className="sp-input"
-                            placeholder={field.placeholder || 'Search ' + field.label}
-                            value={filters[field.label] || ''}
-                            onChange={handleChange}
-                          />
-                        )}
+                        {renderFieldInput(field, filters, handleChange)}
                       </div>
                     ))}
                   </div>

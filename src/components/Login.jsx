@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, register } = useAuth()
   const navigate  = useNavigate()
   const [form, setForm]         = useState({ username: '', password: '' })
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
   const [showPass, setShowPass] = useState(false)
+  const [isLoginMode, setIsLoginMode] = useState(true)
 
   function handleChange(e) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -22,10 +23,23 @@ export default function Login() {
       return
     }
     setLoading(true)
-    const result = await login(form.username, form.password)
-    setLoading(false)
-    if (result.success) navigate('/dashboard')
-    else setError(result.message)
+    if (isLoginMode) {
+      const result = await login(form.username, form.password)
+      setLoading(false)
+      if (result.success) navigate('/dashboard')
+      else setError(result.message)
+    } else {
+      const result = await register(form.username, form.password)
+      setLoading(false)
+      if (result.success) {
+        setIsLoginMode(true)
+        setError('')
+        setForm({ username: '', password: '' })
+        alert('Registration successful! You can now log in.')
+      } else {
+        setError(result.message)
+      }
+    }
   }
 
   return (
@@ -43,7 +57,7 @@ export default function Login() {
         </div>
 
         <div className="auth-title">Migration Report Dashboard</div>
-        <div className="auth-subtitle">Log in to continue</div>
+        <div className="auth-subtitle">{isLoginMode ? 'Log in to continue' : 'Create a new account'}</div>
 
         {error && (
           <div className="auth-error">
@@ -112,21 +126,39 @@ export default function Login() {
 
           <button type="submit" className="auth-submit-btn" disabled={loading}>
             {loading ? (
-              <><span className="spinner" style={{ width: 16, height: 16 }} /> Logging in...</>
+              <><span className="spinner" style={{ width: 16, height: 16 }} /> {isLoginMode ? 'Logging in...' : 'Signing up...'}</>
             ) : (
               <>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-                  <polyline points="10 17 15 12 10 7"/>
-                  <line x1="15" y1="12" x2="3" y2="12"/>
+                  {isLoginMode ? (
+                    <>
+                      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                      <polyline points="10 17 15 12 10 7"/>
+                      <line x1="15" y1="12" x2="3" y2="12"/>
+                    </>
+                  ) : (
+                    <>
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H5c-1.1 0-2 .9-2 2v2"></path>
+                      <circle cx="8.5" cy="7" r="4"></circle>
+                      <line x1="20" y1="8" x2="20" y2="14"></line>
+                      <line x1="23" y1="11" x2="17" y2="11"></line>
+                    </>
+                  )}
                 </svg>
-                Log In
+                {isLoginMode ? 'Log In' : 'Sign Up'}
               </>
             )}
           </button>
         </form>
 
-        <div className="auth-footer">Secured Authentication</div>
+        <div className="auth-footer" style={{ marginTop: '24px' }}>
+          {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+          <span 
+            onClick={() => { setIsLoginMode(!isLoginMode); setError(''); setForm({username: '', password: ''}) }} 
+            style={{ color: '#4f46e5', cursor: 'pointer', fontWeight: 'bold' }}>
+            {isLoginMode ? "Sign Up" : "Log In"}
+          </span>
+        </div>
       </div>
     </div>
   )

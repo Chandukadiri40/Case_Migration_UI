@@ -32,6 +32,55 @@ const labelStyle = {
   letterSpacing: '0.06em',
 }
 
+const tdStyle = {
+  padding: '10px 12px',
+  color: '#334155',
+  borderBottom: '1px solid #f1f5f9',
+  fontSize: '11px',
+}
+
+function renderTableCell(r, c, selectedAppName) {
+  let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()];
+  if (c.key === 'application' && !val && selectedAppName) val = selectedAppName;
+  if (c.key === 'migration_status') {
+    const statusCls = (val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated') ? 'status-badge status-success' : 'status-badge status-failed';
+    return (
+      <td key={c.key} style={tdStyle}>
+        <span className={statusCls}>{val || '—'}</span>
+      </td>
+    );
+  }
+  if (c.key === 'error_info') {
+    const displayVal = val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—';
+    return (
+      <td key={c.key} style={tdStyle}>
+        <span 
+          title={val || 'No error info'} 
+          style={{ 
+            cursor: 'pointer', color: '#e11d48', background: '#fff1f2',
+            padding: '2px 6px', borderRadius: '4px', border: '1px solid #ffe4e6',
+            fontSize: '9px', display: 'inline-block', maxWidth: '240px',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+          }}
+        >
+          {displayVal}
+        </span>
+      </td>
+    );
+  }
+  if (c.key === 'object_id' || c.key === 'p8_doc_id') {
+    return <td key={c.key} className="cell-mono" style={{ ...tdStyle }}>{val || '—'}</td>;
+  }
+  if (c.key === 'migrated_date') {
+    return <td key={c.key} style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>;
+  }
+  return (
+    <td key={c.key} style={tdStyle} title={val}>
+      {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
+    </td>
+  );
+}
+
 // -- Migration Report Tab --
 function MigrationReportTab() {
   const [apps, setApps]                 = useState([])
@@ -98,35 +147,47 @@ function MigrationReportTab() {
       .finally(() => setDocClassLoading(false))
   }, [selectedApp])
 
+  const buildSearchPayload = () => {
+    const payload = {}
+    if (selectedApp) payload.applicationName = apps.find(a => a.appId === selectedApp)?.appName || selectedApp
+    if (selectedDocClass && selectedDocClass !== 'All') payload.documentClass = selectedDocClass
+    if (startDate) payload.startDate = startDate + 'T00:00:00'
+    if (endDate) payload.endDate = endDate + 'T23:59:59'
+    if (migrationStatus && migrationStatus !== 'All') payload.migrationStatus = migrationStatus
+    return payload;
+  }
+
+  const validateSearch = () => {
+    return selectedApp || (selectedDocClass && selectedDocClass !== 'All') || startDate || endDate || (migrationStatus && migrationStatus !== 'All');
+  }
+
+  const handleCustomColumns = (result) => {
+    const isAgg = result && result.length > 0 && (result[0].isAggregated ?? true);
+    if (!isAgg && result && result.length > 0) {
+      const isCustomCol = k => {
+        if (k.toLowerCase().includes('objectstorename')) return false;
+        return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+      };
+      const keys = Object.keys(result[0]).filter(isCustomCol);
+      setAllCustomColumns(keys);
+      setVisibleCustomColumns(new Set(keys));
+    } else {
+      setAllCustomColumns([]);
+      setVisibleCustomColumns(new Set());
+    }
+  }
+
   async function handleSearch() {
-    if (!selectedApp && (!selectedDocClass || selectedDocClass === 'All') && !startDate && !endDate && (!migrationStatus || migrationStatus === 'All')) {
+    if (!validateSearch()) {
       setError('Please select at least one search criteria.')
       return
     }
     setError(''); setLoading(true); setPage(1)
     try {
-      const payload = {}
-      if (selectedApp)      payload.applicationName = apps.find(a => a.appId === selectedApp)?.appName || selectedApp
-      if (selectedDocClass && selectedDocClass !== 'All') payload.documentClass = selectedDocClass
-      if (startDate)        payload.startDate       = startDate + 'T00:00:00'
-      if (endDate)          payload.endDate         = endDate   + 'T23:59:59'
-      if (migrationStatus && migrationStatus !== 'All') payload.migrationStatus = migrationStatus
+      const payload = buildSearchPayload();
       const result = await apiGetDeliverableMigrationReport(payload)
       setData(result)
-
-      const isAgg = result && result.length > 0 && (result[0].isAggregated ?? true);
-      if (!isAgg && result && result.length > 0) {
-          const isCustomCol = k => {
-            if (k.toLowerCase().includes('objectstorename')) return false;
-            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
-        };
-          const keys = Object.keys(result[0]).filter(isCustomCol);
-          setAllCustomColumns(keys);
-          setVisibleCustomColumns(new Set(keys));
-      } else {
-          setAllCustomColumns([]);
-          setVisibleCustomColumns(new Set());
-      }
+      handleCustomColumns(result);
     } catch(e) {
       setError(e.message || 'Failed to fetch migration report.')
     } finally {
@@ -450,56 +511,9 @@ function MigrationReportTab() {
                 </thead>
                 <tbody>
                   {pageData.map((r, i) => (
-                    <tr key={i}>
+                    <tr key={r.object_id || r.p8_doc_id || i}>
                       <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
-                      {recordCols.map(c => {
-                        let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()];
-                        if (c.key === 'application' && !val && selectedAppName) val = selectedAppName;
-                        if (c.key === 'migration_status') {
-                          const statusCls = (val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated') ? 'status-badge status-success' : 'status-badge status-failed'
-                          return (
-                            <td key={c.key} style={tdStyle}>
-                              <span className={statusCls}>{val || '—'}</span>
-                            </td>
-                          )
-                        }
-                        if (c.key === 'error_info') {
-                          return (
-                            <td key={c.key} style={tdStyle}>
-                              <span 
-                                title={val || 'No error info'} 
-                                style={{ 
-                                  cursor: 'pointer', 
-                                  color: '#e11d48',
-                                  background: '#fff1f2',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  border: '1px solid #ffe4e6',
-                                  fontSize: '9px',
-                                  display: 'inline-block',
-                                  maxWidth: '240px',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—'}
-                              </span>
-                            </td>
-                          )
-                        }
-                        if (c.key === 'object_id' || c.key === 'p8_doc_id') {
-                          return <td key={c.key} className="cell-mono" style={{ ...tdStyle }}>{val || '—'}</td>
-                        }
-                        if (c.key === 'migrated_date') {
-                          return <td key={c.key} style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>
-                        }
-                        return (
-                          <td key={c.key} style={tdStyle} title={val}>
-                            {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
-                          </td>
-                        )
-                      })}
+                      {recordCols.map(c => renderTableCell(r, c, selectedAppName))}
                     </tr>
                   ))}
                 </tbody>

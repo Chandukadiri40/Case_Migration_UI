@@ -38,28 +38,53 @@ async function request(path, options = {}) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-export async function apiLogin(username, password) {
+export function apiLogin(username, password) {
   return request('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   })
 }
 
+export function apiRegister(username, password) {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ username, password }),
+  })
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
-export async function apiGetTables() {
+export function apiGetTables() {
   return request('/config/tables')
 }
 
-export async function apiGetCustomColumns(tableKey) {
+export function apiGetDbConfig() {
+  return request('/config/db')
+}
+
+export function apiSaveDbConfig(config) {
+  return request('/config/db', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export function apiTestDbConnection(config) {
+  return request('/config/db/test', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}
+
+export function apiGetCustomColumns(tableKey) {
   return request(`/config/custom-columns?table=${tableKey}&_t=${Date.now()}`)
 }
 
-export async function apiGetSystemColumns() {
+export function apiGetSystemColumns() {
   return request('/config/system-columns')
 }
 
 // ── Search (filter panel) ─────────────────────────────────────────────────────
-export async function apiSearch(payload) {
+export function apiSearch(payload) {
   return request('/search', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -67,7 +92,7 @@ export async function apiSearch(payload) {
 }
 
 // ── Query executor ────────────────────────────────────────────────────────────
-export async function apiExecuteQuery(sql) {
+export function apiExecuteQuery(sql) {
   return request('/search/execute-query', {
     method: 'POST',
     body: JSON.stringify({ sql }),
@@ -75,45 +100,75 @@ export async function apiExecuteQuery(sql) {
 }
 
 // ── Column config (legacy hook) ───────────────────────────────────────────────
-export async function apiGetColumnConfig() {
+export function apiGetColumnConfig() {
   return request('/config/columns')
 }
 
-export async function apiGetChecksumReport(payload) {
+export function apiGetChecksumReport(payload) {
   return request('/checksum/report', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function apiGetAvailableFields() {
+export function apiGetAvailableFields() {
   return request(`/config/available-fields?_t=${Date.now()}`)
 }
 
 // -- Deliverables - Migration Report
-export async function apiGetDeliverableMigrationReport(payload) {
+export function apiGetDeliverableMigrationReport(payload) {
   return request('/deliverables/migration-report', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 }
 
-export async function apiGetReconciliationProperties() {
+export function apiGetReconciliationProperties() {
   return request('/config/reconciliation-properties')
 }
 
 // -- Tenant Configuration
-export async function apiGetTenantConfig() {
+export function apiGetTenantConfig() {
   return request('/config')
 }
 
-export async function apiSaveTenantConfig(payload) {
+export function apiSaveTenantConfig(payload) {
   return request('/config', {
     method: 'POST',
     body: JSON.stringify(payload)
   })
 }
 
-export async function apiGetDbMetadata(schema) {
+export function apiGetDbMetadata(schema) {
   return request(`/config/db-metadata?schema=${schema}`)
+}
+
+// ── Property Mapping ──────────────────────────────────────────────────────────
+export function apiGetPropertyMappings() {
+  return request('/property-mappings')
+}
+
+export function apiGetPropertyMappingsByApp(appId) {
+  return request(`/property-mappings/app/${appId}`)
+}
+
+export function apiSavePropertyMapping(template) {
+  return request('/property-mappings', {
+    method: 'POST',
+    body: JSON.stringify(template),
+  })
+}
+
+export function apiDeletePropertyMapping(templateId) {
+  return request(`/property-mappings/${templateId}`, {
+    method: 'DELETE',
+  })
+}
+
+export function apiGetDocumentClasses(appId, type = 'source') {
+  return request(`/discovery/doc-classes?appId=${appId}&type=${type}`)
+}
+
+export function apiGetClassProperties(appId, docClass) {
+  return request(`/discovery/class-properties?appId=${appId}&docClass=${docClass}`)
 }

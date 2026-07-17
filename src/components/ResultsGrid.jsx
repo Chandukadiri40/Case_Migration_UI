@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { exportToCSV, exportToPDF } from '../utils/exportUtils'
+
 import { generateSummaryExcel, generateSummaryCSV, generateSummaryPDF } from '../utils/reportExport'
 import { apiSearch } from '../utils/api'
 
@@ -166,7 +166,7 @@ export default function ResultsGrid({ data, columns, summary, tableLabel, tableI
     )
   }
 
-  const exportMeta = { tableLabel, appliedFilters, generatedAt: new Date().toLocaleString() }
+
 
   return (    <div className="card results-section">
       {/* Header */}
@@ -221,7 +221,9 @@ export default function ResultsGrid({ data, columns, summary, tableLabel, tableI
                     {col.label}
                     {col.sortable !== false && (
                       <span className="sort-icon">
-                        {sortKey === col.key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sortKey !== col.key && '⇅'}
+                        {sortKey === col.key && sortDir === 'asc' && '▲'}
+                        {sortKey === col.key && sortDir === 'desc' && '▼'}
                       </span>
                     )}
                   </div>
