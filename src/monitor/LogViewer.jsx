@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getLogDates, getLogs } from './api'
-import { RefreshCw, Download, Search, AlertCircle } from 'lucide-react'
+import { RefreshCw, Search, AlertCircle } from 'lucide-react'
 import LogConfig from './LogConfig'
 
 const getRowStyle = (level) => {

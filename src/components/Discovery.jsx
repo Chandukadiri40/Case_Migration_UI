@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
-import { Search, Database, Layers, CheckCircle, FolderOpen, Calendar, HardDrive, FileText, FileSearch, Hash, ArrowDown, ArrowUp, Download } from 'lucide-react'
+import { Search, Layers, CheckCircle, FolderOpen, HardDrive, FileText, FileSearch, Hash, ArrowDown, ArrowUp, Download } from 'lucide-react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { apiGetTenantConfig, BASE } from '../utils/api'
@@ -335,9 +335,12 @@ export default function Discovery() {
                                         <th key={key} onClick={() => handleSort(key)}>
                                             <div className="th-inner">
                                                 {key}
-                                                {sortConfig.key === key ? (
-                                                    sortConfig.direction === 'ascending' ? <ArrowUp size={12} className="sort-icon" /> : <ArrowDown size={12} className="sort-icon" />
-                                                ) : null}
+                                                {(() => {
+                                                    if (sortConfig.key !== key) return null;
+                                                    return sortConfig.direction === 'ascending' 
+                                                        ? <ArrowUp size={12} className="sort-icon" /> 
+                                                        : <ArrowDown size={12} className="sort-icon" />;
+                                                })()}
                                             </div>
                                         </th>
                                     ))}

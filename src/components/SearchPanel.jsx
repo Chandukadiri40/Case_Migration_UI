@@ -3,6 +3,20 @@ import { SYSTEM_FIELDS, STATUS_OPTIONS } from '../config/tableConfig'
 import BulkUpload from './BulkUpload'
 import { apiGetCustomColumns, apiGetAvailableFields, apiGetTenantConfig } from '../utils/api'
 
+const resolveFieldType = (dbField) => {
+  const dispLower = dbField.displayName.toLowerCase();
+  if (dbField.dataType === 3 || dispLower.includes('date') || dispLower.includes('time')) {
+    return 'date';
+  }
+  if (dbField.dataType === 2) {
+    return 'boolean';
+  }
+  if (dbField.dataType === 4 || dbField.dataType === 6 || dispLower.includes('number') || dispLower.includes('size')) {
+    return 'number';
+  }
+  return 'text';
+};
+
 const processFields = (availableDbFields, configKeysLower) => {
   const defaultFields = []
   const remainingFields = []
@@ -20,16 +34,7 @@ const processFields = (availableDbFields, configKeysLower) => {
       seenKeys.add(colKey)
 
       const colNameLower = colKey
-      let resolvedType = 'text'
-      const dispLower = dbField.displayName.toLowerCase()
-      
-      if (dbField.dataType === 3 || dispLower.includes('date') || dispLower.includes('time')) {
-        resolvedType = 'date'
-      } else if (dbField.dataType === 2) {
-        resolvedType = 'boolean'
-      } else if (dbField.dataType === 4 || dbField.dataType === 6 || dispLower.includes('number') || dispLower.includes('size')) {
-        resolvedType = 'number'
-      }
+      const resolvedType = resolveFieldType(dbField);
 
       const fieldDef = {
         key: colNameLower,

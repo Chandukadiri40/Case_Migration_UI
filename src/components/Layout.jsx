@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { FileText, Monitor, LogOut, Menu, Search, Database, Package, Settings } from 'lucide-react'
+import { FileText, Monitor, LogOut, Menu, Search, Database, Package, Settings, Link } from 'lucide-react'
 
 export default function Layout() {
   const { logout } = useAuth()
@@ -31,6 +31,10 @@ export default function Layout() {
             <Package size={18} />
             {!isCollapsed && <span>Deliverables Workspace</span>}
           </NavLink>
+          <NavLink to="/property-mapping" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Property Mapping">
+            <Link size={18} />
+            {!isCollapsed && <span>Property Mapping</span>}
+          </NavLink>
           <NavLink to="/reports" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Reports">
             <FileText size={18} />
             {!isCollapsed && <span>Reports</span>}
@@ -39,9 +43,9 @@ export default function Layout() {
             <Monitor size={18} />
             {!isCollapsed && <span>Logs</span>}
           </NavLink>
-          <NavLink to="/configuration" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Settings">
+          <NavLink to="/configuration" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`} title="Configuration">
             <Settings size={18} />
-            {!isCollapsed && <span>Settings</span>}
+            {!isCollapsed && <span>Configuration</span>}
           </NavLink>
         </nav>
 

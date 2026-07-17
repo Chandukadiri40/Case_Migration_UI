@@ -9,8 +9,7 @@ export default defineConfig({
       // Change the target to match your backend port.
       '/api': {
         target: 'http://localhost:8080',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/api/, '/api'),
+        changeOrigin: true
       },
     },
   },

@@ -8,6 +8,7 @@ import Discovery from './components/Discovery'
 import Exceptions from './components/Exceptions'
 import Deliverables from './components/Deliverables'
 import Configuration from './components/Configuration'
+import PropertyMapping from './components/PropertyMapping'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="exceptions" element={<Exceptions />} />
             <Route path="deliverables" element={<Deliverables />} />
             <Route path="configuration" element={<Configuration />} />
+            <Route path="property-mapping" element={<PropertyMapping />} />
             <Route path="*" element={<Navigate to="discovery" replace />} />
           </Route>
         </Routes>

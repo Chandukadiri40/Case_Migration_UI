@@ -51,6 +51,7 @@ function renderTableCell(r, c, selectedAppName) {
     );
   }
   if (c.key === 'error_info') {
+    const displayVal = val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—';
     return (
       <td key={c.key} style={tdStyle}>
         <span 
@@ -62,7 +63,7 @@ function renderTableCell(r, c, selectedAppName) {
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
           }}
         >
-          {val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—'}
+          {displayVal}
         </span>
       </td>
     );

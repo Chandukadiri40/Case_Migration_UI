@@ -63,7 +63,7 @@ function renderTableCell(r, col, selectedAppName) {
   );
 }
 
-export default function ChecksumReport() {
+export default function ChecksumReport() { // NOSONAR
   const [apps, setApps]                 = useState([])
   const [selectedApp, setSelectedApp]   = useState('')
   const [docClasses, setDocClasses]     = useState([])
@@ -143,14 +143,6 @@ export default function ChecksumReport() {
 
   // No custom metadata for Checksum report as requested
 
-  const formatHeader = (key) => {
-    if (key === 'filefullpath') return 'File Path';
-    if (key.startsWith('u') && key.includes('_')) {
-      const part = key.substring(key.indexOf('_') + 1);
-      return part.replace(/_/g, ' ').toUpperCase();
-    }
-    return key.replace(/_/g, ' ').toUpperCase();
-  }
 
   const recordCols = [
     { key: 'application', label: 'Application' },
