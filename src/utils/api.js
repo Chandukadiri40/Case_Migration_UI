@@ -20,6 +20,10 @@ async function request(path, options = {}) {
   })
 
   if (res.status === 401) {
+    if (path === '/auth/login') {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.message || 'Invalid username or password')
+    }
     sessionStorage.clear()
     window.location.href = '/login'
     return
