@@ -57,7 +57,8 @@ export default function LogViewer({ config, onConfigSaved }) {
     setError('')
     try {
       const res = await getLogs(date)
-      setLogs(res.data)
+      const dataWithIds = res.data.map((log, i) => ({ ...log, id: `${Date.now()}-${i}` }))
+      setLogs(dataWithIds)
     } catch (err) {
       setError('Failed to fetch logs for selected date')
       setLogs([])
@@ -184,7 +185,7 @@ export default function LogViewer({ config, onConfigSaved }) {
                   </tr>
                 ) : (
                   filteredLogs.map((log, idx) => (
-                    <tr key={`${log.timestamp}-${idx}`} style={getRowStyle(log.level)}>
+                    <tr key={log.id} style={getRowStyle(log.level)}>
                       <td style={{ whiteSpace: 'nowrap', color: 'var(--gray-600)' }}>{log.timestamp}</td>
                       <td>
                         <span style={{ 

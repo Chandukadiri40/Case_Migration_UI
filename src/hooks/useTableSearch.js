@@ -30,49 +30,51 @@ function makeDefaults(tableId) {
  *   customFilters: { [colName]: value }
  * }
  */
-function buildPayload(filters) {
-  // Parse doc IDs — comma-separated string → string[]
-  const rawDocId = filters['doc-id'] || ''
-  const docIds = rawDocId
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-
-  // System filters — exclude doc-id (sent as docIds)
-  const systemFilters = {}
+function buildSystemFilters(filters) {
+  const sysFilters = {};
   SYSTEM_FIELDS.forEach(f => {
-    if (f.key === 'doc-id') return  // handled via docIds
+    if (f.key === 'doc-id') return;
     if (f.key === 'created-date') {
-      const val = filters['created-date']
-      if (val && val.trim()) systemFilters['created-date'] = val.trim()
-      return
+      const val = filters['created-date'];
+      if (val && val.trim()) sysFilters['created-date'] = val.trim();
+      return;
     }
-    const val = filters[f.key]
-    if (val && val.trim()) systemFilters[f.key] = val.trim()
-  })
+    const val = filters[f.key];
+    if (val && val.trim()) sysFilters[f.key] = val.trim();
+  });
+  return Object.keys(sysFilters).length > 0 ? sysFilters : null;
+}
 
-  // Custom metadata filters - all keys in filters that are not system keys and have a value
-  const customFilters = {}
-  const systemKeys = ['tableId', 'appId', 'status', 'startDate', 'endDate', 'doc-id', 'created-date', 'content-size', 'mime-type']
+function buildCustomFilters(filters) {
+  const customFilters = {};
+  const systemKeys = ['tableId', 'appId', 'status', 'startDate', 'endDate', 'doc-id', 'created-date', 'content-size', 'mime-type'];
   Object.keys(filters).forEach(key => {
     if (!systemKeys.includes(key)) {
-      const val = filters[key]
+      const val = filters[key];
       if (val && typeof val === 'string' && val.trim()) {
-        customFilters[key] = val.trim()
+        customFilters[key] = val.trim();
       }
     }
-  })
+  });
+  return Object.keys(customFilters).length > 0 ? customFilters : null;
+}
+
+function buildPayload(filters) {
+  const rawDocId = filters['doc-id'] || '';
+  const docIds = rawDocId.split(',').map(s => s.trim()).filter(Boolean);
+
+  let statusLower = filters.status === 'Total' ? '' : filters.status;
 
   return {
     table:         filters.tableId,
     appId:         filters.appId,
-    status:        filters.status === 'Total' ? '' : filters.status,
+    status:        statusLower,
     fromDate:      filters.startDate || null,
     toDate:        filters.endDate || null,
     docIds:        docIds.length > 0 ? docIds : null,
-    systemFilters: Object.keys(systemFilters).length > 0 ? systemFilters : null,
-    customFilters: Object.keys(customFilters).length > 0 ? customFilters : null,
-  }
+    systemFilters: buildSystemFilters(filters),
+    customFilters: buildCustomFilters(filters),
+  };
 }
 
 function validateField(key, val) {
@@ -119,6 +121,22 @@ function validatePayload(payload) {
   if (!hasSystemProperty) return 'Please fill at least one field in System Properties to search.';
 
   return null;
+}
+
+function deriveColumns(records, active) {
+  if (records.length > 0) {
+    return Object.keys(records[0]).map(key => ({
+      key,
+      label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(),
+      sortable: true,
+      visible: true,
+    }))
+  } else {
+    return [
+      ...SYSTEM_FIELDS.map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),
+      ...(TABLE_METADATA[active.tableId] || []).map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),
+    ]
+  }
 }
 
 export function useTableSearch() {
@@ -171,18 +189,9 @@ export function useTableSearch() {
       setResults(records)
 
       if (records.length > 0) {
-        const inferred = Object.keys(records[0]).map(key => ({
-          key,
-          label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(),
-          sortable: true,
-          visible: true,
-        }))
-        setColumns(inferred)
+        setColumns(deriveColumns(records, active));
       } else {
-        setColumns([
-          ...SYSTEM_FIELDS.map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),
-          ...(TABLE_METADATA[active.tableId] || []).map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),
-        ])
+        setColumns(deriveColumns([], active));
       }
 
       setSearched(true)

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle, Settings } from 'lucide-react'
+import { Search, ShieldAlert, Database, ArrowDown, ArrowUp, Download, Plus, Trash2, CheckCircle, XCircle, Settings, Loader2 } from 'lucide-react'
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 import { apiGetTenantConfig, BASE } from '../utils/api'
 
 const cleanColumnName = (col) => {
@@ -13,13 +13,145 @@ const cleanColumnName = (col) => {
     return cleaned;
 };
 
-const analyzeMatchStatus = (srcRow, tgtRow, stgRow) => {
+const DataTable = ({
+    title,
+    tableData,
+    sortConfigs,
+    handleSort,
+    visibleCustomColumns,
+    selectedObjectId,
+    setSelectedObjectId,
+    activeMismatchedKeys
+}) => {
+    if (!tableData || tableData.length === 0) return null;
+    
+    const sortConfig = sortConfigs[title] || { key: null, direction: 'ascending' };
+    
+    let sortedData = [...tableData];
+    if (sortConfig.key !== null) {
+        sortedData.sort((a, b) => {
+            const aVal = a[sortConfig.key];
+            const bVal = b[sortConfig.key];
+            if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
+    }
+    
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+
+    let columns = Object.keys(tableData[0]);
+    // Filter out hidden custom columns
+    const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
+    columns = columns.filter(col => {
+        const normalizedCol = col.toUpperCase().replace(/[ _]/g, '');
+        const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedCol);
+        return isSysField || visibleCustomColumns.has(col);
+    });
+
+    const formatCellValue = (val) => {
+        if (Array.isArray(val)) return val.join(', ');
+        if (val && typeof val === 'object') return JSON.stringify(val);
+        return String(val);
+    };
+
+    const renderTableCell = (row, col, isSelected) => {
+        const isMismatched = isSelected && activeMismatchedKeys.includes(col);
+        const cellStyle = { 
+            color: isMismatched ? '#b91c1c' : undefined, 
+            background: isMismatched ? '#fee2e2' : undefined,
+            borderRight: '1px solid #f1f5f9', 
+            borderLeft: '1px solid #f1f5f9', 
+            whiteSpace: 'nowrap',
+            fontWeight: isMismatched ? '700' : 'normal',
+            maxWidth: 250,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+        };
+        const hasValue = row[col] !== null && row[col] !== undefined;
+        return (
+            <td key={col} style={cellStyle}>
+                {hasValue ? formatCellValue(row[col]) : <em className="cell-empty">NULL</em>}
+            </td>
+        );
+    };
+
+    const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+    const pageData = sortedData.slice((page - 1) * pageSize, page * pageSize);
+
+    return (
+        <div style={{ marginBottom: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '2px', display: 'inline-block', fontSize: '12px' }}>{title} Data ({tableData.length} records)</h3>
+                <div></div>
+            </div>
+            <div className="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            {columns.map(col => (
+                                <th key={col} onClick={() => handleSort(title, col)}>
+                                    <div className="th-inner">
+                                        {cleanColumnName(col)}
+                                        {sortConfig.key === col && sortConfig.direction === 'ascending' && <ArrowUp size={12} className="sort-icon" />}
+                                        {sortConfig.key === col && sortConfig.direction !== 'ascending' && <ArrowDown size={12} className="sort-icon" />}
+                                    </div>
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pageData.map((row, i) => {
+                            const objIdKey = Object.keys(row).find(k => k.toUpperCase() === 'OBJECT_ID');
+                            const rowObjId = row[objIdKey];
+                            const isSelected = selectedObjectId && rowObjId === selectedObjectId;
+                            return (
+                            <tr 
+                                key={rowObjId || i} 
+                                onClick={() => rowObjId ? setSelectedObjectId(rowObjId) : null}
+                                style={{ 
+                                    background: isSelected ? '#e0e7ff' : undefined,
+                                    cursor: 'pointer'
+                                }} 
+                            >
+                                {columns.map(col => renderTableCell(row, col, isSelected))}
+                            </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 8px 8px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    Showing {tableData.length === 0 ? 0 : (page - 1) * pageSize + 1} to {Math.min(page * pageSize, sortedData.length)} of {sortedData.length} records
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Rows per page:</span>
+                        <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none', cursor: 'pointer' }}>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                            <option value={200}>200</option>
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                        <button disabled={page === 1} onClick={() => setPage(page - 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === 1 ? '#f1f5f9' : 'white', color: page === 1 ? '#94a3b8' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Prev</button>
+                        <span style={{ fontSize: '11px', color: '#334155', padding: '2px 4px', fontWeight: 'bold' }}>Page {page} of {totalPages}</span>
+                        <button disabled={page === totalPages} onClick={() => setPage(page + 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === totalPages ? '#f1f5f9' : 'white', color: page === totalPages ? '#94a3b8' : '#334155', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const analyzeMatchStatus = (srcRow, tgtRow, stgRow, visibleCustomColumns) => {
     let mismatched = [];
     const srcColumns = Object.keys(srcRow);
-    const compKeys = srcColumns.filter(k => {
-        const upK = k.toUpperCase();
-        return upK !== 'OBJECT_ID' && upK !== 'MIGRATION_STATUS' && upK !== 'MIGRATED_DATE' && upK !== 'ERROR_MESSAGE' && upK !== 'EXTRACTED_STATUS' && upK !== 'EXTRACTED_DATE';
-    });
+    
+    // Strictly compare ONLY the custom metadata fields that apply to this class
+    const compKeys = srcColumns.filter(k => visibleCustomColumns.has(k));
     
     compKeys.forEach(key => {
         const srcVal = String(srcRow[key] || '');
@@ -34,29 +166,14 @@ const analyzeMatchStatus = (srcRow, tgtRow, stgRow) => {
     return "Matches";
 };
 
-const buildExportRow = (srcRow, targetMap, stagingMap, apps, selectedApp, visibleCustomColumns) => {
-    const srcKey = Object.keys(srcRow).find(k => k.toUpperCase() === 'OBJECT_ID');
-    const objId = srcKey ? srcRow[srcKey] : '';
-    const tgtRow = targetMap[objId] || {};
-    const stgRow = stagingMap[objId] || {};
+const getField = (rowObj, field) => {
+    if (!rowObj) return '';
+    const normField = field.toUpperCase().replace(/[ _]/g, '');
+    const k = Object.keys(rowObj).find(x => x.toUpperCase().replace(/[ _]/g, '') === normField);
+    return k ? rowObj[k] : '';
+};
 
-    const getField = (rowObj, field) => {
-        const normField = field.toUpperCase().replace(/[ _]/g, '');
-        const k = Object.keys(rowObj).find(x => x.toUpperCase().replace(/[ _]/g, '') === normField);
-        return k ? rowObj[k] : '';
-    };
-
-    const appLabel = apps.find(a => String(a.appId) === String(selectedApp))?.appName || selectedApp || '';
-    const row = {
-        'Application': appLabel,
-        'Object Store': getField(srcRow, 'object_store') || '',
-        'Source Document GUID': objId,
-        'MIME Type': getField(srcRow, 'mime_type'),
-        'Size (KB)': getField(srcRow, 'content_size') ? (Number(getField(srcRow, 'content_size')) / 1024).toFixed(2) : '',
-        'Migration Date': getField(tgtRow, 'migrated_date') || getField(stgRow, 'migrated_date') || getField(srcRow, 'migrated_date') || '',
-        'Target Document GUID': getField(tgtRow, 'p8_doc_id') || getField(tgtRow, 'object_id') || getField(stgRow, 'p8_doc_id') || '',
-    };
-
+const appendCustomMappings = (row, srcRow, tgtRow, visibleCustomColumns) => {
     let isMismatched = false;
     const customKeys = Object.keys(srcRow).filter(k => visibleCustomColumns.has(k));
 
@@ -71,10 +188,88 @@ const buildExportRow = (srcRow, targetMap, stagingMap, apps, selectedApp, visibl
 
         if (sVal !== tVal) isMismatched = true;
     });
+    return isMismatched;
+};
 
+const buildExportRow = (srcRow, targetMap, stagingMap, apps, selectedApp, visibleCustomColumns) => {
+    const srcKey = Object.keys(srcRow).find(k => k.toUpperCase() === 'OBJECT_ID');
+    const objId = srcKey ? srcRow[srcKey] : '';
+    const tgtRow = targetMap[objId] || {};
+    const stgRow = stagingMap[objId] || {};
+
+    const appLabel = apps.find(a => String(a.appId) === String(selectedApp))?.appName || selectedApp || '';
+    const sizeStr = getField(srcRow, 'content_size');
+    const row = {
+        'Application': appLabel,
+        'Object Store': getField(srcRow, 'object_store') || '',
+        'Source Document GUID': objId,
+        'MIME Type': getField(srcRow, 'mime_type'),
+        'Size (KB)': sizeStr ? (Number(sizeStr) / 1024).toFixed(2) : '',
+        'Migration Date': getField(tgtRow, 'migrated_date') || getField(stgRow, 'migrated_date') || getField(srcRow, 'migrated_date') || '',
+        'Target Document GUID': getField(tgtRow, 'p8_doc_id') || getField(tgtRow, 'object_id') || getField(stgRow, 'p8_doc_id') || '',
+    };
+
+    const isMismatched = appendCustomMappings(row, srcRow, tgtRow, visibleCustomColumns);
     row['Validation Status'] = isMismatched ? 'MisMatched' : 'Matched';
     return row;
 };
+
+const findRowByObjId = (rows, targetId) => {
+    if (!rows) return null;
+    return rows.find(r => {
+        const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
+        return r[key] === targetId;
+    });
+};
+
+const getFieldDisplay = (rowObj, fieldName) => {
+    if (!rowObj) return 'N/A';
+    const key = Object.keys(rowObj).find(k => k.toUpperCase() === fieldName.toUpperCase());
+    return key ? rowObj[key] || 'N/A' : 'N/A';
+};
+
+const hasAnyRecords = (d) => d && (d.source?.length > 0 || d.staging?.length > 0 || d.target?.length > 0);
+
+const formatDateString = (val) => {
+    if (!val || typeof val !== 'string' || val === 'N/A') return val;
+    return val.includes('T') ? val.replace('T', ' ').split('.')[0] : val;
+};
+
+const InsightCard = ({ selectedObjectId, isSuccess, matchStatus, stagingRow }) => (
+    <div style={{ padding: '6px 10px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: 'white', borderRadius: '6px', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, minWidth: 'max-content', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+            {isSuccess ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
+            <span style={{ fontSize: '11px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
+                {isSuccess && 'Metadata Matches'}
+                {!isSuccess && matchStatus === 'Incomplete Lifecycle' && 'Incomplete Lifecycle'}
+                {!isSuccess && matchStatus !== 'Incomplete Lifecycle' && 'Metadata Mismatch'}
+            </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 'max-content' }}>
+                <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Object ID</span>
+                <span style={{ fontSize: '11px', color: '#0f172a', fontWeight: '600', fontFamily: 'monospace' }}>{selectedObjectId}</span>
+            </div>
+
+            <div style={{ width: '1px', height: '24px', background: '#cbd5e1', display: 'none', '@media (min-width: 768px)': { display: 'block' } }}></div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content auto', columnGap: '6px', rowGap: '4px', fontSize: '10px', minWidth: 0 }}>
+                <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
+                <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{getFieldDisplay(stagingRow, 'EXTRACTED_STATUS')}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED DATE:</span>
+                <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{formatDateString(getFieldDisplay(stagingRow, 'EXTRACTED_DATE'))}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATION STATUS:</span>
+                <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{getFieldDisplay(stagingRow, 'MIGRATION_STATUS')}</span>
+                
+                <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATED DATE:</span>
+                <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{formatDateString(getFieldDisplay(stagingRow, 'MIGRATED_DATE'))}</span>
+            </div>
+        </div>
+    </div>
+);
 
 export default function Exceptions() {
     const [apps, setApps] = useState([])
@@ -122,16 +317,26 @@ export default function Exceptions() {
             .then(res => {
                 setDocClasses(res.data);
                 setSelectedDocClass('');
+                setMetadataFields([]);
+                setCustomMetadata([]);
             })
             .catch(console.error);
-            
-        axios.get(`${BASE}/exceptions/metadata-fields?appId=${selectedApp}`)
+    }, [selectedApp])
+
+    // Fetch Metadata fields when Doc Class changes
+    useEffect(() => {
+        if (!selectedApp || !selectedDocClass) {
+            setMetadataFields([]);
+            return;
+        }
+        const classParam = `&documentClass=${encodeURIComponent(selectedDocClass)}`;
+        axios.get(`${BASE}/exceptions/metadata-fields?appId=${selectedApp}${classParam}`)
             .then(res => setMetadataFields(res.data))
             .catch(console.error);
-    }, [selectedApp]);
+    }, [selectedApp, selectedDocClass]);
 
     const addCustomField = () => {
-        setCustomMetadata([...customMetadata, { field: '', operator: 'EQUALS', value: '' }]);
+        setCustomMetadata([...customMetadata, { id: crypto.randomUUID(), field: '', operator: 'EQUALS', value: '' }]);
     };
 
     const updateCustomMetadata = (index, key, value) => {
@@ -175,17 +380,21 @@ export default function Exceptions() {
         setData(responseData);
         setIsFiltersCollapsed(true);
         
-        // Discover custom columns
-        const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
+        // Discover custom columns strictly from metadataFields
+        const strictCustomFields = metadataFields.map(f => f.toLowerCase());
         const customKeys = new Set();
+        
         const addKeys = (rows) => {
             if (!rows) return;
             rows.forEach(r => Object.keys(r).forEach(k => {
-                const normalizedK = k.toUpperCase().replace(/[ _]/g, '');
-                const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedK);
-                if (!isSysField) customKeys.add(k);
+                const cleanedK = cleanColumnName(k).toLowerCase();
+                // Strictly only add it if it is a known custom metadata field for the selected class
+                if (strictCustomFields.includes(cleanedK)) {
+                    customKeys.add(k);
+                }
             }));
         };
+        
         addKeys(responseData.source);
         addKeys(responseData.target);
         
@@ -227,92 +436,76 @@ export default function Exceptions() {
         });
     };
 
+    const buildRecordMap = (records) => {
+        const map = {};
+        records.forEach(r => {
+            const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
+            if (key && r[key]) map[r[key]] = r;
+        });
+        return map;
+    };
+
+    const exportExcel = (rows) => {
+        const workbook = XLSX.utils.book_new();
+        const headers = Object.keys(rows[0] || {});
+        const aoa = [
+            ['Data Validation Report'],
+            headers,
+            ...rows.map(r => headers.map(h => r[h]))
+        ];
+        const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+        if (headers.length > 0) {
+            worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
+        }
+        worksheet['!cols'] = headers.map(() => ({ wch: 25 }));
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Validation Report");
+        XLSX.writeFile(workbook, "Data_Validation_Report.xlsx");
+    };
+
+    const exportCsv = (rows) => {
+        const csv = Papa.unparse(rows);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.setAttribute('download', `Data_Validation_Report.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleBulkExport = () => {
-        const { format } = exportOptions; // Ignore source/staging/target options, we always generate unified report
+        const { format } = exportOptions;
 
         if (!data || !data.source) {
             alert("No data available to export.");
             return;
         }
 
-        const sourceRecords = data.source || [];
-        const stagingRecords = data.staging || [];
-        const targetRecords = data.target || [];
+        const targetMap = buildRecordMap(data.target || []);
+        const stagingMap = buildRecordMap(data.staging || []);
 
-        // Build a map for target records by object_id
-        const targetMap = {};
-        targetRecords.forEach(tr => {
-            const trKey = Object.keys(tr).find(k => k.toUpperCase() === 'OBJECT_ID');
-            if (trKey && tr[trKey]) {
-                targetMap[tr[trKey]] = tr;
-            }
-        });
+        const rows = (data.source || []).map(srcRow => buildExportRow(srcRow, targetMap, stagingMap, apps, selectedApp, visibleCustomColumns));
 
-        // Build a map for staging records by object_id
-        const stagingMap = {};
-        stagingRecords.forEach(sr => {
-            const srKey = Object.keys(sr).find(k => k.toUpperCase() === 'OBJECT_ID');
-            if (srKey && sr[srKey]) {
-                stagingMap[sr[srKey]] = sr;
-            }
-        });
+        if (format === 'excel') exportExcel(rows);
+        else if (format === 'csv') exportCsv(rows);
 
-        const rows = sourceRecords.map(srcRow => buildExportRow(srcRow, targetMap, stagingMap, apps, selectedApp, visibleCustomColumns));
-
-        if (format === 'excel') {
-            const workbook = XLSX.utils.book_new();
-            
-            // Build Array of Arrays to allow inserting a Title Row
-            const headers = Object.keys(rows[0] || {});
-            const aoa = [
-                ['Data Validation Report'],
-                headers,
-                ...rows.map(r => headers.map(h => r[h]))
-            ];
-
-            const worksheet = XLSX.utils.aoa_to_sheet(aoa);
-            
-            // Merge title row
-            if (headers.length > 0) {
-                worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } }];
-            }
-            // Add some color to title and header
-            worksheet['!cols'] = headers.map(() => ({ wch: 25 }));
-            
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Validation Report");
-            XLSX.writeFile(workbook, "Data_Validation_Report.xlsx");
-        } else if (format === 'csv') {
-            const csv = Papa.unparse(rows);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute('download', `Data_Validation_Report.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
         setShowExportModal(false);
     };
 
 
+
+
     const getMismatchedKeysForSelected = () => {
         if (!data || !selectedObjectId) return [];
-        const findRow = (rows) => {
-            if (!rows) return null;
-            return rows.find(r => {
-                const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
-                return r[key] === selectedObjectId;
-            });
-        };
-        const sourceRow = findRow(data.source);
-        const stagingRow = findRow(data.staging);
-        const targetRow = findRow(data.target);
+        const sourceRow = findRowByObjId(data.source, selectedObjectId);
+        const stagingRow = findRowByObjId(data.staging, selectedObjectId);
+        const targetRow = findRowByObjId(data.target, selectedObjectId);
         if (!sourceRow) return [];
         let mismatched = [];
         const sourceColumns = Object.keys(sourceRow);
-        const keysToCompare = sourceColumns.filter(k => 
-            !['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE'].includes(k.toUpperCase())
-        );
+        // Strictly compare only the custom metadata fields
+        const keysToCompare = sourceColumns.filter(k => visibleCustomColumns.has(k));
+        
         keysToCompare.forEach(key => {
             const srcVal = String(sourceRow[key] || '');
             const tgtVal = targetRow ? String(targetRow[key] || '') : null;
@@ -326,107 +519,8 @@ export default function Exceptions() {
     
     const activeMismatchedKeys = getMismatchedKeysForSelected();
 
-    const formatCellValue = (val) => {
-        if (Array.isArray(val)) return val.join(', ');
-        if (val && typeof val === 'object') return JSON.stringify(val);
-        return String(val);
-    };
-
-    const renderTableCell = (row, col, isSelected) => {
-        const isMismatched = isSelected && activeMismatchedKeys.includes(col);
-        const cellStyle = { 
-            color: isMismatched ? '#b91c1c' : undefined, 
-            background: isMismatched ? '#fee2e2' : undefined,
-            borderRight: '1px solid #f1f5f9', 
-            borderLeft: '1px solid #f1f5f9', 
-            whiteSpace: 'nowrap',
-            fontWeight: isMismatched ? '700' : 'normal',
-            maxWidth: 250,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis'
-        };
-        const hasValue = row[col] !== null && row[col] !== undefined;
-        return (
-            <td key={col} style={cellStyle}>
-                {hasValue ? formatCellValue(row[col]) : <em className="cell-empty">NULL</em>}
-            </td>
-        );
-    };
-
-    const renderTable = (title, tableData) => {
-        if (!tableData || tableData.length === 0) return null;
-        
-        const sortConfig = sortConfigs[title] || { key: null, direction: 'ascending' };
-        
-        let sortedData = [...tableData];
-        if (sortConfig.key !== null) {
-            sortedData.sort((a, b) => {
-                const aVal = a[sortConfig.key];
-                const bVal = b[sortConfig.key];
-                if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
-                if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
-                return 0;
-            });
-        }
-        
-        let columns = Object.keys(tableData[0]);
-        // Filter out hidden custom columns
-        const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
-        columns = columns.filter(col => {
-            const normalizedCol = col.toUpperCase().replace(/[ _]/g, '');
-            const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedCol);
-            return isSysField || visibleCustomColumns.has(col);
-        });
-
-        return (
-            <div style={{ marginBottom: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '2px', display: 'inline-block', fontSize: '12px' }}>{title} Data ({tableData.length} records)</h3>
-                    <div></div>
-                </div>
-                <div className="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                {columns.map(col => (
-                                    <th key={col} onClick={() => handleSort(title, col)}>
-                                        <div className="th-inner">
-                                            {cleanColumnName(col)}
-                                            {sortConfig.key === col ? (
-                                                sortConfig.direction === 'ascending' ? <ArrowUp size={12} className="sort-icon" /> : <ArrowDown size={12} className="sort-icon" />
-                                            ) : null}
-                                        </div>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {sortedData.map((row, i) => {
-                                const objIdKey = Object.keys(row).find(k => k.toUpperCase() === 'OBJECT_ID');
-                                const rowObjId = row[objIdKey];
-                                const isSelected = selectedObjectId && rowObjId === selectedObjectId;
-                                return (
-                                <tr 
-                                    key={rowObjId || i} 
-                                    onClick={() => rowObjId ? setSelectedObjectId(rowObjId) : null}
-                                    style={{ 
-                                        background: isSelected ? '#e0e7ff' : undefined,
-                                        cursor: 'pointer'
-                                    }} 
-                                >
-                                    {columns.map(col => renderTableCell(row, col, isSelected))}
-                                </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
-    }
-
     const renderInsights = () => {
-        if (!data || (!data.source?.length && !data.staging?.length && !data.target?.length)) return null;
+        if (!hasAnyRecords(data)) return null;
 
         if (data.source?.length > 1 && !selectedObjectId) {
             return (
@@ -438,63 +532,16 @@ export default function Exceptions() {
 
         if (!selectedObjectId) return null;
 
-        const findRowByObjectId = (rows) => {
-            if (!rows) return null;
-            return rows.find(r => {
-                const key = Object.keys(r).find(k => k.toUpperCase() === 'OBJECT_ID');
-                return r[key] === selectedObjectId;
-            });
-        };
-
-        const sourceRow = findRowByObjectId(data.source);
-        const stagingRow = findRowByObjectId(data.staging);
-        const targetRow = findRowByObjectId(data.target);
+        const sourceRow = findRowByObjId(data.source, selectedObjectId);
+        const stagingRow = findRowByObjId(data.staging, selectedObjectId);
+        const targetRow = findRowByObjId(data.target, selectedObjectId);
 
         if (!sourceRow) return null;
 
-
-        const matchStatus = analyzeMatchStatus(sourceRow, targetRow, stagingRow);
-
+        const matchStatus = analyzeMatchStatus(sourceRow, targetRow, stagingRow, visibleCustomColumns);
         const isSuccess = matchStatus === "Matches";
 
-        const formatDate = (val) => {
-            if (!val || typeof val !== 'string') return val;
-            return val.includes('T') ? val.replace('T', ' ').split('.')[0] : val;
-        };
-
-        return (
-            <div style={{ padding: '6px 10px', background: isSuccess ? '#f0fdf4' : '#fef2f2', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', background: 'white', borderRadius: '6px', border: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`, minWidth: 'max-content', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                    {isSuccess ? <CheckCircle size={14} color="#16a34a" /> : <XCircle size={14} color="#dc2626" />}
-                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: isSuccess ? '#166534' : '#991b1b' }}>
-                        {isSuccess ? 'Metadata Matches' : (matchStatus === 'Incomplete Lifecycle' ? 'Incomplete Lifecycle' : 'Metadata Mismatch')}
-                    </span>
-                </div>
-
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 'max-content' }}>
-                        <span style={{ fontSize: '9px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase' }}>Object ID</span>
-                        <span style={{ fontSize: '11px', color: '#0f172a', fontWeight: '600', fontFamily: 'monospace' }}>{selectedObjectId}</span>
-                    </div>
-
-                    <div style={{ width: '1px', height: '24px', background: '#cbd5e1', display: 'none', '@media (min-width: 768px)': { display: 'block' } }}></div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'max-content max-content max-content auto', columnGap: '6px', rowGap: '4px', fontSize: '10px', minWidth: 0 }}>
-                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_STATUS')] || 'N/A' : 'N/A'}</span>
-                        
-                        <span style={{ color: '#64748b', fontWeight: '700' }}>EXTRACTED DATE:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'EXTRACTED_DATE')]) || 'N/A' : 'N/A'}</span>
-                        
-                        <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATION STATUS:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', marginRight: '6px' }}>{stagingRow ? stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATION_STATUS')] || 'N/A' : 'N/A'}</span>
-                        
-                        <span style={{ color: '#64748b', fontWeight: '700' }}>MIGRATED DATE:</span>
-                        <span style={{ color: '#0f172a', fontWeight: '600', whiteSpace: 'normal', wordBreak: 'break-word' }}>{stagingRow ? formatDate(stagingRow[Object.keys(stagingRow).find(k => k.toUpperCase() === 'MIGRATED_DATE')]) || 'N/A' : 'N/A'}</span>
-                    </div>
-                </div>
-            </div>
-        );
+        return <InsightCard selectedObjectId={selectedObjectId} isSuccess={isSuccess} matchStatus={matchStatus} stagingRow={stagingRow} />;
     };
 
     return (
@@ -543,8 +590,8 @@ export default function Exceptions() {
                         </div>
 
                         <div>
-                            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '5.5px 16px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }} onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }} onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}>
-                                <Search size={14} /> Search
+                            <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '5.5px 16px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }} onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}>
+                                {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} {loading ? 'Searching...' : 'Search'}
                             </button>
                         </div>
                     </div>
@@ -560,7 +607,7 @@ export default function Exceptions() {
                         {!isFiltersCollapsed && customMetadata.length > 0 && (
                             <div>
                                 {customMetadata.map((cm, idx) => (
-                                    <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                                    <div key={cm.id} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
                                         <select value={cm.field} onChange={(e) => updateCustomMetadata(idx, 'field', e.target.value)} style={{ padding: '5px 8px', width: '200px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#0f172a', fontSize: '9px', outline: 'none' }}>
                                             <option value="">-- Select Field --</option>
                                             {metadataFields.map(f => <option key={f} value={f}>{f}</option>)}
@@ -595,12 +642,13 @@ export default function Exceptions() {
             </div>
 
             <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {loading ? (
+                {loading && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
                         <Database size={40} className="animate-pulse" />
                         <span style={{ fontSize: '14px', fontWeight: '600' }}>Running Evidence Query...</span>
                     </div>
-                ) : data ? (
+                )}
+                {!loading && data && (
                     <>
                         {(!data.source?.length && !data.staging?.length && !data.target?.length) && (
                             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>No records found for the given criteria.</div>
@@ -647,11 +695,12 @@ export default function Exceptions() {
                                 </div>
                             </div>
                         )}
-                        {renderTable('Source', data.source)}
-                        {renderTable('Staging', data.staging)}
-                        {renderTable('Target', data.target)}
+                        <DataTable title="Source" tableData={data.source} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
+                        <DataTable title="Staging" tableData={data.staging} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
+                        <DataTable title="Target" tableData={data.target} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
                     </>
-                ) : (
+                )}
+                {!loading && !data && (
                     <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
                         Enter criteria and click Search to view source, staging, and target evidence.
                     </div>

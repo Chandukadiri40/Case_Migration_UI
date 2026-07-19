@@ -1,6 +1,210 @@
 import React, { useState, useEffect } from 'react';
 import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection } from '../utils/api';
 import { Plus, Trash2, Save, Database, Server, RefreshCw, ArrowLeft, Edit2 } from 'lucide-react';
+const SystemColumnMappingSection = ({ config, setConfig, activeApp, selectedAppIndex, dbMetadata }) => {
+  const ct = activeApp.classifiedTables || {};
+  const systemColumnsByRole = [
+    { role: 'source', key: 'doc-id', defaultName: 'object_id', placeholder: '-- select column --' },
+    { role: 'source', key: 'date', defaultName: 'create_date', placeholder: '-- select column --' },
+    { role: 'source', key: 'content-size', defaultName: 'content_size', placeholder: '-- select column --' },
+    { role: 'source', key: 'mime-type', defaultName: 'mime_type', placeholder: '-- select column --' },
+    { role: 'source', key: 'class-id-col', defaultName: 'object_class_id', placeholder: '-- select column --' },
+    { role: 'source', key: 'status', defaultName: 'migration_status', placeholder: '-- select column --' },
+    { role: 'classdef', key: 'symbolic-name-col', defaultName: 'symbolic_name', placeholder: '-- select column --' },
+    { role: 'annotation', key: 'annotated-id-col', defaultName: 'annotated_id', placeholder: '-- select column --' }
+  ];
+
+  // Filter out system columns for roles that haven't been assigned a table yet
+  const rows = systemColumnsByRole.filter(col => ct[col.role] && ct[col.role].length > 0);
+
+  if (rows.length === 0) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center', background: 'white', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+        <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Assign tables to Source, Class Definition, or Annotation roles above to map their system columns.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+        <thead style={{ background: '#f8fafc' }}>
+          <tr>
+            <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569', fontWeight: 'bold', borderBottom: '1px solid #e2e8f0', width: '30%' }}>Table Name</th>
+            <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569', fontWeight: 'bold', borderBottom: '1px solid #e2e8f0', width: '30%' }}>System Property</th>
+            <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569', fontWeight: 'bold', borderBottom: '1px solid #e2e8f0', width: '40%' }}>Mapped Column</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((col, index) => {
+            const tableName = ct[col.role][0];
+            const availableCols = dbMetadata[activeApp.schema]?.[tableName] || [];
+            const sortedCols = [...availableCols].sort();
+            const assignedVal = activeApp.systemColumns?.[col.key] || '';
+            const isLast = index === rows.length - 1;
+            
+            return (
+              <tr key={col.key} style={{ borderBottom: isLast ? 'none' : '1px solid #f1f5f9' }}>
+                <td style={{ padding: '6px 12px', color: '#334155', fontWeight: '500' }}>
+                  {tableName}
+                </td>
+                <td style={{ padding: '6px 12px', color: '#0f172a', fontFamily: 'monospace', fontSize: '12px' }}>
+                  {col.defaultName}
+                </td>
+                <td style={{ padding: '6px 12px' }}>
+                  <select 
+                    value={assignedVal}
+                    onChange={(e) => {
+                      const newApps = [...config.applications];
+                      if (!newApps[selectedAppIndex].systemColumns) newApps[selectedAppIndex].systemColumns = {};
+                      newApps[selectedAppIndex].systemColumns[col.key] = e.target.value;
+                      setConfig({ ...config, applications: newApps });
+                    }}
+                    style={{ width: '100%', padding: '8px 10px', fontSize: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none', background: assignedVal ? '#eff6ff' : 'white', color: assignedVal ? '#1d4ed8' : '#94a3b8', fontWeight: assignedVal ? '600' : 'normal', fontStyle: assignedVal ? 'normal' : 'italic', cursor: 'pointer' }}
+                  >
+                    <option value="" style={{ color: '#94a3b8', fontStyle: 'italic' }}>{col.placeholder}</option>
+                    {sortedCols.map(c => <option key={c} value={c} style={{ color: '#334155', fontStyle: 'normal', fontWeight: '500' }}>{c}</option>)}
+                    {assignedVal && !sortedCols.includes(assignedVal) && (
+                      <option value={assignedVal} style={{ color: '#334155', fontStyle: 'normal', fontWeight: '500' }}>{assignedVal} (Current)</option>
+                    )}
+                  </select>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+const TableMappingList = ({ activeApp, dbMetadata, updateTableClassification, selectedAppIndex }) => {
+  const allTables = Object.keys(dbMetadata[activeApp.schema] || {})
+    .filter(t => t.toLowerCase() !== 'versionseries')
+    .sort((a, b) => a.localeCompare(b));
+  const ct = activeApp.classifiedTables || { source: [], staging: [], target: [], classdef: [], annotation: [], content: [], customobject: [], checksum: [], columndefinition: [], propertydefinition: [], globalpropertydef: [] };
+  
+  const roles = [
+    { id: 'source', label: 'Source Table' },
+    { id: 'staging', label: 'Staging Table' },
+    { id: 'target', label: 'Target Table' },
+    { id: 'classdef', label: 'Class Definition' },
+    { id: 'columndefinition', label: 'Column Definition' },
+    { id: 'propertydefinition', label: 'Property Definition' },
+    { id: 'globalpropertydef', label: 'Global Property Def' },
+    { id: 'annotation', label: 'Annotation' },
+    { id: 'content', label: 'Content' },
+    { id: 'customobject', label: 'Custom Object' },
+    { id: 'checksum', label: 'Checksum' }
+  ];
+  
+  const getRoleTable = (roleId) => {
+    return ct[roleId] && ct[roleId].length > 0 ? ct[roleId][0] : '';
+  };
+
+  const handleTableSelect = (roleId, table) => {
+    if (!table) {
+      const existingTable = getRoleTable(roleId);
+      if (existingTable) {
+        updateTableClassification(selectedAppIndex, existingTable, 'unassigned');
+      }
+    } else {
+      updateTableClassification(selectedAppIndex, table, roleId);
+    }
+  };
+
+  const isTableAssignedToOtherRole = (table, currentRoleId) => {
+    return roles.some(r => r.id !== currentRoleId && getRoleTable(r.id) === table);
+  };
+
+  return (
+    <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+        <h4 style={{ margin: 0, color: '#1e293b', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Database size={16} color="#4f46e5" /> Table Mappings
+        </h4>
+      </div>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+        {roles.map(role => {
+          const assignedTable = getRoleTable(role.id);
+          return (
+            <div key={role.id} style={{ display: 'flex', flexDirection: 'column' }}>
+              <label style={{ fontSize: '11px', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                {role.label}
+              </label>
+              <select
+                value={assignedTable}
+                onChange={(e) => handleTableSelect(role.id, e.target.value)}
+                style={{ width: '100%', padding: '6px 8px', fontSize: assignedTable ? '12px' : '11px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none', background: assignedTable ? '#eff6ff' : 'white', color: assignedTable ? '#1d4ed8' : '#94a3b8', fontWeight: assignedTable ? '600' : 'normal', fontStyle: assignedTable ? 'normal' : 'italic', cursor: 'pointer' }}
+              >
+                <option value="" style={{ color: '#94a3b8', fontStyle: 'italic' }}>-- select table --</option>
+                {allTables.map(t => {
+                  const isAssignedElsewhere = isTableAssignedToOtherRole(t, role.id);
+                  if (isAssignedElsewhere) return null;
+                  return (
+                    <option key={t} value={t} style={{ color: '#334155', fontStyle: 'normal', fontWeight: '500' }}>
+                      {t}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const DatabaseToggleSwitch = ({ db, dbConfigWrapper, handleSetActiveDb }) => {
+  const isActive = dbConfigWrapper.activeDatabaseType === db.databaseType;
+  const onlyOne = dbConfigWrapper.databases.length === 1;
+  let titleText = "Activate this database";
+  if (onlyOne) {
+    titleText = "Cannot deactivate when only one database is configured";
+  } else if (isActive) {
+    titleText = "Deactivate and switch to the other database";
+  }
+  
+  return (
+    <div 
+      onClick={() => {
+        if (onlyOne) return;
+        if (!isActive) {
+          handleSetActiveDb(db.databaseType);
+        } else {
+          // If turning off the active one, activate the other one
+          const otherDb = dbConfigWrapper.databases.find(d => d.databaseType !== db.databaseType);
+          if (otherDb) handleSetActiveDb(otherDb.databaseType);
+        }
+      }}
+      style={{
+        width: '36px',
+        height: '20px',
+        borderRadius: '10px',
+        background: isActive ? '#10b981' : '#cbd5e1',
+        position: 'relative',
+        cursor: onlyOne ? 'not-allowed' : 'pointer',
+        opacity: onlyOne ? 0.6 : 1,
+        transition: 'background 0.2s',
+        margin: '0 auto'
+      }}
+      title={titleText}
+    >
+      <div style={{
+        width: '16px',
+        height: '16px',
+        background: 'white',
+        borderRadius: '50%',
+        position: 'absolute',
+        top: '2px',
+        left: isActive ? '18px' : '2px',
+        transition: 'left 0.2s'
+      }} />
+    </div>
+  );
+};
 
 export default function Configuration() { // NOSONAR
   const [config, setConfig] = useState({ applications: [] });
@@ -10,6 +214,8 @@ export default function Configuration() { // NOSONAR
   const [success, setSuccess] = useState('');
   
   const [dbMetadata, setDbMetadata] = useState({}); // Cache for schema -> {table: [columns]}
+  const [originalAppSnapshot, setOriginalAppSnapshot] = useState(null); // Snapshot to revert app changes
+  const [schemaDiscovered, setSchemaDiscovered] = useState(false);
 
   // Database Config State
   const [dbConfigWrapper, setDbConfigWrapper] = useState({ activeDatabaseType: 'postgres', databases: [] });
@@ -22,8 +228,7 @@ export default function Configuration() { // NOSONAR
   // New Navigation State
   const [mainTab, setMainTab] = useState('appConfig'); // 'appConfig' | 'propertyMapping' | 'dbConfig'
   const [selectedAppIndex, setSelectedAppIndex] = useState(null); // Used for drill-down in appConfig and selection in propertyMapping
-  const [activeRole, setActiveRole] = useState('source'); // 'source' | 'staging' | 'target' | 'product'
-  const [activeTableDetail, setActiveTableDetail] = useState(null); // Selected table inside the role detail view
+
   // Modal states
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -63,6 +268,11 @@ export default function Configuration() { // NOSONAR
       setSuccess('');
       await apiSaveTenantConfig(config);
       setSuccess('Configuration saved successfully!');
+      
+      // Return to main app listing
+      setSelectedAppIndex(null);
+      setOriginalAppSnapshot(null);
+      
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.message || 'Failed to save configuration');
@@ -172,33 +382,57 @@ export default function Configuration() { // NOSONAR
         source: [],
         staging: [],
         target: [],
-        product: []
+        classdef: [],
+        annotation: [],
+        content: [],
+        customobject: [],
+        checksum: [],
+        columndefinition: [],
+        propertydefinition: [],
+        globalpropertydef: []
       },
       primaryColumns: {
         source: "object_id",
-        staging: "stg_object_id",
-        target: "p8_doc_id"
+        staging: "object_id",
+        target: "object_id"
       },
       systemColumns: {
         status: "migration_status",
         date: "create_date",
         "content-size": "content_size",
-        "mime-type": "mime_type"
+        "mime-type": "mime_type",
+        "doc-id": "object_id",
+        "class-id-col": "object_class_id",
+        "symbolic-name-col": "symbolic_name",
+        "annotated-id-col": "annotated_id"
       }
     };
+    setOriginalAppSnapshot(null); // null indicates a brand new app
+    setSchemaDiscovered(false);
     setConfig({ ...config, applications: [...config.applications, newApp] });
     setSelectedAppIndex(config.applications.length); // Open detail view immediately
   };
 
-  const handleRemoveApp = (index, e) => {
+  const handleRemoveApp = async (index, e) => {
     if (e) e.stopPropagation();
     const newApps = [...config.applications];
     newApps.splice(index, 1);
-    setConfig({ ...config, applications: newApps });
+    const newConfig = { ...config, applications: newApps };
+    setConfig(newConfig);
     if (selectedAppIndex === index) {
       setSelectedAppIndex(null);
     } else if (selectedAppIndex > index) {
       setSelectedAppIndex(selectedAppIndex - 1);
+    }
+    try {
+      setSaving(true);
+      await apiSaveTenantConfig(newConfig);
+      setSuccess('Application deleted successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.message || 'Failed to delete application');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -220,41 +454,21 @@ export default function Configuration() { // NOSONAR
   };
 
   const assignNewRole = (ct, tableName, newRole, oldRole) => {
-    if (newRole === 'unassigned' && ['source', 'staging', 'target'].includes(oldRole)) {
-      ct.product = [];
-    }
-    if (newRole && newRole !== 'unassigned' && ct[newRole]) {
-      if (['source', 'staging', 'target'].includes(newRole)) {
-        ct[newRole] = [tableName]; 
-      } else {
-        ct[newRole].push(tableName);
-      }
-    }
-  };
-
-  const autoAssignProductTables = (ct, dbMetadata, schema) => {
-    if (ct.source.length > 0 && ct.staging.length > 0 && ct.target.length > 0) {
-      if (dbMetadata[schema]) {
-        const allTables = Object.keys(dbMetadata[schema]);
-        const unassigned = allTables.filter(t => !(ct.source.includes(t) || ct.staging.includes(t) || ct.target.includes(t) || ct.product.includes(t)));
-        if (unassigned.length > 0) {
-          ct.product = [...ct.product, ...unassigned];
-        }
-      }
+    if (newRole && newRole !== 'unassigned' && ct[newRole] !== undefined) {
+      ct[newRole] = [tableName]; // All roles are 1-to-1 mappings now
     }
   };
 
   const updateTableClassification = (appIndex, tableName, newRole) => {
     const newApps = [...config.applications];
     if (!newApps[appIndex].classifiedTables) {
-      newApps[appIndex].classifiedTables = { source: [], staging: [], target: [], product: [] };
+      newApps[appIndex].classifiedTables = { source: [], staging: [], target: [], classdef: [], annotation: [], content: [], customobject: [], checksum: [], columndefinition: [], propertydefinition: [], globalpropertydef: [] };
     }
     const ct = newApps[appIndex].classifiedTables;
     
     const oldRole = findOldRole(ct, tableName);
     removeTableFromAllRoles(ct, tableName);
     assignNewRole(ct, tableName, newRole, oldRole);
-    autoAssignProductTables(ct, dbMetadata, newApps[appIndex].schema);
     
     setConfig({ ...config, applications: newApps });
   };
@@ -365,48 +579,11 @@ export default function Configuration() { // NOSONAR
                       dbConfigWrapper.databases.map((db, index) => (
                         <tr key={db.databaseType || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
                           <td style={{ padding: '10px 12px', width: '120px', textAlign: 'center' }}>
-                            {(() => { // NOSONAR
-                              const isActive = dbConfigWrapper.activeDatabaseType === db.databaseType;
-                              const onlyOne = dbConfigWrapper.databases.length === 1;
-                              const titleText = onlyOne ? "Cannot deactivate when only one database is configured" : (isActive ? "Deactivate and switch to the other database" : "Activate this database");
-                              return (
-                                <div 
-                                  onClick={() => {
-                                    if (onlyOne) return;
-                                    if (!isActive) {
-                                      handleSetActiveDb(db.databaseType);
-                                    } else {
-                                      // If turning off the active one, activate the other one
-                                      const otherDb = dbConfigWrapper.databases.find(d => d.databaseType !== db.databaseType);
-                                      if (otherDb) handleSetActiveDb(otherDb.databaseType);
-                                    }
-                                  }}
-                                  style={{
-                                    width: '36px',
-                                    height: '20px',
-                                    borderRadius: '10px',
-                                    background: isActive ? '#10b981' : '#cbd5e1',
-                                    position: 'relative',
-                                    cursor: onlyOne ? 'not-allowed' : 'pointer',
-                                    opacity: onlyOne ? 0.6 : 1,
-                                    transition: 'background 0.2s',
-                                    margin: '0 auto'
-                                  }}
-                                  title={titleText}
-                                >
-                                  <div style={{
-                                    width: '16px',
-                                    height: '16px',
-                                    background: 'white',
-                                    borderRadius: '50%',
-                                    position: 'absolute',
-                                    top: '2px',
-                                    left: isActive ? '18px' : '2px',
-                                    transition: 'left 0.2s'
-                                  }} />
-                                </div>
-                              );
-                            })()}
+                            <DatabaseToggleSwitch 
+                              db={db} 
+                              dbConfigWrapper={dbConfigWrapper} 
+                              handleSetActiveDb={handleSetActiveDb} 
+                            />
                           </td>
                           <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500', color: '#334155' }}>
                             {db.databaseType === 'postgres' ? 'PostgreSQL' : 'SQL Server'}
@@ -517,7 +694,12 @@ export default function Configuration() { // NOSONAR
                       <tr 
                         key={app.appId || `app-${appIdx}`} 
                         style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
-                        onClick={() => { setSelectedAppIndex(appIdx); fetchMetadataForSchema(app.schema); }}
+                        onClick={() => { 
+                          setOriginalAppSnapshot(JSON.parse(JSON.stringify(app)));
+                          setSelectedAppIndex(appIdx); 
+                          setSchemaDiscovered(true);
+                          fetchMetadataForSchema(app.schema); 
+                        }}
                         title="Click to configure"
                       >
                         <td style={{ padding: '10px 12px', fontSize: '12px', color: '#334155', fontWeight: '500' }}>{app.appId || '-'}</td>
@@ -544,17 +726,21 @@ export default function Configuration() { // NOSONAR
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <button 
                       onClick={() => {
-                        const active = config.applications[selectedAppIndex];
-                        if (!active.appId && !active.appName && !active.objectStore && !active.schema) {
-                          const newApps = [...config.applications];
+                        const newApps = [...config.applications];
+                        if (originalAppSnapshot === null) {
+                          // Brand new app not yet saved, remove it
                           newApps.splice(selectedAppIndex, 1);
-                          setConfig({ ...config, applications: newApps });
+                        } else {
+                          // Existing app, revert to original state
+                          newApps[selectedAppIndex] = originalAppSnapshot;
                         }
+                        setConfig({ ...config, applications: newApps });
                         setSelectedAppIndex(null);
+                        setOriginalAppSnapshot(null);
                       }}
                       style={{ background: '#f1f5f9', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: 'bold', fontSize: '12px' }}
                     >
-                      <ArrowLeft size={14} /> Back to List
+                      <ArrowLeft size={14} /> Cancel & Go Back
                     </button>
                     <h3 style={{ margin: 0, fontSize: '12px', color: '#4f46e5' }}>
                       {activeApp.appName || 'New Application'}
@@ -607,9 +793,13 @@ export default function Configuration() { // NOSONAR
                       <input 
                         type="text" 
                         value={activeApp.schema} 
-                        onChange={e => updateAppField(selectedAppIndex, 'schema', e.target.value)} 
+                        onChange={e => {
+                          updateAppField(selectedAppIndex, 'schema', e.target.value);
+                          setSchemaDiscovered(false);
+                        }} 
                         onKeyDown={e => {
                           if (e.key === 'Enter' && activeApp.appId && activeApp.appName && activeApp.objectStore && activeApp.schema) {
+                            setSchemaDiscovered(true);
                             fetchMetadataForSchema(activeApp.schema);
                           }
                         }} 
@@ -617,7 +807,10 @@ export default function Configuration() { // NOSONAR
                         placeholder="Enter Database Schema" 
                       />
                       <button 
-                        onClick={() => fetchMetadataForSchema(activeApp.schema)} 
+                        onClick={() => {
+                          setSchemaDiscovered(true);
+                          fetchMetadataForSchema(activeApp.schema);
+                        }} 
                         disabled={!activeApp.appId || !activeApp.appName || !activeApp.objectStore || !activeApp.schema}
                         style={{ 
                           padding: '6px 10px', 
@@ -640,180 +833,27 @@ export default function Configuration() { // NOSONAR
                   </div>
                 </div>
 
-                {dbMetadata[activeApp.schema] && Object.keys(dbMetadata[activeApp.schema]).length > 0 ? (
+                {schemaDiscovered && dbMetadata[activeApp.schema] && Object.keys(dbMetadata[activeApp.schema]).length > 0 ? (
                   <>
-                    {/* 4-Bucket Tabs (Horizontal) */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-                      {['source', 'staging', 'target', 'product'].map(role => { // NOSONAR
-                        const tablesInRole = activeApp.classifiedTables?.[role] || [];
-                        const isActive = activeRole === role;
-                        return (
-                          <div 
-                            key={role} 
-                            onClick={() => { setActiveRole(role); setActiveTableDetail(null); }}
-                            style={{ 
-                              background: isActive ? '#eff6ff' : '#f8fafc', 
-                              border: `1px solid ${isActive ? '#3b82f6' : '#cbd5e1'}`, 
-                              borderRadius: '8px', 
-                              padding: '12px',
-                              cursor: 'pointer',
-                              boxShadow: isActive ? '0 0 0 1px #3b82f6' : 'none',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                              <h5 style={{ margin: 0, textTransform: 'capitalize', color: isActive ? '#1d4ed8' : '#1e293b', fontSize: '13px' }}>{role} Table(s)</h5>
-                            </div>
-                            {tablesInRole.length > 0 ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', overflowY: 'auto', paddingRight: '4px' }}>
-                                {tablesInRole.map(t => (
-                                  <div key={t} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', padding: '6px', background: 'white', border: `1px solid ${isActive ? '#bfdbfe' : '#e2e8f0'}`, borderRadius: '4px', color: '#3b82f6', fontWeight: 'bold' }}>
-                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t}>{t}</span>
-                                    <button onClick={(e) => { e.stopPropagation(); updateTableClassification(selectedAppIndex, t, 'unassigned'); }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Unassign table">
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>No {role} tables assigned.</div>
-                            )}
-                          </div>
-                        );
-                      })}
+                    {/* Table-Centric Mapping View */}
+                    <TableMappingList 
+                      activeApp={activeApp}
+                      dbMetadata={dbMetadata}
+                      updateTableClassification={updateTableClassification}
+                      selectedAppIndex={selectedAppIndex}
+                    />
+
+                    {/* System Columns Mapping */}
+                    <div style={{ marginTop: '12px' }}>
+                      <h4 style={{ margin: '0 0 8px 0', color: '#1e293b', fontSize: '13px' }}>System Columns Mapping</h4>
+                      <SystemColumnMappingSection 
+                        config={config} 
+                        setConfig={setConfig} 
+                        activeApp={activeApp} 
+                        selectedAppIndex={selectedAppIndex} 
+                        dbMetadata={dbMetadata} 
+                      />
                     </div>
-
-                    {/* Active Role Detail View */}
-                    {(() => { // NOSONAR
-                      const role = activeRole;
-                      const tablesInRole = activeApp.classifiedTables?.[role] || [];
-                      const canAdd = role === 'product' || tablesInRole.length === 0;
-
-                      const allTables = Object.keys(dbMetadata[activeApp.schema] || {});
-                      const ct = activeApp.classifiedTables || { source: [], staging: [], target: [], product: [] };
-                      const unassignedTables = allTables.filter(t => !(ct.source?.includes(t) || ct.staging?.includes(t) || ct.target?.includes(t) || ct.product?.includes(t)));
-
-                      return (
-                        <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '20px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: tablesInRole.length > 0 || canAdd ? '16px' : '0' }}>
-                            <h4 style={{ margin: 0, textTransform: 'capitalize', color: '#1e293b', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {role === 'source' ? <Database size={18} color="#3b82f6" /> : null}
-                              {role === 'staging' ? <Database size={18} color="#8b5cf6" /> : null}
-                              {role === 'target' ? <Database size={18} color="#10b981" /> : null}
-                              {role === 'product' ? <Database size={18} color="#f59e0b" /> : null}
-                              {role} Table Mapping
-                            </h4>
-                            {canAdd && unassignedTables.length > 0 && (
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                <select 
-                                  id={`select-${role}`}
-                                  style={{ padding: '6px 12px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', minWidth: '250px' }}
-                                  defaultValue=""
-                                >
-                                  <option value="" disabled>Select unassigned table...</option>
-                                  {unassignedTables.map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                                <button 
-                                  onClick={() => {
-                                    const sel = document.getElementById(`select-${role}`);
-                                    if (sel && sel.value) {
-                                      updateTableClassification(selectedAppIndex, sel.value, role);
-                                      sel.value = "";
-                                    }
-                                  }}
-                                  style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#3b82f6', color: 'white', border: 'none', padding: '6px 14px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', fontWeight: 'bold' }}
-                                >
-                                  <Plus size={14} /> Add
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {tablesInRole.length > 0 ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '20px', height: '300px' }}>
-                              {/* Left: List of Mapped Tables */}
-                              <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', overflowY: 'auto' }}>
-                                {tablesInRole.map(t => (
-                                  <div 
-                                    key={t}
-                                    onClick={() => setActiveTableDetail(t)}
-                                    style={{ 
-                                      padding: '10px 12px', 
-                                      borderBottom: '1px solid #f1f5f9', 
-                                      cursor: 'pointer', 
-                                      display: 'flex', 
-                                      justifyContent: 'space-between', 
-                                      alignItems: 'center',
-                                      background: activeTableDetail === t ? '#eff6ff' : 'white',
-                                      color: activeTableDetail === t ? '#1d4ed8' : '#334155'
-                                    }}
-                                  >
-                                    <span style={{ fontSize: '13px', fontWeight: activeTableDetail === t ? 'bold' : 'normal', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t}</span>
-                                    <button 
-                                      onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        updateTableClassification(selectedAppIndex, t, 'unassigned');
-                                        if (activeTableDetail === t) setActiveTableDetail(null);
-                                      }} 
-                                      style={{ background: '#fee2e2', border: '1px solid #fecaca', color: '#ef4444', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex' }} 
-                                      title="Remove mapping"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                              {/* Right: Columns of Selected Table */}
-                              <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', overflowY: 'auto', padding: '16px' }}>
-                                {activeTableDetail && tablesInRole.includes(activeTableDetail) ? (() => {
-                                  const tableColumns = dbMetadata[activeApp.schema][activeTableDetail] || [];
-                                  return (
-                                    <div>
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                                        <h5 style={{ margin: 0, fontSize: '14px', color: '#334155' }}>
-                                          Columns in <strong>{activeTableDetail}</strong> <span style={{ color: '#64748b', fontSize: '12px', fontWeight: 'normal' }}>({tableColumns.length} total)</span>
-                                        </h5>
-                                      </div>
-                                      <div style={{ borderRadius: '6px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                          <thead>
-                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                              <th style={{ padding: '8px 12px', textAlign: 'center', width: '50px', color: '#475569', fontWeight: 'bold' }}>S.No</th>
-                                              <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569', fontWeight: 'bold' }}>Column Name</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {tableColumns.map((col, idx) => (
-                                              <tr key={col} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
-                                                <td style={{ padding: '8px 12px', textAlign: 'center', color: '#64748b' }}>{idx + 1}</td>
-                                                <td style={{ padding: '8px 12px', color: '#334155', fontWeight: '500' }}>{col}</td>
-                                              </tr>
-                                            ))}
-                                            {tableColumns.length === 0 && (
-                                              <tr>
-                                                <td colSpan={2} style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>No columns found.</td>
-                                              </tr>
-                                            )}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  );
-                                })() : (
-                                  <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                                    Select a mapped table from the left to view its columns.
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ padding: '24px', textAlign: 'center', background: 'white', border: '1px dashed #cbd5e1', borderRadius: '8px', color: '#94a3b8', fontSize: '14px', fontStyle: 'italic' }}>
-                              No table mapped for {role}. Select one from the dropdown to map.
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
                   </>
                 ) : (
                   <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>

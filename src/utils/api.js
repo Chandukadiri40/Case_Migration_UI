@@ -119,16 +119,21 @@ export function apiGetDeliverableMigrationReport(payload) {
   })
 }
 
-export function apiGetReconciliationProperties() {
-  return request('/config/reconciliation-properties')
-}
-
 // -- Tenant Configuration
-export function apiGetTenantConfig() {
-  return request('/config')
+let tenantConfigPromise = null;
+
+export function apiGetTenantConfig(forceRefresh = false) {
+  if (!tenantConfigPromise || forceRefresh) {
+    tenantConfigPromise = request('/config').catch(err => {
+      tenantConfigPromise = null; // Clear on error so it retries next time
+      throw err;
+    });
+  }
+  return tenantConfigPromise;
 }
 
 export function apiSaveTenantConfig(payload) {
+  tenantConfigPromise = null; // Invalidate cache on save
   return request('/config', {
     method: 'POST',
     body: JSON.stringify(payload)

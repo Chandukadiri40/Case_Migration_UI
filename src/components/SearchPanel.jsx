@@ -76,6 +76,151 @@ const renderFieldInput = (field, filters, handleChange) => {
   return <input type="text" name={field.label} className="sp-input" placeholder={field.placeholder || 'Search ' + field.label} value={filters[field.label] || ''} onChange={handleChange} />;
 }
 
+const CustomMetadataGroup = ({
+  dropdownFields,
+  addFieldDropdownRef,
+  addFieldDropdownOpen,
+  setAddFieldDropdownOpen,
+  fieldSearchText,
+  setFieldSearchText,
+  filteredDropdownFields,
+  activeFields,
+  isConfiguredByDefault,
+  handleRemoveField,
+  handleAddField,
+  apiLoading,
+  filters,
+  handleChange
+}) => {
+  return (
+    <div className="sp-col">
+      <div className="sp-group-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', overflow: 'visible' }}>
+        <span>Custom Metadata</span>
+        {dropdownFields.length > 0 && (
+          <div className="add-field-dropdown-container" ref={addFieldDropdownRef}>
+            <button
+              type="button"
+              className="btn-add-field-trigger"
+              onClick={() => {
+                setAddFieldDropdownOpen(o => !o);
+                setFieldSearchText('');
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: '1px' }}>
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Add Field
+            </button>
+            {addFieldDropdownOpen && (
+              <div className="add-field-dropdown-menu">
+                <div className="add-field-dropdown-header">Select Metadata Field</div>
+                <div className="add-field-dropdown-search-wrap">
+                  <input
+                    type="text"
+                    placeholder="Search fields..."
+                    value={fieldSearchText}
+                    onChange={e => setFieldSearchText(e.target.value)}
+                    className="add-field-search-input"
+                    autoFocus
+                    onClick={e => e.stopPropagation()}
+                  />
+                </div>
+                <div className="add-field-dropdown-list">
+                  {filteredDropdownFields.map(field => {
+                    const isActive = activeFields.some(af => af.key === field.key);
+                    return (
+                        <div
+                          key={field.key}
+                          className="add-field-dropdown-item checkbox-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isActive) {
+                              if (!isConfiguredByDefault(field.key)) {
+                                handleRemoveField(field.key);
+                              }
+                            } else {
+                              handleAddField(field.key);
+                            }
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isActive}
+                            disabled={isConfiguredByDefault(field.key)}
+                            readOnly
+                            className="add-field-checkbox"
+                          />
+                          <span className={`add-field-label ${isConfiguredByDefault(field.key) ? 'disabled-label' : ''}`} title={field.label}>
+                            {field.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  {filteredDropdownFields.length === 0 && (
+                    <div style={{ padding: '12px', color: 'var(--gray-400)', textAlign: 'center', fontStyle: 'italic', fontSize: '12px' }}>
+                      No matching fields
+                    </div>
+                  )}
+                </div>
+                <div className="add-field-dropdown-footer">
+                  <button
+                    type="button"
+                    className="btn-done-add-field"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAddFieldDropdownOpen(false);
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {apiLoading && (
+        <div style={{ padding: '12px 0', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="spinner spinner--dark" />
+          <span>Loading metadata fields...</span>
+        </div>
+      )}
+      {!apiLoading && activeFields.length === 0 && (
+        <div style={{ padding: '16px', color: 'var(--gray-400)', textAlign: 'center', fontStyle: 'italic', border: '1px dashed var(--gray-200)', borderRadius: '6px' }}>
+          No metadata fields configured.
+        </div>
+      )}
+      {!apiLoading && activeFields.length > 0 && (
+        <div className="sp-fields-grid">
+          {activeFields.map(field => (
+            <div className="sp-field" key={field.key}>
+              <div className="sp-input-label-row">
+                <label className="sp-input-label">{field.label}</label>
+                {!isConfiguredByDefault(field.key) && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveField(field.key)}
+                    className="btn-remove-field"
+                    title="Remove field"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
+              {renderFieldInput(field, filters, handleChange)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function SearchPanel({ tableId, filters, setFilters, onSearch, onReset, loading, error }) {
   const [collapsed, setCollapsed] = useState(false)
   const [bulkMode, setBulkMode]   = useState(false)
@@ -389,140 +534,22 @@ export default function SearchPanel({ tableId, filters, setFilters, onSearch, on
 
             {/* COL 3 — Custom Metadata */}
             {(activeFields.length > 0 || dropdownFields.length > 0) && (
-              <div className="sp-col">
-                <div className="sp-group-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', overflow: 'visible' }}>
-                  <span>Custom Metadata</span>
-                  {dropdownFields.length > 0 && (
-                    <div className="add-field-dropdown-container" ref={addFieldDropdownRef}>
-                      <button
-                        type="button"
-                        className="btn-add-field-trigger"
-                        onClick={() => {
-                          setAddFieldDropdownOpen(o => !o);
-                          setFieldSearchText('');
-                        }}
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: '1px' }}>
-                          <line x1="12" y1="5" x2="12" y2="19"/>
-                          <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                        Add Field
-                      </button>
-                      {addFieldDropdownOpen && (
-                        <div className="add-field-dropdown-menu">
-                          <div className="add-field-dropdown-header">Select Metadata Field</div>
-                          <div className="add-field-dropdown-search-wrap">
-                            <input
-                              type="text"
-                              placeholder="Search fields..."
-                              value={fieldSearchText}
-                              onChange={e => setFieldSearchText(e.target.value)}
-                              className="add-field-search-input"
-                              autoFocus
-                              onClick={e => e.stopPropagation()}
-                            />
-                          </div>
-                          <div className="add-field-dropdown-list">
-                            {filteredDropdownFields.map(field => {
-                              const isActive = activeFields.some(af => af.key === field.key);
-                              return (
-                                  <div
-                                    key={field.key}
-                                    className="add-field-dropdown-item checkbox-item"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (isActive) {
-                                        if (!isConfiguredByDefault(field.key)) {
-                                          handleRemoveField(field.key);
-                                        }
-                                      } else {
-                                        handleAddField(field.key);
-                                      }
-                                    }}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isActive}
-                                      disabled={isConfiguredByDefault(field.key)}
-                                      readOnly
-                                      className="add-field-checkbox"
-                                    />
-                                    <span className={`add-field-label ${isConfiguredByDefault(field.key) ? 'disabled-label' : ''}`} title={field.label}>
-                                      {field.label}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            {filteredDropdownFields.length === 0 && (
-                              <div style={{ padding: '12px', color: 'var(--gray-400)', textAlign: 'center', fontStyle: 'italic', fontSize: '12px' }}>
-                                No matching fields
-                              </div>
-                            )}
-                          </div>
-                          <div className="add-field-dropdown-footer">
-                            <button
-                              type="button"
-                              className="btn-done-add-field"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setAddFieldDropdownOpen(false);
-                              }}
-                            >
-                              Done
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-                
-                {apiLoading && (
-                  <div style={{ padding: '12px 0', color: 'var(--gray-500)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="spinner spinner--dark" />
-                    <span>Loading metadata fields...</span>
-                  </div>
-                )}
-                {!apiLoading && activeFields.length === 0 && (
-                  <div style={{ padding: '16px', color: 'var(--gray-400)', textAlign: 'center', fontStyle: 'italic', border: '1px dashed var(--gray-200)', borderRadius: '6px' }}>
-                    No metadata fields configured.
-                  </div>
-                )}
-                {!apiLoading && activeFields.length > 0 && (
-                  <div className="sp-fields-grid">
-                    {activeFields.map(field => (
-                      <div className="sp-field" key={field.key}>
-                        <div className="sp-input-label-row">
-                          <label className="sp-input-label">{field.label}</label>
-                          {!isConfiguredByDefault(field.key) && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveField(field.key)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                color: 'var(--danger)',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}
-                              title={`Remove ${field.label}`}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        {renderFieldInput(field, filters, handleChange)}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <CustomMetadataGroup
+                dropdownFields={dropdownFields}
+                addFieldDropdownRef={addFieldDropdownRef}
+                addFieldDropdownOpen={addFieldDropdownOpen}
+                setAddFieldDropdownOpen={setAddFieldDropdownOpen}
+                fieldSearchText={fieldSearchText}
+                setFieldSearchText={setFieldSearchText}
+                filteredDropdownFields={filteredDropdownFields}
+                activeFields={activeFields}
+                isConfiguredByDefault={isConfiguredByDefault}
+                handleRemoveField={handleRemoveField}
+                handleAddField={handleAddField}
+                apiLoading={apiLoading}
+                filters={filters}
+                handleChange={handleChange}
+              />
             )}
           </div>
 

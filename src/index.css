@@ -319,6 +319,7 @@ input, select, textarea, button {
 .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.3); border-top-color: white; border-radius: 50%; animation: spin .65s linear infinite; display: inline-block; flex-shrink: 0; }
 .spinner--dark { border-color: rgba(37,99,235,.2); border-top-color: white; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
 .loading-card { display: flex; align-items: center; gap: 12px; padding: 32px 24px; color: var(--gray-500); font-size: 13px; margin-bottom: 16px; }
 .loading-card .spinner { border-color: var(--gray-200); border-top-color: var(--primary); }
 
@@ -784,7 +785,7 @@ input[type="date"].sp-input { color: var(--gray-900); font-weight: 500; }
 .results-badge { background: var(--primary-light); color: var(--primary); font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px; border: 1px solid var(--primary-muted); }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
-.table-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 6px; width: max-content; max-width: 100%; }
+.table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; width: 100%; }
 table { border-collapse: collapse; text-align: left; font-size: 10px; width: 100%; }
 thead th {
   background: #f1f5f9; padding: 6px 8px;

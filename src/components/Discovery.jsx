@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
-import { Search, Layers, CheckCircle, FolderOpen, HardDrive, FileText, FileSearch, Hash, ArrowDown, ArrowUp, Download } from 'lucide-react'
+import { Search, Layers, CheckCircle, FolderOpen, HardDrive, FileText, FileSearch, Hash, ArrowDown, ArrowUp, Download, Loader2 } from 'lucide-react'
 import Papa from 'papaparse'
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 import { apiGetTenantConfig, BASE } from '../utils/api'
 
 export default function Discovery() {
@@ -95,13 +95,15 @@ export default function Discovery() {
 
     // Fetch Document Classes when App changes
     useEffect(() => {
-        if (!selectedApp) return;
-        axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}`)
-            .then(res => {
-                setDocClasses(res.data);
-                setSelectedDocClass('');
+        if (!selectedApp) { setDocClasses([]); setSelectedDocClass('All'); return }
+        axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}&type=all`)
+            .then(res => { 
+                setDocClasses(res.data); 
+                setSelectedDocClass('All');
             })
-            .catch(err => console.error("Error fetching document classes", err));
+            .catch(err => {
+                console.error("Error fetching document classes", err);
+            });
     }, [selectedApp]);
 
     // Note: removed auto-selection of first subreport when category changes
@@ -295,14 +297,15 @@ export default function Discovery() {
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                        <button
-                            onClick={runReport}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '5px 14px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', height: '28px', fontSize: '9px', transition: 'all 0.2s', width: '100%', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' }}
-                            onMouseOver={(e) => { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; }}
-                            onMouseOut={(e) => { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; }}
-                        >
-                            <Search size={12} /> Run Report
-                        </button>
+                            <button
+                                onClick={runReport}
+                                disabled={loading}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '5px 14px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', height: '28px', fontSize: '9px', transition: 'all 0.2s', width: '100%', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
+                                onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }}
+                                onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
+                            >
+                                {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />} {loading ? 'Running...' : 'Run Report'}
+                            </button>
                     </div>
                 </div>
             </div>

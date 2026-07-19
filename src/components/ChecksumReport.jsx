@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { apiGetChecksumReport, apiGetTenantConfig } from '../utils/api'
 import { generateChecksumExcel, generateChecksumCSV } from '../utils/checksumExport'
-import { Download, Search, Database } from 'lucide-react'
+import { Download, Search, Database, Loader2 } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -29,11 +29,16 @@ const labelStyle = {
   letterSpacing: '0.06em',
 }
 
-function renderTableCell(r, col, selectedAppName) {
+function getCellValue(r, col, selectedAppName) {
   let val = r[col.key] || r[col.key?.toUpperCase()] || r[col.key?.toLowerCase()];
-  if (col.key === 'application' && !val && selectedAppName) val = selectedAppName;
-  if (col.key === 'object_store' && !val && r['objectstorename']) val = r['objectstorename'];
-  if (col.key === 'content_size' && val) val = (Number(val) / 1024).toFixed(2);
+  if (col.key === 'application' && !val && selectedAppName) return selectedAppName;
+  if (col.key === 'object_store' && !val && r['objectstorename']) return r['objectstorename'];
+  if (col.key === 'content_size' && val) return (Number(val) / 1024).toFixed(2);
+  return val;
+}
+
+function renderTableCell(r, col, selectedAppName) {
+  const val = getCellValue(r, col, selectedAppName);
 
   if (col.key === 'checksum_status') {
     const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
@@ -62,6 +67,98 @@ function renderTableCell(r, col, selectedAppName) {
     </td>
   );
 }
+
+const ChecksumFilterPanel = ({
+  apps,
+  selectedApp,
+  setSelectedApp,
+  docClasses,
+  selectedDocClass,
+  setSelectedDocClass,
+  docClassLoading,
+  fromDate,
+  setFromDate,
+  toDate,
+  setToDate,
+  data,
+  handleReset,
+  handleFetch,
+  loading
+}) => {
+  return (
+    <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+          <div>
+            <label style={labelStyle}>Application</label>
+            <select
+              value={selectedApp}
+              onChange={e => setSelectedApp(e.target.value)}
+              style={fieldStyle}
+              onFocus={e => e.target.style.borderColor = '#4f46e5'}
+              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+            >
+              <option value="">-- Select Application --</option>
+              {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Document Class</label>
+            <select
+              value={selectedDocClass}
+              onChange={e => setSelectedDocClass(e.target.value)}
+              style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
+              disabled={!selectedApp || docClassLoading}
+              onFocus={e => e.target.style.borderColor = '#4f46e5'}
+              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+            >
+              <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
+              {docClasses.length > 0 && <option value="All">All Classes</option>}
+              {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Start Date</label>
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+          </div>
+
+          <div>
+            <label style={labelStyle}>End Date</label>
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            {data && (
+              <button
+                onClick={handleReset}
+                style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={handleFetch}
+              disabled={loading}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
+              onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} 
+              onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> Searching...
+                </>
+              ) : (
+                <>
+                  <Search size={14} /> Search
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+    </div>
+  );
+};
 
 export default function ChecksumReport() { // NOSONAR
   const [apps, setApps]                 = useState([])
@@ -171,73 +268,23 @@ export default function ChecksumReport() { // NOSONAR
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
-            <div>
-              <label style={labelStyle}>Application</label>
-              <select
-                value={selectedApp}
-                onChange={e => setSelectedApp(e.target.value)}
-                style={fieldStyle}
-                onFocus={e => e.target.style.borderColor = '#4f46e5'}
-                onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-              >
-                <option value="">-- Select Application --</option>
-                {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Document Class</label>
-              <select
-                value={selectedDocClass}
-                onChange={e => setSelectedDocClass(e.target.value)}
-                style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
-                disabled={!selectedApp || docClassLoading}
-                onFocus={e => e.target.style.borderColor = '#4f46e5'}
-                onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-              >
-                <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
-                {docClasses.length > 0 && <option value="All">All Classes</option>}
-                {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Start Date</label>
-              <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
-            </div>
-
-            <div>
-              <label style={labelStyle}>End Date</label>
-              <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              {data && (
-                <button
-                  onClick={handleReset}
-                  style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
-                >
-                  Clear
-                </button>
-              )}
-              <button
-                onClick={handleFetch}
-                disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
-                onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} 
-                onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
-              >
-                {loading ? 'Loading...' : (
-                  <>
-                    <Search size={14} /> Search
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-      </div>
+      <ChecksumFilterPanel
+        apps={apps}
+        selectedApp={selectedApp}
+        setSelectedApp={setSelectedApp}
+        docClasses={docClasses}
+        selectedDocClass={selectedDocClass}
+        setSelectedDocClass={setSelectedDocClass}
+        docClassLoading={docClassLoading}
+        fromDate={fromDate}
+        setFromDate={setFromDate}
+        toDate={toDate}
+        setToDate={setToDate}
+        data={data}
+        handleReset={handleReset}
+        handleFetch={handleFetch}
+        loading={loading}
+      />
 
       {error && (
         <div className="alert alert-error" style={{ marginBottom: 14 }}>
@@ -298,7 +345,7 @@ export default function ChecksumReport() { // NOSONAR
                 </div>
               </div>
 
-              <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 <table>
                   <thead>
                     <tr>

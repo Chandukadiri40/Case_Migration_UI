@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from '@e965/xlsx'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -18,25 +18,20 @@ function formatHeader(key) {
   return key.replace(/_/g, ' ').toUpperCase()
 }
 
-function getCustomColumns(data, reconProps, visible) {
-  const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
-  if (hasWildcard) {
-    const isCustomCol = k => {
-        if (k.toLowerCase().includes('objectstorename')) return false;
-        return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
-    };
-    const keys = Object.keys(data[0]).filter(isCustomCol);
-    return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
-  }
-  return (reconProps.customMetadata || []).filter(k => visible.size === 0 || visible.has(k.toLowerCase()) || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+function getCustomColumns(data, visible) {
+  const isCustomCol = k => {
+      if (k.toLowerCase().includes('objectstorename')) return false;
+      return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath' || visible.has(k);
+  };
+  const keys = Object.keys(data[0]).filter(isCustomCol);
+  return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
 }
 
 function getRecordColumns(data, meta) {
   if (!data || data.length === 0) return []
-  const reconProps = meta?.reconProps || { customMetadata: [] }
   const visible = meta.visibleCustomColumns || new Set();
   
-  const customCols = getCustomColumns(data, reconProps, visible);
+  const customCols = getCustomColumns(data, visible);
   const hasFailed = data.some(r => String(r.migration_status ?? '').toLowerCase() === 'failed')
 
   return [

@@ -23,7 +23,6 @@ export default function PropertyMapping() {
   const [selectedSourceClass, setSelectedSourceClass] = useState('');
   const [selectedTargetClass, setSelectedTargetClass] = useState('');
   
-  const [sourceProperties, setSourceProperties] = useState([]);
   const [targetProperties, setTargetProperties] = useState([]);
   
   const [mappings, setMappings] = useState([]);
@@ -54,7 +53,6 @@ export default function PropertyMapping() {
     setSelectedTargetClass('');
     setSourceClasses([]);
     setTargetClasses([]);
-    setSourceProperties([]);
     setTargetProperties([]);
     setMappings([]);
     
@@ -75,13 +73,11 @@ export default function PropertyMapping() {
   const handleSourceClassChange = async (docClass) => {
     setSelectedSourceClass(docClass);
     if (!docClass) {
-      setSourceProperties([]);
       setMappings([]);
       return;
     }
     try {
       const props = await apiGetClassProperties(selectedAppId, docClass);
-      setSourceProperties(props);
       // Auto-populate grid with all source properties
       setMappings(props.map(p => ({
         sourceProperty: p.propertyName,
@@ -217,7 +213,6 @@ export default function PropertyMapping() {
         apiGetClassProperties(template.applicationId, template.targetDocumentClass)
       ]);
       
-      setSourceProperties(srcProps);
       setTargetProperties(tgtProps);
       
       // Reconstruct mapping grid (showing all source props, overlaying mapped targets)
@@ -248,7 +243,6 @@ export default function PropertyMapping() {
     setSelectedTargetClass('');
     setSourceClasses([]);
     setTargetClasses([]);
-    setSourceProperties([]);
     setTargetProperties([]);
     setMappings([]);
   };
@@ -387,7 +381,7 @@ export default function PropertyMapping() {
                 <tbody>
                   {viewingTemplate.mappings && viewingTemplate.mappings.length > 0 ? (
                     viewingTemplate.mappings.map((m, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                      <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
                         <td style={{ padding: '8px 12px', fontSize: '12px', color: '#334155', fontWeight: '500' }}>{m.sourceProperty}</td>
                         <td style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b' }}>{m.sourceDataType}</td>
                         <td style={{ padding: '8px 12px', fontSize: '12px', color: '#059669', fontWeight: '600' }}>{m.targetProperty}</td>
@@ -453,7 +447,7 @@ export default function PropertyMapping() {
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: '#475569', marginBottom: '4px' }}>Target Document Class</label>
                 <select 
                   value={selectedTargetClass}
-                  onChange={e => handleTargetTargetClassChange(e.target.value)}
+                  onChange={e => handleTargetClassChange(e.target.value)}
                   disabled={!selectedAppId}
                   style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', outline: 'none', color: '#10b981', fontWeight: '500', background: !selectedAppId ? '#f8fafc' : 'white' }}
                 >
@@ -508,7 +502,7 @@ export default function PropertyMapping() {
                       </tr>
                     ) : (
                       mappings.map((m, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#fafaf9' }}>
+                        <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#fafaf9' }}>
                           <td style={{ padding: '6px 16px' }}>
                             <span style={{ display: 'inline-block', padding: '2px 8px', background: '#f1f5f9', borderRadius: '4px', fontSize: '12px', color: '#334155', fontWeight: '500', border: '1px solid #e2e8f0' }}>
                               {m.sourceProperty}

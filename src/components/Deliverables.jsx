@@ -1,13 +1,73 @@
 import React, { useState, useEffect } from 'react'
 import axios from 'axios'
 import ChecksumReport from './ChecksumReport'
-import { apiGetDeliverableMigrationReport, apiGetReconciliationProperties, apiGetTenantConfig } from '../utils/api'
+import { apiGetDeliverableMigrationReport, apiGetTenantConfig } from '../utils/api'
 import { exportDeliverableExcel, exportDeliverableCSV } from '../utils/deliverableExport'
-import { FileSpreadsheet, Download, Search, Database, Settings } from 'lucide-react'
+import { FileSpreadsheet, Download, Search, Database, Settings, Loader2 } from 'lucide-react'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const STATUS_OPTIONS = ['All', 'Success', 'Failed']
+
+function getCellValue(r, cKey, selectedAppName) {
+  let val = r[cKey] || r[cKey.toUpperCase()] || r[cKey.toLowerCase()];
+  if (cKey === 'application' && !val && selectedAppName) {
+    val = selectedAppName;
+  }
+  return val;
+}
+
+const toNum = (val) => Number(val) || 0;
+
+function renderAggregatedRow(r, sno, isNewApp, appCount) {
+  const compPct = toNum(r.percentCompletion);
+  const failPct = toNum(r.percentFailed);
+  const runDays = toNum(r.runTimeDays);
+  
+  let completionClass = 'status-badge';
+  if (compPct >= 100) completionClass = 'status-badge status-success';
+  else if (compPct > 0) completionClass = 'status-badge status-pending';
+  
+  let failedRender = <span className="cell-empty">0.0%</span>;
+  if (failPct > 0) {
+    failedRender = <span className="status-badge status-failed">{failPct.toFixed(1)}%</span>;
+  }
+  
+  let runTimeRender = <span className="cell-empty">0.00 days</span>;
+  if (runDays > 0) {
+    runTimeRender = `${runDays.toFixed(2)} days`;
+  }
+
+  const objStoreStr = r.objectStore ? String(r.objectStore) : 'na';
+  const docClassStr = r.documentClass ? String(r.documentClass) : 'na';
+  const rowKey = `agg-${objStoreStr}-${docClassStr}`;
+
+  const objStoreEl = r.objectStore ? r.objectStore : <em className="cell-empty">NULL</em>;
+  const docClassEl = r.documentClass ? r.documentClass : <em className="cell-empty">NULL</em>;
+
+  return (
+    <tr key={rowKey}>
+      <td style={{ textAlign: 'center' }}>{sno}</td>
+      {isNewApp ? (
+        <td rowSpan={appCount} style={{ fontWeight: 700, color: '#1e293b', verticalAlign: 'middle', textAlign: 'center', background: '#f8fafc' }}>
+          {objStoreEl}
+        </td>
+      ) : null}
+      <td>{docClassEl}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.totalDocuments).toLocaleString()}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.totalFileSizeGb).toFixed(2)}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.extractedFileNet).toLocaleString()}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.extractionFailed).toLocaleString()}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.remaining).toLocaleString()}</td>
+      <td style={{ textAlign: 'right' }}>{toNum(r.extractedFileSizeGb).toFixed(2)}</td>
+      <td style={{ textAlign: 'right' }}>
+        <span className={completionClass}>{compPct.toFixed(1)}%</span>
+      </td>
+      <td style={{ textAlign: 'right' }}>{failedRender}</td>
+      <td style={{ textAlign: 'right' }}>{runTimeRender}</td>
+    </tr>
+  );
+}
 
 const fieldStyle = {
   padding: '5px 8px',
@@ -40,55 +100,181 @@ const tdStyle = {
 }
 
 function renderTableCell(r, c, selectedAppName) {
-  let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()];
-  if (c.key === 'application' && !val && selectedAppName) val = selectedAppName;
-  if (c.key === 'migration_status') {
-    const statusCls = (val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated') ? 'status-badge status-success' : 'status-badge status-failed';
-    return (
-      <td key={c.key} style={tdStyle}>
-        <span className={statusCls}>{val || '—'}</span>
-      </td>
-    );
+  const val = getCellValue(r, c.key, selectedAppName);
+  
+  switch (c.key) {
+    case 'migration_status': {
+      const isSuccess = val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated';
+      const statusCls = isSuccess ? 'status-badge status-success' : 'status-badge status-failed';
+      return (
+        <td key={c.key} style={tdStyle}>
+          <span className={statusCls}>{val || '—'}</span>
+        </td>
+      );
+    }
+    case 'error_info': {
+      let displayVal = '—';
+      if (val) {
+        displayVal = val.length > 40 ? val.substring(0, 40) + '...' : val;
+      }
+      return (
+        <td key={c.key} style={tdStyle}>
+          <span 
+            title={val || 'No error info'} 
+            style={{ 
+              cursor: 'pointer', color: '#e11d48', background: '#fff1f2',
+              padding: '2px 6px', borderRadius: '4px', border: '1px solid #ffe4e6',
+              fontSize: '9px', display: 'inline-block', maxWidth: '240px',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+            }}
+          >
+            {displayVal}
+          </span>
+        </td>
+      );
+    }
+    case 'object_id':
+    case 'p8_doc_id':
+      return <td key={c.key} className="cell-mono" style={{ ...tdStyle }}>{val || '—'}</td>;
+    case 'migrated_date':
+      return <td key={c.key} style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>;
+    default:
+      return (
+        <td key={c.key} style={tdStyle} title={val}>
+          {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
+        </td>
+      );
   }
-  if (c.key === 'error_info') {
-    const displayVal = val ? (val.length > 40 ? val.substring(0, 40) + '...' : val) : '—';
-    return (
-      <td key={c.key} style={tdStyle}>
-        <span 
-          title={val || 'No error info'} 
-          style={{ 
-            cursor: 'pointer', color: '#e11d48', background: '#fff1f2',
-            padding: '2px 6px', borderRadius: '4px', border: '1px solid #ffe4e6',
-            fontSize: '9px', display: 'inline-block', maxWidth: '240px',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-          }}
-        >
-          {displayVal}
-        </span>
-      </td>
-    );
-  }
-  if (c.key === 'object_id' || c.key === 'p8_doc_id') {
-    return <td key={c.key} className="cell-mono" style={{ ...tdStyle }}>{val || '—'}</td>;
-  }
-  if (c.key === 'migrated_date') {
-    return <td key={c.key} style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{val ? new Date(val).toLocaleString() : '—'}</td>;
-  }
-  return (
-    <td key={c.key} style={tdStyle} title={val}>
-      {val == null || val === '' ? <span className="cell-empty">—</span> : String(val)}
-    </td>
-  );
 }
+
+
+const DeliverableFilterPanel = ({
+  apps,
+  selectedApp,
+  setSelectedApp,
+  docClasses,
+  selectedDocClass,
+  setSelectedDocClass,
+  docClassLoading,
+  startDate,
+  setStartDate,
+  endDate,
+  setEndDate,
+  migrationStatus,
+  setMigrationStatus,
+  data,
+  handleReset,
+  handleSearch,
+  loading
+}) => {
+  return (
+    <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+
+        <div>
+          <label style={labelStyle}>Application</label>
+          <select
+            value={selectedApp}
+            onChange={e => setSelectedApp(e.target.value)}
+            style={fieldStyle}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+          >
+            <option value="">-- Select Application --</option>
+            {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Document Class</label>
+          <select
+            value={selectedDocClass}
+            onChange={e => setSelectedDocClass(e.target.value)}
+            style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
+            disabled={!selectedApp || docClassLoading}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+          >
+            <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
+            {docClasses.length > 0 && <option value="All">All Classes</option>}
+            {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Start Date</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            style={fieldStyle}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+          />
+        </div>
+
+        <div>
+          <label style={labelStyle}>End Date</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={e => setEndDate(e.target.value)}
+            style={fieldStyle}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+          />
+        </div>
+
+        <div>
+          <label style={labelStyle}>Migration Status</label>
+          <select
+            value={migrationStatus}
+            onChange={e => setMigrationStatus(e.target.value)}
+            style={fieldStyle}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
+          >
+            <option value="" disabled hidden>Select Status</option>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {data && (
+            <button
+              onClick={handleReset}
+              style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
+            onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} 
+            onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Searching...
+              </>
+            ) : (
+              <>
+                <Search size={14} /> Search
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // -- Migration Report Tab --
 function MigrationReportTab() {
   const [apps, setApps]                 = useState([])
   const [selectedApp, setSelectedApp]   = useState('')
-  const [reconProps, setReconProps]     = useState({
-    systemProperties: ['mime_type', 'create_date', 'modify_date', 'object_class_id'],
-    customMetadata: ['u1708_documenttitle', 'ua8c8_user_name', 'ud5e8_address', 'uc7a6_order_no']
-  })
 
   // Load configured apps
   useEffect(() => {
@@ -98,13 +284,6 @@ function MigrationReportTab() {
           setApps(res.applications)
         }
       })
-      .catch(console.error)
-  }, [])
-
-  // Load configured reconciliation columns
-  useEffect(() => {
-    apiGetReconciliationProperties()
-      .then(setReconProps)
       .catch(console.error)
   }, [])
   const [docClasses, setDocClasses]     = useState([])
@@ -225,18 +404,15 @@ function MigrationReportTab() {
     { key: 'p8_doc_id', label: 'Target Document GUID' },
     { key: 'migration_status', label: 'Migration Status' }
   ];
-  const hasWildcard = !reconProps.customMetadata || reconProps.customMetadata.length === 0 || reconProps.customMetadata.includes('*');
-  const customCols = hasWildcard
-    ? (() => {
+  const customCols = (() => {
         const isCustomCol = k => {
             if (k.toLowerCase().includes('objectstorename')) return false;
-            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath';
+            return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath' || visibleCustomColumns.has(k);
         };
         const keys = !isAggregated && data && data.length > 0 ? Object.keys(data[0]).filter(isCustomCol) : [];
         return keys.filter(k => visibleCustomColumns.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
-      })()
-    : (reconProps.customMetadata || []).filter(k => visibleCustomColumns.has(k.toLowerCase()) || visibleCustomColumns.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
-  
+  })();
+
   const isFailedView = data && data.length > 0 && !isAggregated && data.some(r => r.migration_status?.toLowerCase() === 'failed');
 
   const recordCols = [
@@ -255,107 +431,29 @@ function MigrationReportTab() {
     return nums
   }
 
-  const tdStyle = { fontSize: '9px', padding: '6px' };
   const selectedAppName = apps.find(a => String(a.appId) === String(selectedApp))?.appName || '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
-
-          <div>
-            <label style={labelStyle}>Application</label>
-            <select
-              value={selectedApp}
-              onChange={e => setSelectedApp(e.target.value)}
-              style={fieldStyle}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            >
-              <option value="">-- Select Application --</option>
-              {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Document Class</label>
-            <select
-              value={selectedDocClass}
-              onChange={e => setSelectedDocClass(e.target.value)}
-              style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
-              disabled={!selectedApp || docClassLoading}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            >
-              <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
-              {docClasses.length > 0 && <option value="All">All Classes</option>}
-              {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={e => setStartDate(e.target.value)}
-              style={fieldStyle}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={e => setEndDate(e.target.value)}
-              style={fieldStyle}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>Migration Status</label>
-            <select
-              value={migrationStatus}
-              onChange={e => setMigrationStatus(e.target.value)}
-              style={fieldStyle}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            >
-              <option value="" disabled hidden>Select Status</option>
-              {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            {data && (
-              <button
-                onClick={handleReset}
-                style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
-              >
-                Clear
-              </button>
-            )}
-            <button
-              onClick={handleSearch}
-              disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
-              onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} 
-              onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
-            >
-              {loading ? 'Loading...' : (
-                <>
-                  <Search size={14} /> Search
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+      <DeliverableFilterPanel
+        apps={apps}
+        selectedApp={selectedApp}
+        setSelectedApp={setSelectedApp}
+        docClasses={docClasses}
+        selectedDocClass={selectedDocClass}
+        setSelectedDocClass={setSelectedDocClass}
+        docClassLoading={docClassLoading}
+        startDate={startDate}
+        setStartDate={setStartDate}
+        endDate={endDate}
+        setEndDate={setEndDate}
+        migrationStatus={migrationStatus}
+        setMigrationStatus={setMigrationStatus}
+        data={data}
+        handleReset={handleReset}
+        handleSearch={handleSearch}
+        loading={loading}
+      />
 
       {error && (
         <div className="alert alert-error" style={{ marginBottom: 14 }}>
@@ -426,16 +524,16 @@ function MigrationReportTab() {
                         )}
                     </div>
                 )}
-                <button onClick={() => exportDeliverableCSV(data, { ...meta, selectedAppName, reconProps, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+                <button onClick={() => exportDeliverableCSV(data, { ...meta, selectedAppName, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
                     <Download size={12} /> CSV
                 </button>
-                <button onClick={() => exportDeliverableExcel(data, { ...meta, selectedAppName, reconProps, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
+                <button onClick={() => exportDeliverableExcel(data, { ...meta, selectedAppName, visibleCustomColumns })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
                     <Download size={12} /> Excel
                 </button>
             </div>
           </div>
           
-          <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div className="table-wrap" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
             {isAggregated ? (
               // ── INSIGHTS (ALL STATUS SCENARIO) ──
               <table>
@@ -457,46 +555,14 @@ function MigrationReportTab() {
                 </thead>
                 <tbody>
                   {(() => {
-                    let sno = 1; let lastApp = null
-                    return data.map((r, i) => {
-                      const isNewApp = r.objectStore !== lastApp
-                      lastApp = r.objectStore
-                      const appCount = data.filter(x => x.objectStore === r.objectStore).length
-                      return (
-                        <tr key={i}>
-                          <td style={{ textAlign: 'center' }}>{sno++}</td>
-                          {isNewApp && (
-                            <td rowSpan={appCount} style={{ fontWeight: 700, color: '#1e293b', verticalAlign: 'middle', background: '#f8fafc' }}>
-                              {r.objectStore || <em className="cell-empty">NULL</em>}
-                            </td>
-                          )}
-                          <td>{r.documentClass || <em className="cell-empty">NULL</em>}</td>
-                          <td style={{ textAlign: 'right' }}>{(r.totalDocuments ?? 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{Number(r.totalFileSizeGb ?? 0).toFixed(2)}</td>
-                          <td style={{ textAlign: 'right' }}>{(r.extractedFileNet ?? 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{(r.extractionFailed ?? 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{(r.remaining ?? 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right' }}>{Number(r.extractedFileSizeGb ?? 0).toFixed(2)}</td>
-                          <td style={{ textAlign: 'right' }}>
-                            <span className={ (r.percentCompletion ?? 0) >= 100 ? 'status-badge status-success' : (r.percentCompletion ?? 0) > 0 ? 'status-badge status-pending' : 'status-badge' }>
-                              {Number(r.percentCompletion ?? 0).toFixed(1)}%
-                            </span>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {(r.percentFailed ?? 0) > 0
-                              ? <span className="status-badge status-failed">{Number(r.percentFailed ?? 0).toFixed(1)}%</span>
-                              : <span className="cell-empty">0.0%</span>
-                            }
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {r.runTimeDays != null && r.runTimeDays > 0
-                              ? `${Number(r.runTimeDays).toFixed(2)} days`
-                              : <span className="cell-empty">0.00 days</span>
-                            }
-                          </td>
-                        </tr>
-                      )
-                    })
+                    let sno = 1; 
+                    let lastApp = null;
+                    return data.map(r => {
+                      const isNewApp = r.objectStore !== lastApp;
+                      lastApp = r.objectStore;
+                      const appCount = data.filter(x => x.objectStore === r.objectStore).length;
+                      return renderAggregatedRow(r, sno++, isNewApp, appCount);
+                    });
                   })()}
                 </tbody>
               </table>
