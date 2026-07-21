@@ -1184,3 +1184,5 @@ tbody td { padding: 6px 8px; color: #64748b; white-space: nowrap; font-size: 10p
 .discovery-grid tr:hover td {
     background-color: #f9fafb;
 }
+
+@keyframes modalSlideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }

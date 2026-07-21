@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 
 import { generateSummaryExcel, generateSummaryCSV, generateSummaryPDF } from '../utils/reportExport'
 import { apiSearch } from '../utils/api'
+import { useAlert } from '../context/AlertContext'
 
 const STATUS_KEYS = ['migration_status', 'status', 'extraction_status', 'validation_status']
 
@@ -52,6 +53,7 @@ function detectReportType(from, to) {
 }
 
 export default function ResultsGrid({ data, columns, summary, tableLabel, tableId, appliedFilters }) {
+  const { showAlert } = useAlert()
   const [visibleCols, setVisibleCols] = useState(
     () => new Set(columns.filter(c => c.visible !== false).map(c => c.key))
   )
@@ -88,7 +90,7 @@ export default function ResultsGrid({ data, columns, summary, tableLabel, tableI
     try {
       const { fromDate, toDate, reportType, totalRecords, failedRecords } = await buildReportData()
       generateSummaryExcel({ tableLabel, reportType, fromDate, toDate, totalRecords, periodRecords: data, failedRecords })
-    } catch (e) { alert('Export failed: ' + e.message) }
+    } catch (e) { showAlert('Export failed: ' + e.message, 'Error', 'error') }
     finally { setExporting(false) }
   }
 
@@ -98,7 +100,7 @@ export default function ResultsGrid({ data, columns, summary, tableLabel, tableI
     try {
       const { fromDate, toDate, reportType, totalRecords, failedRecords } = await buildReportData()
       generateSummaryCSV({ tableLabel, reportType, fromDate, toDate, totalRecords, periodRecords: data, failedRecords })
-    } catch (e) { alert('Export failed: ' + e.message) }
+    } catch (e) { showAlert('Export failed: ' + e.message, 'Error', 'error') }
     finally { setExporting(false) }
   }
 
@@ -108,7 +110,7 @@ export default function ResultsGrid({ data, columns, summary, tableLabel, tableI
     try {
       const { fromDate, toDate, reportType, totalRecords, failedRecords } = await buildReportData()
       generateSummaryPDF({ tableLabel, reportType, fromDate, toDate, totalRecords, periodRecords: data, failedRecords })
-    } catch (e) { alert('Export failed: ' + e.message) }
+    } catch (e) { showAlert('Export failed: ' + e.message, 'Error', 'error') }
     finally { setExporting(false) }
   }
 

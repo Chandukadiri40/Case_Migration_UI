@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiGetTenantConfig, apiGetPropertyMappings, apiSavePropertyMapping, apiDeletePropertyMapping, apiGetDocumentClasses, apiGetClassProperties } from '../utils/api';
 import { Plus, Trash2, Save, FileText, LayoutList, CheckCircle, Search, Edit2, Download, ArrowLeft } from 'lucide-react';
+import { useAlert } from '../context/AlertContext';
 
 export default function PropertyMapping() {
+  const { showAlert } = useAlert();
   const [activeTab, setActiveTab] = useState('view'); // 'view' or 'create'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -77,12 +79,14 @@ export default function PropertyMapping() {
       return;
     }
     try {
-      const props = await apiGetClassProperties(selectedAppId, docClass);
+      const props = await apiGetClassProperties(selectedAppId, docClass, 'source');
       // Auto-populate grid with all source properties
       setMappings(props.map(p => ({
-        sourceProperty: p.propertyName,
-        sourceDataType: p.dataType,
+        sourceProperty: p.propertyName || p.propertyname,
+        sourceSymbolicName: p.symbolicName || p.symbolicname || p.propertyName || p.propertyname,
+        sourceDataType: p.dataType || p.datatype,
         targetProperty: '',
+        targetSymbolicName: '',
         targetDataType: ''
       })));
     } catch (err) {
@@ -97,7 +101,7 @@ export default function PropertyMapping() {
       return;
     }
     try {
-      const props = await apiGetClassProperties(selectedAppId, docClass);
+      const props = await apiGetClassProperties(selectedAppId, docClass, 'target');
       setTargetProperties(props);
     } catch (err) {
       console.error('Failed to fetch target properties', err);
@@ -106,10 +110,11 @@ export default function PropertyMapping() {
 
   const updateMappingRowTarget = (index, targetPropName) => {
     const newMappings = [...mappings];
-    const targetProp = targetProperties.find(p => p.propertyName === targetPropName);
+    const targetProp = targetProperties.find(p => (p.propertyName || p.propertyname) === targetPropName);
     
     newMappings[index].targetProperty = targetPropName;
-    newMappings[index].targetDataType = targetProp ? targetProp.dataType : '';
+    newMappings[index].targetSymbolicName = targetProp ? (targetProp.symbolicName || targetProp.symbolicname || targetProp.propertyName || targetProp.propertyname) : '';
+    newMappings[index].targetDataType = targetProp ? (targetProp.dataType || targetProp.datatype) : '';
     setMappings(newMappings);
   };
 
@@ -121,7 +126,7 @@ export default function PropertyMapping() {
 
   const handleExportCSV = (template) => {
     if (!template || !template.mappings || template.mappings.length === 0) {
-      alert("No mappings to export.");
+      showAlert("No mappings to export.", "Warning", "error");
       return;
     }
     const headers = ["Source Property", "Source Type", "Target Property", "Target Type"];
@@ -145,6 +150,14 @@ export default function PropertyMapping() {
       setError('Template Name, Application, Source Class, and Target Class are required');
       return;
     }
+    
+    // Make 1:1 mapping mandatory
+    const unmapped = mappings.filter(m => !m.targetProperty);
+    if (unmapped.length > 0) {
+      setError('All source properties must be mapped to a target property. Please select a target for every row, or delete the row if you do not wish to map it.');
+      return;
+    }
+
     try {
       setLoading(true);
       const payload = {
@@ -153,7 +166,7 @@ export default function PropertyMapping() {
         applicationId: selectedAppId,
         sourceDocumentClass: selectedSourceClass,
         targetDocumentClass: selectedTargetClass,
-        mappings: mappings.filter(m => m.targetProperty), // Only save mapped properties
+        mappings: mappings, // All rows are validated to have target properties
         lastModifiedBy: 'Admin',
         lastModifiedDate: new Date().toISOString()
       };
@@ -209,19 +222,25 @@ export default function PropertyMapping() {
       
       // Load properties concurrently
       const [srcProps, tgtProps] = await Promise.all([
-        apiGetClassProperties(template.applicationId, template.sourceDocumentClass),
-        apiGetClassProperties(template.applicationId, template.targetDocumentClass)
+        apiGetClassProperties(template.applicationId, template.sourceDocumentClass, 'source'),
+        apiGetClassProperties(template.applicationId, template.targetDocumentClass, 'target')
       ]);
       
       setTargetProperties(tgtProps);
       
       // Reconstruct mapping grid (showing all source props, overlaying mapped targets)
       const reconstructedMappings = srcProps.map(sp => {
-        const mapped = template.mappings?.find(m => m.sourceProperty === sp.propertyName);
+        const sourceProp = sp.propertyName || sp.propertyname;
+        const sourceDataType = sp.dataType || sp.datatype;
+        const mapped = template.mappings?.find(m => m.sourceProperty === sourceProp);
+        const tgtPropObj = mapped && tgtProps.find(tp => (tp.propertyName || tp.propertyname) === mapped.targetProperty);
+
         return {
-          sourceProperty: sp.propertyName,
-          sourceDataType: sp.dataType,
+          sourceProperty: sourceProp,
+          sourceSymbolicName: sp.symbolicName || sp.symbolicname || sourceProp,
+          sourceDataType: sourceDataType,
           targetProperty: mapped ? mapped.targetProperty : '',
+          targetSymbolicName: tgtPropObj ? (tgtPropObj.symbolicName || tgtPropObj.symbolicname || tgtPropObj.propertyName || tgtPropObj.propertyname) : '',
           targetDataType: mapped ? mapped.targetDataType : ''
         };
       });
@@ -372,20 +391,20 @@ export default function PropertyMapping() {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr>
-                    <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Property</th>
-                    <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Type</th>
-                    <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Property</th>
-                    <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Type</th>
+                    <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Property</th>
+                    <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Type</th>
+                    <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Property</th>
+                    <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Type</th>
                   </tr>
                 </thead>
                 <tbody>
                   {viewingTemplate.mappings && viewingTemplate.mappings.length > 0 ? (
                     viewingTemplate.mappings.map((m, idx) => (
                       <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
-                        <td style={{ padding: '8px 12px', fontSize: '12px', color: '#334155', fontWeight: '500' }}>{m.sourceProperty}</td>
-                        <td style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b' }}>{m.sourceDataType}</td>
-                        <td style={{ padding: '8px 12px', fontSize: '12px', color: '#059669', fontWeight: '600' }}>{m.targetProperty}</td>
-                        <td style={{ padding: '8px 12px', fontSize: '11px', color: '#64748b' }}>{m.targetDataType}</td>
+                        <td style={{ padding: '4px 8px', fontSize: '11px', color: '#334155', fontWeight: '500' }}>{m.sourceSymbolicName || m.sourceProperty}</td>
+                        <td style={{ padding: '4px 8px', fontSize: '10px', color: '#64748b' }}>{m.sourceDataType}</td>
+                        <td style={{ padding: '4px 8px', fontSize: '11px', color: '#059669', fontWeight: '600' }}>{m.targetSymbolicName || m.targetProperty}</td>
+                        <td style={{ padding: '4px 8px', fontSize: '10px', color: '#64748b' }}>{m.targetDataType}</td>
                       </tr>
                     ))
                   ) : (
@@ -485,11 +504,11 @@ export default function PropertyMapping() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                   <thead style={{ background: 'white', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 1px 0 #e2e8f0' }}>
                     <tr>
-                      <th style={{ padding: '8px 16px', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Property Name</th>
-                      <th style={{ padding: '8px 16px', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Data Type</th>
-                      <th style={{ padding: '8px 16px', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f0fdf4' }}>Target Property Name</th>
-                      <th style={{ padding: '8px 16px', fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f0fdf4' }}>Target Data Type</th>
-                      <th style={{ padding: '8px 16px', width: '40px' }}></th>
+                      <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Property Name</th>
+                      <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Data Type</th>
+                      <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f0fdf4' }}>Target Property Name</th>
+                      <th style={{ padding: '4px 8px', fontSize: '10px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', background: '#f0fdf4' }}>Target Data Type</th>
+                      <th style={{ padding: '4px 8px', width: '30px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -503,32 +522,40 @@ export default function PropertyMapping() {
                     ) : (
                       mappings.map((m, idx) => (
                         <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? 'white' : '#fafaf9' }}>
-                          <td style={{ padding: '6px 16px' }}>
-                            <span style={{ display: 'inline-block', padding: '2px 8px', background: '#f1f5f9', borderRadius: '4px', fontSize: '12px', color: '#334155', fontWeight: '500', border: '1px solid #e2e8f0' }}>
-                              {m.sourceProperty}
+                          <td style={{ padding: '2px 8px' }}>
+                            <span style={{ display: 'inline-block', padding: '1px 6px', background: '#f1f5f9', borderRadius: '4px', fontSize: '11px', color: '#334155', fontWeight: '500', border: '1px solid #e2e8f0' }}>
+                              {m.sourceSymbolicName || m.sourceProperty}
                             </span>
                           </td>
-                          <td style={{ padding: '6px 16px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                          <td style={{ padding: '2px 8px', fontSize: '10px', color: '#64748b', fontWeight: '600' }}>
                             {m.sourceDataType || 'UNKNOWN'}
                           </td>
                           
-                          <td style={{ padding: '6px 16px', background: '#f0fdf4' }}>
+                          <td style={{ padding: '2px 8px', background: '#f0fdf4' }}>
                             <select 
                               value={m.targetProperty || ''}
                               onChange={e => updateMappingRowTarget(idx, e.target.value)}
                               disabled={!selectedTargetClass}
-                              style={{ width: '100%', padding: '4px 8px', borderRadius: '4px', border: '1px solid #86efac', fontSize: '12px', outline: 'none', color: '#065f46', fontWeight: '500', background: 'white', cursor: selectedTargetClass ? 'pointer' : 'not-allowed' }}
+                              style={{ width: '100%', padding: '2px 6px', borderRadius: '4px', border: '1px solid #86efac', fontSize: '11px', outline: 'none', color: '#065f46', fontWeight: '500', background: 'white', cursor: selectedTargetClass ? 'pointer' : 'not-allowed' }}
                             >
                               <option value="">-- Do Not Map --</option>
-                              {targetProperties.map(tp => (
-                                <option key={tp.propertyName} value={tp.propertyName}>{tp.propertyName}</option>
-                              ))}
+                              {targetProperties
+                                .filter(tp => {
+                                  const pName = tp.propertyName || tp.propertyname;
+                                  return !mappings.some((m, mIdx) => mIdx !== idx && m.targetProperty === pName);
+                                })
+                                .map(tp => {
+                                  const pName = tp.propertyName || tp.propertyname;
+                                  const symName = tp.symbolicName || tp.symbolicname || pName;
+                                  return <option key={pName} value={pName}>{symName}</option>;
+                                })
+                              }
                             </select>
                           </td>
-                          <td style={{ padding: '6px 16px', fontSize: '11px', color: '#059669', fontWeight: '600', background: '#f0fdf4' }}>
+                          <td style={{ padding: '2px 8px', fontSize: '10px', color: '#059669', fontWeight: '600', background: '#f0fdf4' }}>
                             {m.targetDataType || '-'}
                           </td>
-                          <td style={{ padding: '6px 16px', textAlign: 'right' }}>
+                          <td style={{ padding: '2px 8px', textAlign: 'right' }}>
                             <button 
                               onClick={() => removeMappingRow(idx)} 
                               style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', opacity: 0.6, transition: 'opacity 0.2s', padding: '4px' }}

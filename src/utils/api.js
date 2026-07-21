@@ -16,6 +16,7 @@ async function request(path, options = {}) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
+    cache: 'no-store',
     ...options,
   })
 
@@ -34,7 +35,13 @@ async function request(path, options = {}) {
     throw new Error(body.message || `Request failed: ${res.status}`)
   }
 
-  return res.json()
+  const text = await res.text()
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch (err) {
+    return text
+  }
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -66,6 +73,10 @@ export function apiSaveDbConfig(config) {
     method: 'POST',
     body: JSON.stringify(config),
   })
+}
+
+export function apiGetUISettings() {
+  return request('/config/ui-settings')
 }
 
 export function apiTestDbConnection(config) {
@@ -174,6 +185,6 @@ export function apiGetDocumentClasses(appId, type = 'source') {
   return request(`/discovery/doc-classes?appId=${appId}&type=${type}`)
 }
 
-export function apiGetClassProperties(appId, docClass) {
-  return request(`/discovery/class-properties?appId=${appId}&docClass=${docClass}`)
+export function apiGetClassProperties(appId, docClass, type = 'source') {
+  return request(`/discovery/class-properties?appId=${appId}&docClass=${docClass}&type=${type}`)
 }

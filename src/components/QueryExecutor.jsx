@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react'
 import { apiExecuteQuery } from '../utils/api'
 
-const KEYWORDS = ['SELECT', 'FROM', 'WHERE', 'AND', 'OR', 'ORDER', 'BY', 'DESC', 'ASC',
-  'IN', 'LIKE', 'NOT', 'NULL', 'BETWEEN', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'JOIN',
-  'LEFT', 'INNER', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG', 'MIN', 'MAX']
+const KEYWORDS_REGEX_1 = /\b(SELECT|FROM|WHERE|AND|OR|ORDER|BY|DESC|ASC|IN|LIKE|NOT|NULL|BETWEEN|GROUP)\b/g
+const KEYWORDS_REGEX_2 = /\b(HAVING|LIMIT|OFFSET|JOIN|LEFT|INNER|ON|AS|DISTINCT|COUNT|SUM|AVG|MIN|MAX)\b/g
 
 // Simple keyword highlight for the read-only preview overlay
 function highlight(sql) {
@@ -12,9 +11,8 @@ function highlight(sql) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  KEYWORDS.forEach(kw => {
-    out = out.replace(new RegExp(`\\b${kw}\\b`, 'g'), `<span class="qe-kw">${kw}</span>`)
-  })
+  out = out.replace(KEYWORDS_REGEX_1, '<span class="qe-kw">$&</span>')
+  out = out.replace(KEYWORDS_REGEX_2, '<span class="qe-kw">$&</span>')
   out = out.replace(/'([^']*)'/g, `<span class="qe-str">'$1'</span>`)
   out = out.replace(/--[^\n]*/g, m => `<span class="qe-comment">${m}</span>`)
   return out

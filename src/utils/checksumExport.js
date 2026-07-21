@@ -23,8 +23,8 @@ const processCellValue = (r, c, val, meta) => {
   if (c.key === 'object_store' && !val && r['objectstorename']) return r['objectstorename'];
   if (c.key === 'content_size' && val) return (Number(val) / 1024).toFixed(2);
   if (c.key === 'checksum_status') {
-      const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
-      return isMatched ? 'Matched' : 'MisMatched';
+    const isMatched = val?.toLowerCase() === 'completed' || val?.toLowerCase() === 'matched';
+    return isMatched ? 'Matched' : 'MisMatched';
   }
   return val == null ? '' : String(val);
 }

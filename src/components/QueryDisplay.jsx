@@ -1,15 +1,14 @@
 import { useState } from 'react'
+import DOMPurify from 'dompurify'
 
-const KW = ['SELECT','FROM','WHERE','AND','OR','ORDER','BY','DESC','ASC','BETWEEN','IN',
-  'LIKE','NOT','NULL','LIMIT','OFFSET','GROUP','HAVING','JOIN','LEFT','INNER','ON',
-  'AS','DISTINCT','ILIKE']
+const KW_REGEX_1 = /\b(SELECT|FROM|WHERE|AND|OR|ORDER|BY|DESC|ASC|BETWEEN|IN|LIKE|NOT)\b/g
+const KW_REGEX_2 = /\b(NULL|LIMIT|OFFSET|GROUP|HAVING|JOIN|LEFT|INNER|ON|AS|DISTINCT|ILIKE)\b/g
 
 function highlight(sql) {
   if (!sql) return ''
   let out = sql.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  KW.forEach(kw => {
-    out = out.replace(new RegExp('\\b' + kw + '\\b', 'g'), '<span class="sql-kw">' + kw + '</span>')
-  })
+  out = out.replace(KW_REGEX_1, '<span class="sql-kw">$&</span>')
+  out = out.replace(KW_REGEX_2, '<span class="sql-kw">$&</span>')
   out = out.replace(/'([^']*)'/g, "<span class=\"sql-str\">'$1'</span>")
   out = out.replace(/--[^\n]*/g, m => '<span class="sql-comment">' + m + '</span>')
   return out
@@ -61,7 +60,7 @@ export default function QueryDisplay({ query }) {
         <div className="card-body" style={{ padding: 0 }}>
           <pre
             className="sql-block"
-            dangerouslySetInnerHTML={{ __html: highlight(query) }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlight(query)) }}
             aria-label="Generated SQL query"
           />
           <p className="query-audit-note">

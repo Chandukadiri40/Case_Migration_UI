@@ -123,14 +123,57 @@ function validatePayload(payload) {
   return null;
 }
 
+function extractUniqueKeys(records) {
+  const allKeys = [];
+  records.forEach(r => {
+    Object.keys(r).forEach(k => {
+      if (!allKeys.includes(k)) allKeys.push(k);
+    });
+  });
+  return allKeys;
+}
+
+function categorizeKeys(allKeys, systemKeyWords) {
+  const baseKeys = [];
+  let docTitleKey = null;
+  const customKeys = [];
+
+  allKeys.forEach(k => {
+    const lower = k.toLowerCase();
+    if (lower.includes('documenttitle')) {
+      docTitleKey = k;
+    } else if (systemKeyWords.includes(lower)) {
+      baseKeys.push(k);
+    } else {
+      customKeys.push(k);
+    }
+  });
+  return { baseKeys, docTitleKey, customKeys };
+}
+
 function deriveColumns(records, active) {
   if (records.length > 0) {
-    return Object.keys(records[0]).map(key => ({
+    const allKeys = extractUniqueKeys(records);
+    const systemKeyWords = ['object_id', 'document_id', 'content_size', 'mime_type', 'created_date', 'migration_status', 'status', 'extraction_status', 'validation_status', 'filefullpath'];
+    
+    const { baseKeys, docTitleKey, customKeys } = categorizeKeys(allKeys, systemKeyWords);
+
+    baseKeys.sort((a, b) => {
+      const idxA = systemKeyWords.indexOf(a.toLowerCase());
+      const idxB = systemKeyWords.indexOf(b.toLowerCase());
+      return (idxA !== -1 ? idxA : 999) - (idxB !== -1 ? idxB : 999);
+    });
+
+    const orderedKeys = [...baseKeys];
+    if (docTitleKey) orderedKeys.push(docTitleKey);
+    orderedKeys.push(...customKeys);
+
+    return orderedKeys.map(key => ({
       key,
       label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(),
       sortable: true,
       visible: true,
-    }))
+    }));
   } else {
     return [
       ...SYSTEM_FIELDS.map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),
@@ -186,6 +229,21 @@ export function useTableSearch() {
     try {
       const data = await apiSearch(payload)
       const records = Array.isArray(data) ? data : (data.records ?? [])
+
+      const systemKeyWords = new Set(['object_id', 'document_id', 'content_size', 'mime_type', 'created_date', 'migration_status', 'status', 'extraction_status', 'validation_status', 'filefullpath']);
+      
+      const getCustomKeysSignature = (record) => {
+        return Object.keys(record)
+          .filter(k => {
+             const lower = k.toLowerCase();
+             return record[k] != null && record[k] !== '' && !systemKeyWords.has(lower) && !lower.includes('documenttitle');
+          })
+          .sort()
+          .join(',');
+      };
+
+      records.sort((a, b) => getCustomKeysSignature(b).localeCompare(getCustomKeysSignature(a)));
+
       setResults(records)
 
       if (records.length > 0) {

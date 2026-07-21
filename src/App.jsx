@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { AlertProvider } from './context/AlertContext'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 import Layout from './components/Layout'
@@ -22,8 +23,9 @@ function PublicRoute({ children }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <AlertProvider>
+      <AuthProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           
@@ -40,6 +42,7 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </AlertProvider>
   )
 }

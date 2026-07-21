@@ -18,20 +18,34 @@ function formatHeader(key) {
   return key.replace(/_/g, ' ').toUpperCase()
 }
 
-function getCustomColumns(data, visible) {
+function getCustomColumns(data, meta) {
+  if (meta && meta.allCustomColumns && meta.allCustomColumns.length > 0) {
+    return meta.allCustomColumns.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+  }
+
+  const visible = meta && meta.visibleCustomColumns ? meta.visibleCustomColumns : new Set();
   const isCustomCol = k => {
-      if (k.toLowerCase().includes('objectstorename')) return false;
-      return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath' || visible.has(k);
+    if (k.toLowerCase().includes('objectstorename')) return false;
+    return (k.startsWith('u') && k.includes('_')) || k === 'filefullpath' || k === 'folderpath' || visible.has(k);
   };
   const keys = Object.keys(data[0]).filter(isCustomCol);
-  return keys.filter(k => visible.size === 0 || visible.has(k)).map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
+  const customCols = keys;
+
+  customCols.sort((a, b) => {
+    const cleanA = a.replace(/^(U[0-9a-f]+_)/i, '').toLowerCase();
+    const cleanB = b.replace(/^(U[0-9a-f]+_)/i, '').toLowerCase();
+    if (cleanA.includes('documenttitle') && !cleanB.includes('documenttitle')) return -1;
+    if (!cleanA.includes('documenttitle') && cleanB.includes('documenttitle')) return 1;
+    return cleanA.localeCompare(cleanB);
+  });
+
+  return customCols.map(k => ({ key: k.toLowerCase(), label: formatHeader(k) }));
 }
 
 function getRecordColumns(data, meta) {
   if (!data || data.length === 0) return []
-  const visible = meta.visibleCustomColumns || new Set();
-  
-  const customCols = getCustomColumns(data, visible);
+
+  const customCols = getCustomColumns(data, meta);
   const hasFailed = data.some(r => String(r.migration_status ?? '').toLowerCase() === 'failed')
 
   return [
@@ -43,8 +57,8 @@ function getRecordColumns(data, meta) {
     { key: 'migrated_date', label: 'Migration Date' },
     { key: 'p8_doc_id', label: 'Target Document GUID' },
     { key: 'migration_status', label: 'Migration Status' },
-    ...customCols,
-    ...(hasFailed ? [{ key: 'error_info', label: 'Error Info' }] : [])
+    ...(hasFailed ? [{ key: 'error_info', label: 'Error Info' }] : []),
+    ...customCols
   ]
 }
 
@@ -71,13 +85,39 @@ function buildAggregatedRows(data) {
   return { headers: AGGREGATED_HEADERS, rows }
 }
 
+function getCellValueExport(r, cKey, selectedAppName) {
+  if (cKey === 'objectStore') {
+    const k = Object.keys(r).find(x => {
+      const clean = x.toLowerCase().replace(/^(u[0-9a-f]+_)/i, '');
+      return clean === 'targetobjectstorename' || clean === 'object_store';
+    });
+    if (k && r[k]) return r[k];
+  }
+
+  let matchingKey = Object.keys(r).find(x => x.toLowerCase() === cKey.toLowerCase());
+
+  if (!matchingKey) {
+    const cleanCKey = cKey.toLowerCase().replace(/^(u[0-9a-f]+_)/i, '');
+    matchingKey = Object.keys(r).find(x => {
+      const cleanX = x.toLowerCase().replace(/^(u[0-9a-f]+_)/i, '');
+      return cleanX === cleanCKey;
+    });
+  }
+
+  let val = matchingKey ? r[matchingKey] : undefined;
+
+  if (cKey === 'application' && !val && selectedAppName) {
+    val = selectedAppName;
+  }
+  return val;
+}
+
 function buildRecordRows(data, meta) {
   const cols = getRecordColumns(data, meta)
   const headers = cols.map(c => c.label)
   const rows = data.map(r => {
     return cols.map(c => {
-      let val = r[c.key] || r[c.key.toUpperCase()] || r[c.key.toLowerCase()]
-      if (c.key === 'application' && !val && meta.selectedAppName) val = meta.selectedAppName;
+      let val = getCellValueExport(r, c.key, meta.selectedAppName);
       if (val == null) return ''
       return String(val)
     })

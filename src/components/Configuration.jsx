@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection } from '../utils/api';
+import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection, apiGetUISettings } from '../utils/api';
 import { Plus, Trash2, Save, Database, Server, RefreshCw, ArrowLeft, Edit2 } from 'lucide-react';
 const SystemColumnMappingSection = ({ config, setConfig, activeApp, selectedAppIndex, dbMetadata }) => {
   const ct = activeApp.classifiedTables || {};
@@ -208,6 +208,7 @@ const DatabaseToggleSwitch = ({ db, dbConfigWrapper, handleSetActiveDb }) => {
 
 export default function Configuration() { // NOSONAR
   const [config, setConfig] = useState({ applications: [] });
+  const [uiSettings, setUiSettings] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -250,6 +251,11 @@ export default function Configuration() { // NOSONAR
       setConfig(res || { applications: [] });
       
       try {
+        const settings = await apiGetUISettings();
+        setUiSettings(settings || {});
+      } catch(e) { console.warn('Failed to fetch UI settings'); }
+      
+      try {
         const dbRes = await apiGetDbConfig();
         if (dbRes && dbRes.databases) setDbConfigWrapper(dbRes);
       } catch (e) { console.warn('Failed to fetch DB config'); }
@@ -266,8 +272,30 @@ export default function Configuration() { // NOSONAR
       setSaving(true);
       setError('');
       setSuccess('');
-      await apiSaveTenantConfig(config);
+      
+      let configToSave = { ...config };
+      if (uiSettings.fixedFilenetMapping) {
+        configToSave.applications = configToSave.applications.map(app => ({
+          ...app,
+          systemColumns: {
+            "status": "migration_status",
+            "date": "create_date",
+            "content-size": "content_size",
+            "mime-type": "mime_type",
+            "doc-id": "object_id",
+            "class-id-col": "object_class_id",
+            "symbolic-name-col": "symbolic_name",
+            "annotated-id-col": "annotated_id",
+            "target-guid-col": "p8_doc_id"
+          }
+        }));
+      }
+
+      await apiSaveTenantConfig(configToSave);
       setSuccess('Configuration saved successfully!');
+      
+      // Update local state with enforced rules
+      setConfig(configToSave);
       
       // Return to main app listing
       setSelectedAppIndex(null);
@@ -391,11 +419,6 @@ export default function Configuration() { // NOSONAR
         propertydefinition: [],
         globalpropertydef: []
       },
-      primaryColumns: {
-        source: "object_id",
-        staging: "object_id",
-        target: "object_id"
-      },
       systemColumns: {
         status: "migration_status",
         date: "create_date",
@@ -404,7 +427,8 @@ export default function Configuration() { // NOSONAR
         "doc-id": "object_id",
         "class-id-col": "object_class_id",
         "symbolic-name-col": "symbolic_name",
-        "annotated-id-col": "annotated_id"
+        "annotated-id-col": "annotated_id",
+        "target-guid-col": "p8_doc_id"
       }
     };
     setOriginalAppSnapshot(null); // null indicates a brand new app
@@ -844,16 +868,18 @@ export default function Configuration() { // NOSONAR
                     />
 
                     {/* System Columns Mapping */}
-                    <div style={{ marginTop: '12px' }}>
-                      <h4 style={{ margin: '0 0 8px 0', color: '#1e293b', fontSize: '13px' }}>System Columns Mapping</h4>
-                      <SystemColumnMappingSection 
-                        config={config} 
-                        setConfig={setConfig} 
-                        activeApp={activeApp} 
-                        selectedAppIndex={selectedAppIndex} 
-                        dbMetadata={dbMetadata} 
-                      />
-                    </div>
+                    {!uiSettings.fixedFilenetMapping && (
+                      <div style={{ marginTop: '12px' }}>
+                        <h4 style={{ margin: '0 0 8px 0', color: '#1e293b', fontSize: '13px' }}>System Columns Mapping</h4>
+                        <SystemColumnMappingSection 
+                          config={config} 
+                          setConfig={setConfig} 
+                          activeApp={activeApp} 
+                          selectedAppIndex={selectedAppIndex} 
+                          dbMetadata={dbMetadata} 
+                        />
+                      </div>
+                    )}
                   </>
                 ) : (
                   <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>

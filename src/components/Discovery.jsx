@@ -4,8 +4,10 @@ import { Search, Layers, CheckCircle, FolderOpen, HardDrive, FileText, FileSearc
 import Papa from 'papaparse'
 import * as XLSX from '@e965/xlsx'
 import { apiGetTenantConfig, BASE } from '../utils/api'
+import { useAlert } from '../context/AlertContext'
 
 export default function Discovery() {
+    const { showAlert } = useAlert()
     const [apps, setApps] = useState([])
     const [selectedApp, setSelectedApp] = useState('')
 
@@ -192,22 +194,22 @@ export default function Discovery() {
         }
 
         if (!selectedApp) {
-            alert("Please select an Application before running the report.")
+            showAlert("Please select an Application before running the report.")
             return;
         }
 
         if (!selectedDocClass) {
-            alert("Please select a Document Class (or 'All').")
+            showAlert("Please select a Document Class (or 'All').")
             return;
         }
 
         if (!activeCategory) {
-            alert("Please select a Report Category.")
+            showAlert("Please select a Report Category.")
             return;
         }
 
         if (!activeSubReport) {
-            alert("Please select a Report Type.")
+            showAlert("Please select a Report Type.")
             return;
         }
 

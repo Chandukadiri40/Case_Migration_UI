@@ -87,94 +87,94 @@ const ChecksumFilterPanel = ({
 }) => {
   return (
     <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
-          <div>
-            <label style={labelStyle}>Application</label>
-            <select
-              value={selectedApp}
-              onChange={e => setSelectedApp(e.target.value)}
-              style={fieldStyle}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            >
-              <option value="">-- Select Application --</option>
-              {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Document Class</label>
-            <select
-              value={selectedDocClass}
-              onChange={e => setSelectedDocClass(e.target.value)}
-              style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
-              disabled={!selectedApp || docClassLoading}
-              onFocus={e => e.target.style.borderColor = '#4f46e5'}
-              onBlur={e  => e.target.style.borderColor = '#cbd5e1'}
-            >
-              <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
-              {docClasses.length > 0 && <option value="All">All Classes</option>}
-              {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Start Date</label>
-            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
-          </div>
-
-          <div>
-            <label style={labelStyle}>End Date</label>
-            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            {data && (
-              <button
-                onClick={handleReset}
-                style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
-              >
-                Clear
-              </button>
-            )}
-            <button
-              onClick={handleFetch}
-              disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
-              onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }} 
-              onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" /> Searching...
-                </>
-              ) : (
-                <>
-                  <Search size={14} /> Search
-                </>
-              )}
-            </button>
-          </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr auto', gap: 12, alignItems: 'end' }}>
+        <div>
+          <label style={labelStyle}>Application</label>
+          <select
+            value={selectedApp}
+            onChange={e => setSelectedApp(e.target.value)}
+            style={fieldStyle}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+          >
+            <option value="">-- Select Application --</option>
+            {apps.map(a => <option key={a.appId} value={a.appId}>{a.appName}</option>)}
+          </select>
         </div>
+
+        <div>
+          <label style={labelStyle}>Document Class</label>
+          <select
+            value={selectedDocClass}
+            onChange={e => setSelectedDocClass(e.target.value)}
+            style={{ ...fieldStyle, opacity: !selectedApp ? 0.5 : 1 }}
+            disabled={!selectedApp || docClassLoading}
+            onFocus={e => e.target.style.borderColor = '#4f46e5'}
+            onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+          >
+            <option value="">{docClassLoading ? 'Loading...' : '-- Select Document Class --'}</option>
+            {docClasses.length > 0 && <option value="All">All Classes</option>}
+            {docClasses.map(dc => <option key={dc} value={dc}>{dc}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Start Date</label>
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+        </div>
+
+        <div>
+          <label style={labelStyle}>End Date</label>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} style={fieldStyle} onFocus={e => e.target.style.borderColor = '#4f46e5'} onBlur={e => e.target.style.borderColor = '#cbd5e1'} />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          {data && (
+            <button
+              onClick={handleReset}
+              style={{ padding: '6px 16px', background: 'white', color: '#64748b', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '11px', fontWeight: '600' }}
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={handleFetch}
+            disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px 20px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)', opacity: loading ? 0.7 : 1 }}
+            onMouseOver={(e) => { if (!loading) { e.target.style.background = '#4338ca'; e.target.style.transform = 'translateY(-1px)'; } }}
+            onMouseOut={(e) => { if (!loading) { e.target.style.background = '#4f46e5'; e.target.style.transform = 'translateY(0)'; } }}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Searching...
+              </>
+            ) : (
+              <>
+                <Search size={14} /> Search
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
 
 export default function ChecksumReport() { // NOSONAR
-  const [apps, setApps]                 = useState([])
-  const [selectedApp, setSelectedApp]   = useState('')
-  const [docClasses, setDocClasses]     = useState([])
+  const [apps, setApps] = useState([])
+  const [selectedApp, setSelectedApp] = useState('')
+  const [docClasses, setDocClasses] = useState([])
   const [selectedDocClass, setSelectedDocClass] = useState('')
-  const [fromDate, setFromDate]         = useState('')
-  const [toDate, setToDate]             =             useState('')
-  const [loading, setLoading]           = useState(false)
-  const [error, setError]               = useState('')
-  const [data, setData]                 = useState(null)
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [data, setData] = useState(null)
   const [docClassLoading, setDocClassLoading] = useState(false)
 
   // Local pagination states
-  const [page, setPage]                 = useState(1)
-  const [pageSize, setPageSize]         = useState(100)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(100)
 
   // Load configured apps
   useEffect(() => {
@@ -210,7 +210,7 @@ export default function ChecksumReport() { // NOSONAR
         appId: selectedApp,
         documentClass: selectedDocClass && selectedDocClass !== 'All' ? selectedDocClass : null,
         fromDate: fromDate ? fromDate + 'T00:00:00' : null,
-        toDate:   toDate   ? toDate   + 'T23:59:59' : null,
+        toDate: toDate ? toDate + 'T23:59:59' : null,
         migrationStatus: 'Success'
       })
       setData(result)
@@ -234,12 +234,13 @@ export default function ChecksumReport() { // NOSONAR
 
   const meta = { fromDate, toDate, generatedAt: new Date().toLocaleString() }
   const s = data?.summary ?? {}
-  const total     = s.total     ?? 0
+  const total = s.total ?? 0
   const completed = s.completed ?? 0
-  const pending   = s.pending   ?? 0
+  const pending = s.pending ?? 0
 
   // No custom metadata for Checksum report as requested
 
+  const targetGuidCol = apps.find(a => String(a.appId) === String(selectedApp))?.systemColumns?.['target-guid-col'] || 'p8_doc_id';
 
   const recordCols = [
     { key: 'application', label: 'Application' },
@@ -248,7 +249,7 @@ export default function ChecksumReport() { // NOSONAR
     { key: 'mime_type', label: 'MIME Type' },
     { key: 'content_size', label: 'Size (KB)' },
     { key: 'migrated_date', label: 'Migration Date' },
-    { key: 'p8_doc_id', label: 'Target Document GUID' },
+    { key: targetGuidCol, label: 'Target Document GUID' },
     { key: 'checksumbefore', label: 'Source CheckSum' },
     { key: 'checksumafter', label: 'Target CheckSum' },
     { key: 'checksum_status', label: 'Validation Status' }
@@ -258,7 +259,7 @@ export default function ChecksumReport() { // NOSONAR
 
   // Pagination calculations
   const totalPages = Math.max(1, Math.ceil((data?.records || []).length / pageSize))
-  const pageData   = (data?.records || []).slice((page - 1) * pageSize, page * pageSize)
+  const pageData = (data?.records || []).slice((page - 1) * pageSize, page * pageSize)
 
   function pageNums() {
     const nums = []
@@ -288,19 +289,19 @@ export default function ChecksumReport() { // NOSONAR
 
       {error && (
         <div className="alert alert-error" style={{ marginBottom: 14 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
           {error}
         </div>
       )}
 
       {/* Results */}
       <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-      
+
         {loading && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
-                <Database size={40} className="animate-pulse" />
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>Running Checksum Report...</span>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
+            <Database size={40} className="animate-pulse" />
+            <span style={{ fontSize: '14px', fontWeight: '600' }}>Running Checksum Report...</span>
+          </div>
         )}
 
         {!loading && data && data.records.length === 0 && (
@@ -336,12 +337,12 @@ export default function ChecksumReport() { // NOSONAR
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0, color: '#1976d2', borderBottom: '2px solid #1976d2', paddingBottom: '4px', display: 'inline-block', fontSize: '14px' }}>Checksum Results ({data.records.length} records)</h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => generateChecksumCSV(data, meta)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
-                        <Download size={12} /> CSV
-                    </button>
-                    <button onClick={() => generateChecksumExcel(data, meta)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
-                        <Download size={12} /> Excel
-                    </button>
+                  <button onClick={() => generateChecksumCSV(data, { ...meta, selectedAppName })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+                    <Download size={12} /> CSV
+                  </button>
+                  <button onClick={() => generateChecksumExcel(data, { ...meta, selectedAppName })} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
+                    <Download size={12} /> Excel
+                  </button>
                 </div>
               </div>
 
@@ -354,15 +355,15 @@ export default function ChecksumReport() { // NOSONAR
                     </tr>
                   </thead>
                   <tbody>
-                  {pageData.map((r, i) => (
-                    <tr key={r.documentid ?? i}>
-                      <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
-                      {recordCols.map(col => renderTableCell(r, col, selectedAppName))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    {pageData.map((r, i) => (
+                      <tr key={r.documentid || r[targetGuidCol] || i}>
+                        <td style={{ textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</td>
+                        {recordCols.map(col => renderTableCell(r, col, selectedAppName))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             {/* Pagination Controls */}
@@ -380,7 +381,7 @@ export default function ChecksumReport() { // NOSONAR
                     {[100, 500, 1000].map(n => <option key={n} value={n}>{n} / page</option>)}
                   </select>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="6 9 12 15 18 9"/>
+                    <polyline points="6 9 12 15 18 9" />
                   </svg>
                 </div>
               </div>

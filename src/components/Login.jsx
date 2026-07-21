@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useAlert } from '../context/AlertContext'
 
 export default function Login() {
+  const { showAlert } = useAlert()
   const { login, register } = useAuth()
   const navigate  = useNavigate()
   const [form, setForm]         = useState({ username: '', password: '' })
@@ -35,7 +37,7 @@ export default function Login() {
         setIsLoginMode(true)
         setError('')
         setForm({ username: '', password: '' })
-        alert('Registration successful! You can now log in.')
+        showAlert('Registration successful! You can now log in.', 'Success')
       } else {
         setError(result.message)
       }
