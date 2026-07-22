@@ -97,11 +97,11 @@ export default function Discovery() {
 
     // Fetch Document Classes when App changes
     useEffect(() => {
-        if (!selectedApp) { setDocClasses([]); setSelectedDocClass('All'); return }
+        if (!selectedApp) { setDocClasses([]); setSelectedDocClass(''); return }
         axios.get(`${BASE}/discovery/doc-classes?appId=${selectedApp}&type=all`)
             .then(res => { 
                 setDocClasses(res.data); 
-                setSelectedDocClass('All');
+                setSelectedDocClass('');
             })
             .catch(err => {
                 console.error("Error fetching document classes", err);
@@ -179,20 +179,6 @@ export default function Discovery() {
     };
 
     const runReport = () => {
-        setLoading(true)
-        setData([])
-        const currentSubReports = subReports[activeCategory]
-        if (!currentSubReports) {
-            setLoading(false)
-            return;
-        }
-
-        const endpoint = currentSubReports.find(s => s.id === activeSubReport)?.endpoint
-        if (!endpoint) {
-            setLoading(false)
-            return;
-        }
-
         if (!selectedApp) {
             showAlert("Please select an Application before running the report.")
             return;
@@ -210,6 +196,20 @@ export default function Discovery() {
 
         if (!activeSubReport) {
             showAlert("Please select a Report Type.")
+            return;
+        }
+
+        setLoading(true)
+        setData([])
+        const currentSubReports = subReports[activeCategory]
+        if (!currentSubReports) {
+            setLoading(false)
+            return;
+        }
+
+        const endpoint = currentSubReports.find(s => s.id === activeSubReport)?.endpoint
+        if (!endpoint) {
+            setLoading(false)
             return;
         }
 

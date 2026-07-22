@@ -11,6 +11,9 @@ const cleanColumnName = (col) => {
     if (cleaned.toLowerCase() === 'targetobjectstorename') {
         return 'Object Store';
     }
+    if (cleaned.toLowerCase() === 'documenttitle') {
+        return 'Document Title';
+    }
     return cleaned;
 };
 
@@ -545,19 +548,22 @@ export default function Exceptions() {
             .finally(() => setLoading(false))
     }
 
-    const processSearchData = (responseData) => {
-        setData(responseData);
-        setIsFiltersCollapsed(true);
+    const isSystemField = (key) => {
+        const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'ERROR_INFO', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID', 'DOCUMENTTITLE'];
+        const normalizedCol = key.toUpperCase().replace(/[ _]/g, '');
+        return sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedCol) || 
+               normalizedCol.endsWith('TARGETOBJECTSTORENAME') || 
+               normalizedCol.endsWith('OBJECTSTORENAME') || 
+               normalizedCol === 'OBJECTSTORE';
+    };
 
+    const extractCustomColumns = (responseData) => {
         const customKeys = new Set();
-        const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'ERROR_INFO', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID'];
-
         const addKeys = (rows) => {
             if (!rows) return;
             rows.forEach(r => Object.keys(r).forEach(k => {
-                const normalizedCol = k.toUpperCase().replace(/[ _]/g, '');
-                const isSysField = sysFields.some(sf => sf.replace(/[ _]/g, '') === normalizedCol) || normalizedCol.endsWith('TARGETOBJECTSTORENAME') || normalizedCol.endsWith('OBJECTSTORENAME') || normalizedCol === 'OBJECTSTORE';
-                if (!isSysField) {
+                const val = r[k];
+                if (val !== null && val !== undefined && val !== '' && !isSystemField(k)) {
                     customKeys.add(k);
                 }
             }));
@@ -565,23 +571,31 @@ export default function Exceptions() {
 
         addKeys(responseData.source);
         addKeys(responseData.target);
+        return Array.from(customKeys).sort();
+    };
 
-        const customColsArray = Array.from(customKeys).sort();
-        setAllCustomColumns(customColsArray);
-        
-        setVisibleCustomColumns(new Set(customColsArray));
-
+    const determineSelectedObjectId = (responseData) => {
         let singleRec = null;
-        if (responseData.source && responseData.source.length === 1) singleRec = responseData.source[0];
-        else if (responseData.staging && responseData.staging.length === 1) singleRec = responseData.staging[0];
-        else if (responseData.target && responseData.target.length === 1) singleRec = responseData.target[0];
+        if (responseData.source?.length === 1) singleRec = responseData.source[0];
+        else if (responseData.staging?.length === 1) singleRec = responseData.staging[0];
+        else if (responseData.target?.length === 1) singleRec = responseData.target[0];
 
         if (singleRec) {
             const objIdKey = Object.keys(singleRec).find(k => k.toUpperCase() === 'OBJECT_ID');
-            setSelectedObjectId(singleRec[objIdKey]);
-        } else {
-            setSelectedObjectId(null);
+            return singleRec[objIdKey];
         }
+        return null;
+    };
+
+    const processSearchData = (responseData) => {
+        setData(responseData);
+        setIsFiltersCollapsed(true);
+
+        const customColsArray = extractCustomColumns(responseData);
+        setAllCustomColumns(customColsArray);
+        setVisibleCustomColumns(new Set(customColsArray));
+
+        setSelectedObjectId(determineSelectedObjectId(responseData));
     };
 
     useEffect(() => {
@@ -720,7 +734,7 @@ export default function Exceptions() {
 
     return (
         <>
-            <div className="exceptions-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div className="exceptions-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
 
                 <div className="filters-panel" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', position: 'relative' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -815,7 +829,7 @@ export default function Exceptions() {
                     )}
                 </div>
 
-                <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {loading && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
                             <Database size={40} className="animate-pulse" />

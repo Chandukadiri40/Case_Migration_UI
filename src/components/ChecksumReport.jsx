@@ -3,6 +3,7 @@ import axios from 'axios'
 import { apiGetChecksumReport, apiGetTenantConfig } from '../utils/api'
 import { generateChecksumExcel, generateChecksumCSV } from '../utils/checksumExport'
 import { Download, Search, Database, Loader2 } from 'lucide-react'
+import { useAlert } from '../context/AlertContext'
 
 const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -161,6 +162,7 @@ const ChecksumFilterPanel = ({
 };
 
 export default function ChecksumReport() { // NOSONAR
+  const { showAlert } = useAlert()
   const [apps, setApps] = useState([])
   const [selectedApp, setSelectedApp] = useState('')
   const [docClasses, setDocClasses] = useState([])
@@ -199,8 +201,12 @@ export default function ChecksumReport() { // NOSONAR
 
   async function handleFetch() {
     if (!selectedApp) {
-      setError('Please select an application.')
+      showAlert('Please select an Application before running the report.')
       return
+    }
+    if (!selectedDocClass) {
+      showAlert("Please select a Document Class (or 'All').")
+      return;
     }
     setError('')
     setLoading(true)
@@ -268,7 +274,7 @@ export default function ChecksumReport() { // NOSONAR
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 }}>
       <ChecksumFilterPanel
         apps={apps}
         selectedApp={selectedApp}
@@ -295,7 +301,7 @@ export default function ChecksumReport() { // NOSONAR
       )}
 
       {/* Results */}
-      <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
         {loading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>

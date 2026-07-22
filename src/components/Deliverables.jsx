@@ -39,7 +39,7 @@ function getCellValue(r, cKey, selectedAppName) {
 
 const toNum = (val) => Number(val) || 0;
 
-function renderAggregatedRow(r, sno, isNewApp, appCount) {
+function renderAggregatedRow(r, sno, isNewApp, appCount, selectedAppName) {
   const compPct = toNum(r.percentCompletion);
   const failPct = toNum(r.percentFailed);
   const runDays = toNum(r.runTimeDays);
@@ -62,15 +62,15 @@ function renderAggregatedRow(r, sno, isNewApp, appCount) {
   const docClassStr = r.documentClass ? String(r.documentClass) : 'na';
   const rowKey = `agg-${objStoreStr}-${docClassStr}`;
 
-  const objStoreEl = r.objectStore ? r.objectStore : <em className="cell-empty">NULL</em>;
   const docClassEl = r.documentClass ? r.documentClass : <em className="cell-empty">NULL</em>;
+  const appNameEl = selectedAppName ? selectedAppName : <em className="cell-empty">NULL</em>;
 
   return (
     <tr key={rowKey}>
       <td style={{ textAlign: 'center' }}>{sno}</td>
       {isNewApp ? (
         <td rowSpan={appCount} style={{ fontWeight: 700, color: '#1e293b', verticalAlign: 'middle', textAlign: 'center', background: '#f8fafc' }}>
-          {objStoreEl}
+          {appNameEl}
         </td>
       ) : null}
       <td>{docClassEl}</td>
@@ -440,6 +440,10 @@ function MigrationReportTab() {
       showAlert('Please select an Application before running the report.')
       return
     }
+    if (!selectedDocClass) {
+      showAlert("Please select a Document Class (or 'All').")
+      return;
+    }
     if (!migrationStatus) {
       showAlert('Please select a Migration Status.')
       return
@@ -471,6 +475,7 @@ function MigrationReportTab() {
   const formatHeader = (key) => {
     if (key.toLowerCase() === 'filefullpath') return 'File Path';
     const cleaned = cleanColumnName(key);
+    if (cleaned.toLowerCase() === 'documenttitle') return 'Document Title';
     return cleaned.replace(/_/g, ' ').toUpperCase();
   };
 
@@ -499,7 +504,7 @@ function MigrationReportTab() {
   const selectedAppName = apps.find(a => String(a.appId) === String(selectedApp))?.appName || '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, minWidth: 0 }}>
       <DeliverableFilterPanel
         apps={apps}
         selectedApp={selectedApp}
@@ -528,7 +533,7 @@ function MigrationReportTab() {
       )}
 
       {/* Results */}
-      <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div className="grid-container" style={{ background: 'white', padding: '8px', borderRadius: '12px', flex: 1, minHeight: 0, minWidth: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
 
         {loading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', color: '#4f46e5', gap: '10px' }}>
@@ -618,7 +623,7 @@ function MigrationReportTab() {
                   <thead>
                     <tr>
                       <th>S.No</th>
-                      <th>Application Type</th>
+                      <th>Application</th>
                       <th>Documentation Class</th>
                       <th>Total No Documents</th>
                       <th>Total Files Size (in GB)</th>
@@ -636,10 +641,10 @@ function MigrationReportTab() {
                       let sno = 1;
                       let lastApp = null;
                       return data.map(r => {
-                        const isNewApp = r.objectStore !== lastApp;
-                        lastApp = r.objectStore;
-                        const appCount = data.filter(x => x.objectStore === r.objectStore).length;
-                        return renderAggregatedRow(r, sno++, isNewApp, appCount);
+                        const isNewApp = selectedAppName !== lastApp;
+                        lastApp = selectedAppName;
+                        const appCount = data.length;
+                        return renderAggregatedRow(r, sno++, isNewApp, appCount, selectedAppName);
                       });
                     })()}
                   </tbody>

@@ -786,7 +786,7 @@ input[type="date"].sp-input { color: var(--gray-900); font-weight: 500; }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
 .table-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; width: 100%; }
-table { border-collapse: collapse; text-align: left; font-size: 10px; width: 100%; }
+table { border-collapse: collapse; text-align: left; font-size: 10px; width: max-content; }
 thead th {
   background: #f1f5f9; padding: 6px 8px;
   text-align: left; font-size: 11px; font-weight: 700;
