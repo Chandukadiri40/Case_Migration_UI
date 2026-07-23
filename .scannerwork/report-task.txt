@@ -2,5 +2,5 @@ projectKey=Migration_Report_UI
 serverUrl=http://localhost:9002
 serverVersion=9.9.8.100196
 dashboardUrl=http://localhost:9002/dashboard?id=Migration_Report_UI
-ceTaskId=AZ-EYSOdMtez2fqNhDyY
-ceTaskUrl=http://localhost:9002/api/ce/task?id=AZ-EYSOdMtez2fqNhDyY
+ceTaskId=AZ-ILitSMtez2fqNhDyZ
+ceTaskUrl=http://localhost:9002/api/ce/task?id=AZ-ILitSMtez2fqNhDyZ

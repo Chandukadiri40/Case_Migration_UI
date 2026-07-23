@@ -11,7 +11,8 @@ const SystemColumnMappingSection = ({ config, setConfig, activeApp, selectedAppI
     { role: 'source', key: 'class-id-col', defaultName: 'object_class_id', placeholder: '-- select column --' },
     { role: 'source', key: 'status', defaultName: 'migration_status', placeholder: '-- select column --' },
     { role: 'classdef', key: 'symbolic-name-col', defaultName: 'symbolic_name', placeholder: '-- select column --' },
-    { role: 'annotation', key: 'annotated-id-col', defaultName: 'annotated_id', placeholder: '-- select column --' }
+    { role: 'annotation', key: 'annotated-id-col', defaultName: 'annotated_id', placeholder: '-- select column --' },
+    { role: 'content', key: 'content-doc-id-col', defaultName: 'doc_id', placeholder: '-- select column --' }
   ];
 
   // Filter out system columns for roles that haven't been assigned a table yet
@@ -286,6 +287,7 @@ export default function Configuration() { // NOSONAR
             "class-id-col": "object_class_id",
             "symbolic-name-col": "symbolic_name",
             "annotated-id-col": "annotated_id",
+            "content-doc-id-col": "doc_id",
             "target-guid-col": "p8_doc_id"
           }
         }));
@@ -428,6 +430,7 @@ export default function Configuration() { // NOSONAR
         "class-id-col": "object_class_id",
         "symbolic-name-col": "symbolic_name",
         "annotated-id-col": "annotated_id",
+        "content-doc-id-col": "doc_id",
         "target-guid-col": "p8_doc_id"
       }
     };
