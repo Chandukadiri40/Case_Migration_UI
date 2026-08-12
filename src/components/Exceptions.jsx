@@ -66,11 +66,13 @@ const DataTable = ({
     visibleCustomColumns,
     selectedObjectId,
     setSelectedObjectId,
-    activeMismatchedKeys
+    activeMismatchedKeys,
+    page,
+    pageSize,
+    totalRecords,
+    onPageChange,
+    onPageSizeChange
 }) => {
-    const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(50);
-
     if (!tableData || tableData.length === 0) return null;
 
     const sortConfig = sortConfigs[title] || { key: null, direction: 'ascending' };
@@ -180,8 +182,8 @@ const DataTable = ({
         );
     };
 
-    const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
-    const pageData = sortedData.slice((page - 1) * pageSize, page * pageSize);
+    const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+    const pageData = sortedData;
 
     return (
         <div style={{ marginBottom: '2px' }}>
@@ -227,21 +229,21 @@ const DataTable = ({
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 12px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderRadius: '0 0 8px 8px' }}>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>
-                    Showing {tableData.length === 0 ? 0 : (page - 1) * pageSize + 1} to {Math.min(page * pageSize, sortedData.length)} of {sortedData.length} records
+                    Showing {tableData.length === 0 ? 0 : (page - 1) * pageSize + 1} to {Math.min(page * pageSize, totalRecords)} of {totalRecords} records
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Rows per page:</span>
-                        <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }} style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none', cursor: 'pointer' }}>
+                        <select value={pageSize} onChange={e => { onPageSizeChange(Number(e.target.value)); }} style={{ padding: '2px 6px', fontSize: '11px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none', cursor: 'pointer' }}>
                             <option value={50}>50</option>
                             <option value={100}>100</option>
                             <option value={200}>200</option>
                         </select>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                        <button disabled={page === 1} onClick={() => setPage(page - 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === 1 ? '#f1f5f9' : 'white', color: page === 1 ? '#94a3b8' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Prev</button>
+                        <button disabled={page === 1} onClick={() => onPageChange(page - 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === 1 ? '#f1f5f9' : 'white', color: page === 1 ? '#94a3b8' : '#334155', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Prev</button>
                         <span style={{ fontSize: '11px', color: '#334155', padding: '2px 4px', fontWeight: 'bold' }}>Page {page} of {totalPages}</span>
-                        <button disabled={page === totalPages} onClick={() => setPage(page + 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === totalPages ? '#f1f5f9' : 'white', color: page === totalPages ? '#94a3b8' : '#334155', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>Next</button>
+                        <button disabled={page === totalPages} onClick={() => onPageChange(page + 1)} style={{ padding: '2px 10px', fontSize: '11px', border: '1px solid #cbd5e1', borderRadius: '4px', background: page === totalPages ? '#f1f5f9' : 'white', color: page === totalPages ? '#94a3b8' : '#334155', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}>Next</button>
                     </div>
                 </div>
             </div>
@@ -433,6 +435,10 @@ export default function Exceptions() {
     const [showColumnSettings, setShowColumnSettings] = useState(false)
     const columnSettingsRef = useRef(null)
 
+    const [page, setPage] = useState(1)
+    const [pageSize, setPageSize] = useState(50)
+    const [totalRecords, setTotalRecords] = useState(0)
+
     const [exportOptions, setExportOptions] = useState({ format: 'excel', source: true, staging: true, target: true })
 
     useEffect(() => {
@@ -524,13 +530,13 @@ export default function Exceptions() {
         return true;
     }
 
-    const searchExceptions = (e) => {
-        e.preventDefault()
+    const searchExceptions = (e, targetPage = 1, targetPageSize = pageSize) => {
+        if (e) e.preventDefault();
         if (!isValidSearch()) return;
 
         setLoading(true)
 
-        const criteria = { appId: selectedApp };
+        const criteria = { appId: selectedApp, page: targetPage, pageSize: targetPageSize };
         if (objectId) criteria.objectId = objectId;
         if (selectedDocClass !== 'All') criteria.documentClasses = [selectedDocClass];
         if (createdFrom) criteria.createdFrom = createdFrom;
@@ -540,13 +546,27 @@ export default function Exceptions() {
         }
 
         axios.post(`${BASE}/exceptions/check`, criteria)
-            .then(res => processSearchData(res.data))
+            .then(res => {
+                const responseData = res.data;
+                setTotalRecords(responseData.totalRecords);
+                setPage(targetPage);
+                setPageSize(targetPageSize);
+                processSearchData(responseData.data);
+            })
             .catch(err => {
                 console.error(err);
                 showAlert(err.response?.data?.message || err.response?.data?.error || err.message || "Search failed");
             })
             .finally(() => setLoading(false))
     }
+
+    const handlePageChange = (newPage) => {
+        searchExceptions(null, newPage, pageSize);
+    };
+
+    const handlePageSizeChange = (newSize) => {
+        searchExceptions(null, 1, newSize);
+    };
 
     const isSystemField = (key) => {
         const sysFields = ['OBJECT_ID', 'MIGRATION_STATUS', 'MIGRATED_DATE', 'ERROR_MESSAGE', 'ERROR_INFO', 'EXTRACTED_STATUS', 'EXTRACTED_DATE', 'MIME_TYPE', 'CONTENT_SIZE', 'OBJECT_STORE', 'P8_DOC_ID', 'DOCUMENTTITLE'];
@@ -899,9 +919,9 @@ export default function Exceptions() {
                                     </div>
                                 </div>
                             )}
-                            <DataTable title="Source" tableData={data.source} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
-                            <DataTable title="Staging" tableData={data.staging} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
-                            <DataTable title="Target" tableData={data.target} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} />
+                            <DataTable title="Source" tableData={data.source} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} page={page} pageSize={pageSize} totalRecords={totalRecords} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
+                            <DataTable title="Staging" tableData={data.staging} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} page={page} pageSize={pageSize} totalRecords={totalRecords} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
+                            <DataTable title="Target" tableData={data.target} sortConfigs={sortConfigs} handleSort={handleSort} visibleCustomColumns={visibleCustomColumns} selectedObjectId={selectedObjectId} setSelectedObjectId={setSelectedObjectId} activeMismatchedKeys={activeMismatchedKeys} page={page} pageSize={pageSize} totalRecords={totalRecords} onPageChange={handlePageChange} onPageSizeChange={handlePageSizeChange} />
                         </>
                     )}
                     {!loading && !data && (

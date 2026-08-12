@@ -321,6 +321,7 @@ function MigrationReportTab() {
   // Pagination states for records view
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(100)
+  const [totalRecords, setTotalRecords] = React.useState(0)
 
   // Column visibility states
   const [allCustomColumns, setAllCustomColumns] = React.useState([])
@@ -360,8 +361,8 @@ function MigrationReportTab() {
       .catch(console.error);
   }, [selectedApp, selectedDocClass]);
 
-  const buildSearchPayload = () => {
-    const payload = {}
+  const buildSearchPayload = (targetPage, targetPageSize) => {
+    const payload = { page: targetPage, pageSize: targetPageSize }
     if (selectedApp) payload.applicationName = apps.find(a => a.appId === selectedApp)?.appName || selectedApp
     if (selectedDocClass && selectedDocClass !== 'All') payload.documentClass = selectedDocClass
     if (startDate) payload.startDate = startDate + 'T00:00:00'
@@ -435,7 +436,12 @@ function MigrationReportTab() {
     }
   }
 
-  async function handleSearch() {
+  async function handleSearch(targetPage = 1, targetPageSize = pageSize) {
+    // If called from the button directly, targetPage might be the event object
+    if (targetPage && targetPage.preventDefault) {
+      targetPage = 1;
+    }
+
     if (!selectedApp) {
       showAlert('Please select an Application before running the report.')
       return
@@ -448,12 +454,13 @@ function MigrationReportTab() {
       showAlert('Please select a Migration Status.')
       return
     }
-    setError(''); setLoading(true); setPage(1)
+    setError(''); setLoading(true); setPage(targetPage);
     try {
-      const payload = buildSearchPayload();
+      const payload = buildSearchPayload(targetPage, targetPageSize);
       const result = await apiGetDeliverableMigrationReport(payload)
-      setData(result)
-      handleCustomColumns(result);
+      setData(result.data)
+      setTotalRecords(result.totalRecords)
+      handleCustomColumns(result.data);
     } catch (e) {
       setError(e.message || 'Failed to fetch migration report.')
     } finally {
@@ -461,10 +468,19 @@ function MigrationReportTab() {
     }
   }
 
+  const handlePageChange = (newPage) => {
+    handleSearch(newPage, pageSize);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    handleSearch(1, newSize);
+  };
+
   function handleReset() {
     setSelectedApp(''); setSelectedDocClass(''); setDocClasses([])
     setStartDate(''); setEndDate(''); setMigrationStatus('')
-    setData(null); setError(''); setPage(1)
+    setData(null); setError(''); setPage(1); setTotalRecords(0);
   }
 
   const meta = { generatedAt: new Date().toLocaleString() }
@@ -492,8 +508,8 @@ function MigrationReportTab() {
   ];
 
   // Pagination calculations
-  const totalPages = Math.max(1, Math.ceil((data || []).length / pageSize))
-  const pageData = (data || []).slice((page - 1) * pageSize, page * pageSize)
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize))
+  const pageData = data || []
 
   function pageNums() {
     const nums = []
@@ -675,12 +691,12 @@ function MigrationReportTab() {
               <div className="pagination" style={{ marginTop: '8px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
                 <div className="pagination-left">
                   <span className="pagination-info" style={{ fontSize: '10px' }}>
-                    Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, data.length)} of{' '}
-                    <strong>{data.length.toLocaleString()}</strong>
+                    Showing {data.length === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, totalRecords)} of{' '}
+                    <strong>{totalRecords.toLocaleString()}</strong>
                   </span>
                   <div className="page-size-select">
                     <select value={pageSize}
-                      onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                      onChange={e => handlePageSizeChange(Number(e.target.value))}
                       aria-label="Rows per page"
                       style={{ fontSize: '10px' }}>
                       {[100, 500, 1000].map(n => <option key={n} value={n}>{n} / page</option>)}
@@ -691,13 +707,13 @@ function MigrationReportTab() {
                   </div>
                 </div>
                 <div className="pagination-controls">
-                  <button className="page-btn" onClick={() => setPage(1)} disabled={page === 1} aria-label="First">«</button>
-                  <button className="page-btn" onClick={() => setPage(p => p - 1)} disabled={page === 1} aria-label="Prev">‹</button>
+                  <button className="page-btn" onClick={() => handlePageChange(1)} disabled={page === 1} aria-label="First">«</button>
+                  <button className="page-btn" onClick={() => handlePageChange(page - 1)} disabled={page === 1} aria-label="Prev">‹</button>
                   {pageNums().map(n => (
-                    <button key={n} className={'page-btn' + (n === page ? ' active' : '')} onClick={() => setPage(n)} style={{ fontSize: '10px', minWidth: '22px', height: '22px' }}>{n}</button>
+                    <button key={n} className={'page-btn' + (n === page ? ' active' : '')} onClick={() => handlePageChange(n)} style={{ fontSize: '10px', minWidth: '22px', height: '22px' }}>{n}</button>
                   ))}
-                  <button className="page-btn" onClick={() => setPage(p => p + 1)} disabled={page === totalPages} aria-label="Next">›</button>
-                  <button className="page-btn" onClick={() => setPage(totalPages)} disabled={page === totalPages} aria-label="Last">»</button>
+                  <button className="page-btn" onClick={() => handlePageChange(page + 1)} disabled={page === totalPages} aria-label="Next">›</button>
+                  <button className="page-btn" onClick={() => handlePageChange(totalPages)} disabled={page === totalPages} aria-label="Last">»</button>
                 </div>
               </div>
             )}
