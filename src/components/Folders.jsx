@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { 
   Folder, FileText, ArrowLeft, RefreshCw, Download, Eye, X, 
-  Search, HardDrive, Upload, 
-  FileCode, Image as ImageIcon, FileSpreadsheet, FileArchive, Globe, CheckSquare, Square
+  Search, HardDrive, Upload, Copy, Check,
+  FileCode, Image as ImageIcon, FileSpreadsheet, FileArchive, Globe
 } from 'lucide-react'
 import { useAlert } from '../context/AlertContext'
 import { apiBrowseFolder, apiGetFolderConfig, apiGetDocumentViewUrl, apiGetDocumentDownloadUrl } from '../utils/api'
@@ -22,6 +22,10 @@ export default function Folders() {
   const [countdown, setCountdown] = useState(5)
   const [isAutoRefreshEnabled, setIsAutoRefreshEnabled] = useState(true)
   const [selectedFileForPreview, setSelectedFileForPreview] = useState(null)
+  const [previewContent, setPreviewContent] = useState('')
+  const [previewBlobUrl, setPreviewBlobUrl] = useState(null)
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+  const [isCopied, setIsCopied] = useState(false)
   const [isUploadingSim, setIsUploadingSim] = useState(false)
   const [lastSyncTime, setLastSyncTime] = useState(new Date().toLocaleTimeString())
   
@@ -73,6 +77,51 @@ export default function Folders() {
     refreshFolderContent(false)
   }, [currentPath])
 
+  // Fetch document content directly when a file is selected for viewing in the modal
+  useEffect(() => {
+    if (!selectedFileForPreview) {
+      setPreviewContent('')
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl)
+        setPreviewBlobUrl(null)
+      }
+      return
+    }
+
+    const filePath = selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`
+    const viewUrl = apiGetDocumentViewUrl(filePath)
+    setIsPreviewLoading(true)
+    setPreviewContent('')
+    setIsCopied(false)
+
+    console.log('[UI-FOLDER-DEBUG] Loading preview content for:', selectedFileForPreview.name, viewUrl)
+
+    fetch(viewUrl)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`)
+        return res.blob()
+      })
+      .then(async blob => {
+        const lowerName = selectedFileForPreview.name.toLowerCase()
+        const isImage = lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.gif') || lowerName.endsWith('.bmp') || lowerName.endsWith('.webp')
+        const isPdf = lowerName.endsWith('.pdf')
+
+        if (isImage || isPdf) {
+          const blobUrl = URL.createObjectURL(blob)
+          setPreviewBlobUrl(blobUrl)
+        } else {
+          const text = await blob.text()
+          setPreviewContent(text)
+        }
+        setIsPreviewLoading(false)
+      })
+      .catch(err => {
+        console.error('[UI-FOLDER-DEBUG] Error fetching preview content:', err)
+        setPreviewContent(`Failed to load document content. Error: ${err.message}`)
+        setIsPreviewLoading(false)
+      })
+  }, [selectedFileForPreview])
+
   async function refreshFolderContent(isAuto = false) {
     setLastSyncTime(new Date().toLocaleTimeString())
     if (!isAuto) setIsLoading(true)
@@ -112,19 +161,30 @@ export default function Folders() {
     refreshFolderContent(false)
   }
 
-  // Direct single file download helper without opening new tab
-  function triggerDirectDownload(filePath, fileName) {
+  // Direct single file download helper (No new browser tab, saves directly with actual name)
+  async function triggerDirectDownload(filePath, fileName) {
     const downloadUrl = apiGetDocumentDownloadUrl(filePath)
-    const a = document.createElement('a')
-    a.style.display = 'none'
-    a.href = downloadUrl
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    console.log('[UI-FOLDER-DEBUG] Triggering direct blob download for:', fileName, downloadUrl)
 
-    if (showAlert) {
-      showAlert(`Downloading document "${fileName}"...`, 'Downloading File', 'info')
+    try {
+      const res = await fetch(downloadUrl)
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`)
+      const blob = await res.blob()
+      
+      const blobUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.style.display = 'none'
+      a.href = blobUrl
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      
+      setTimeout(() => {
+        document.body.removeChild(a)
+        URL.revokeObjectURL(blobUrl)
+      }, 200)
+    } catch (e) {
+      console.error('[UI-FOLDER-DEBUG] Download error:', e)
     }
   }
 
@@ -132,15 +192,11 @@ export default function Folders() {
   function handleBulkDownload() {
     if (selectedFilePaths.length === 0) return
 
-    if (showAlert) {
-      showAlert(`Starting bulk download for ${selectedFilePaths.length} selected document(s)...`, 'Bulk Download Started', 'info')
-    }
-
     selectedFilePaths.forEach((path, idx) => {
       setTimeout(() => {
         const fileName = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
         triggerDirectDownload(path, fileName)
-      }, idx * 400)
+      }, idx * 300)
     })
   }
 
@@ -161,6 +217,14 @@ export default function Folders() {
       setSelectedFilePaths(selectedFilePaths.filter(p => p !== filePath))
     } else {
       setSelectedFilePaths([...selectedFilePaths, filePath])
+    }
+  }
+
+  function handleCopyContent() {
+    if (previewContent) {
+      navigator.clipboard.writeText(previewContent)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
     }
   }
 
@@ -188,15 +252,13 @@ export default function Folders() {
 
   function renderFileIcon(file) {
     if (file.isDir) return <Folder size={18} color="#3b82f6" fill="#eff6ff" />
-    switch (file.type) {
-      case 'pdf': return <FileText size={18} color="#ef4444" />
-      case 'image': return <ImageIcon size={18} color="#10b981" />
-      case 'sheet': return <FileSpreadsheet size={18} color="#059669" />
-      case 'archive': return <FileArchive size={18} color="#8b5cf6" />
-      case 'code': return <FileCode size={18} color="#6366f1" />
-      case 'doc': return <FileText size={18} color="#2563eb" />
-      default: return <FileText size={18} color="#64748b" />
-    }
+    const lowerName = file.name.toLowerCase()
+    if (lowerName.endsWith('.pdf')) return <FileText size={18} color="#ef4444" />
+    if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png')) return <ImageIcon size={18} color="#10b981" />
+    if (lowerName.endsWith('.csv') || lowerName.endsWith('.xlsx')) return <FileSpreadsheet size={18} color="#059669" />
+    if (lowerName.endsWith('.zip') || lowerName.endsWith('.tar')) return <FileArchive size={18} color="#8b5cf6" />
+    if (lowerName.endsWith('.xml') || lowerName.endsWith('.log') || lowerName.endsWith('.txt') || lowerName.endsWith('.json')) return <FileCode size={18} color="#6366f1" />
+    return <FileText size={18} color="#64748b" />
   }
 
   const filteredFiles = searchTerm
@@ -447,16 +509,16 @@ export default function Folders() {
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
                           <button
                             onClick={() => setSelectedFileForPreview(item)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 12px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
                           >
-                            <Eye size={12} /> View Document
+                            <Eye size={13} /> View Document
                           </button>
                           <button
                             onClick={() => triggerDirectDownload(itemPath, item.name)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                            title="Download document directly"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '5px 10px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                            title="Download document directly with actual filename"
                           >
-                            <Download size={12} />
+                            <Download size={13} />
                           </button>
                         </div>
                       ) : (
@@ -471,64 +533,94 @@ export default function Folders() {
         </table>
       </div>
 
-      {/* Universal Document Viewer Drawer / Modal (In Current Page) */}
+      {/* Universal In-App Document Viewer Modal (White Theme & Expanded Dimensions) */}
       {selectedFileForPreview && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(5px)',
+          background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(6px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
         }}>
           <div style={{
-            width: '880px', background: '#fff', borderRadius: '12px',
-            overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)',
-            display: 'flex', flexDirection: 'column', height: '640px'
+            width: '92vw', maxWidth: '1120px', background: '#ffffff', borderRadius: '14px',
+            overflow: 'hidden', boxShadow: '0 25px 60px -15px rgba(0,0,0,0.25)',
+            display: 'flex', flexDirection: 'column', height: '84vh', maxHeight: '780px',
+            border: '1px solid #cbd5e1'
           }}>
-            <div style={{ padding: '14px 20px', background: '#0f172a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Modal Header */}
+            <div style={{ padding: '16px 24px', background: '#ffffff', color: '#0f172a', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {renderFileIcon(selectedFileForPreview)}
-                <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{selectedFileForPreview.name}</span>
-                <span style={{ background: '#3b82f6', color: '#fff', fontSize: '9px', padding: '2px 8px', borderRadius: '10px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#0f172a' }}>{selectedFileForPreview.name}</span>
+                <span style={{ background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', fontSize: '10px', padding: '2px 10px', borderRadius: '12px', textTransform: 'uppercase', fontWeight: 'bold' }}>
                   {selectedFileForPreview.type}
                 </span>
               </div>
-              <button onClick={() => setSelectedFileForPreview(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+              <button 
+                onClick={() => setSelectedFileForPreview(null)} 
+                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '50%', width: '32px', height: '32px', color: '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <div style={{ background: '#f8fafc', padding: '10px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#475569' }}>
-              <span><b>Path:</b> {selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`}</span>
+            {/* Modal Metadata Bar */}
+            <div style={{ background: '#f8fafc', padding: '10px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#475569' }}>
+              <span><b>Path:</b> <span style={{ fontFamily: 'monospace', color: '#1e293b' }}>{selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`}</span></span>
               <span><b>Size:</b> {selectedFileForPreview.size} | <b>Modified:</b> {selectedFileForPreview.modified}</span>
             </div>
 
-            {/* Document Viewer Frame inside Modal on Current Page */}
-            <div style={{ flex: 1, background: '#1e293b', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {selectedFileForPreview.type === 'image' ? (
-                <img
-                  src={apiGetDocumentViewUrl(selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`)}
-                  alt={selectedFileForPreview.name}
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                />
+            {/* Document Viewer Body (White Theme) */}
+            <div style={{ flex: 1, background: '#f8fafc', overflow: 'hidden', padding: '16px', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+              {isPreviewLoading ? (
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', gap: '12px' }}>
+                  <RefreshCw size={26} className="animate-spin" color="#2563eb" />
+                  <span style={{ fontSize: '13.5px', fontWeight: 'bold', color: '#1e293b' }}>Fetching real-time document content...</span>
+                </div>
+              ) : previewBlobUrl && (selectedFileForPreview.name.toLowerCase().endsWith('.jpg') || selectedFileForPreview.name.toLowerCase().endsWith('.jpeg') || selectedFileForPreview.name.toLowerCase().endsWith('.png') || selectedFileForPreview.name.toLowerCase().endsWith('.gif') || selectedFileForPreview.name.toLowerCase().endsWith('.bmp') || selectedFileForPreview.name.toLowerCase().endsWith('.webp')) ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '12px' }}>
+                  <img src={previewBlobUrl} alt={selectedFileForPreview.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '6px' }} />
+                </div>
+              ) : previewBlobUrl && selectedFileForPreview.name.toLowerCase().endsWith('.pdf') ? (
+                <embed src={previewBlobUrl} type="application/pdf" style={{ width: '100%', height: '100%', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#ffffff' }} />
               ) : (
-                <iframe
-                  src={apiGetDocumentViewUrl(selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`)}
-                  title={selectedFileForPreview.name}
-                  style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }}
-                />
+                <div style={{ position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <button
+                    onClick={handleCopyContent}
+                    style={{
+                      position: 'absolute', top: '12px', right: '14px', zIndex: 10,
+                      display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px',
+                      background: '#ffffff', color: '#334155', border: '1px solid #cbd5e1',
+                      borderRadius: '6px', fontSize: '11.5px', cursor: 'pointer', fontWeight: 'bold',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                    }}
+                  >
+                    {isCopied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+                    {isCopied ? 'Copied!' : 'Copy Code'}
+                  </button>
+
+                  <pre style={{
+                    margin: 0, padding: '20px', flex: 1, overflow: 'auto',
+                    fontFamily: 'Consolas, Monaco, "Andale Mono", monospace', fontSize: '12.5px',
+                    color: '#0f172a', background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0',
+                    lineHeight: '1.6', whiteSpace: 'pre-wrap', wordBreak: 'break-all', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)'
+                  }}>
+                    {previewContent}
+                  </pre>
+                </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '12px 20px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ padding: '14px 24px', background: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
               <button
                 onClick={() => triggerDirectDownload(selectedFileForPreview.path || `${currentPath}/${selectedFileForPreview.name}`, selectedFileForPreview.name)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '7px', fontSize: '12.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(37,99,235,0.2)' }}
               >
-                <Download size={14} /> Download Document
+                <Download size={15} /> Download Document
               </button>
               <button
                 onClick={() => setSelectedFileForPreview(null)}
-                style={{ padding: '7px 16px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                style={{ padding: '8px 18px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '7px', fontSize: '12.5px', fontWeight: 'bold', cursor: 'pointer' }}
               >
                 Close Viewer
               </button>
