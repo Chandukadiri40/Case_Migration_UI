@@ -12,6 +12,7 @@ import Configuration from './components/Configuration'
 import PropertyMapping from './components/PropertyMapping'
 import Reconciliation from './components/Reconciliation'
 import DashboardOverview from './components/DashboardOverview'
+import Folders from './components/Folders'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
             
             <Route path="jobs-configuration" element={<JobsConfiguration />} />
+            <Route path="folders" element={<Folders />} />
             <Route path="configuration" element={<Configuration />} />
             <Route path="property-mapping" element={<PropertyMapping />} />
 

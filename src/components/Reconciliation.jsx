@@ -109,7 +109,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTrigger, setSearchTrigger] = useState(0)
-  const [countdown, setCountdown] = useState(30)
+  const [countdown, setCountdown] = useState(10)
 
   // Data states
   const [summaryData, setSummaryData] = useState(INITIAL_SUMMARY)
@@ -694,16 +694,14 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   // Trigger fetch when active query filters change or search trigger changes
   useEffect(() => {
     fetchReportData(false)
-    setCountdown(30)
+    setCountdown(10)
   }, [statusFilter, isChecksumMode, fromDateFilter, toDateFilter, idsFilter, searchTrigger, reconcileTab])
 
   // Auto-refresh countdown trigger
   useEffect(() => {
     if (countdown === 0) {
-      if (reconcileTab !== 'exception') {
-        fetchReportData(true)
-      }
-      setCountdown(30)
+      fetchReportData(true)
+      setCountdown(10)
     }
   }, [countdown, reconcileTab])
 
@@ -1215,6 +1213,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
             </div>
           </div>
           
+<<<<<<< HEAD
           {reconcileTab !== 'exception' && (
             <div style={{ 
               display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', color: '#4b5563', 
@@ -1225,6 +1224,17 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
               <span>Auto-Refresh: {formatTime(countdown)}</span>
             </div>
           )}
+=======
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
+            background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', 
+            fontFamily: 'monospace', fontWeight: 'bold', marginLeft: 'auto', marginRight: '4px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          }}>
+            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
+            <span>Auto-Refresh: {formatTime(countdown)}</span>
+          </div>
+>>>>>>> a5f38b8b5f4925429b033b03f84278dd692aaaf1
         </div>
 
         {/* Sub-Tabs: Reconciliation Dashboard, Recon Report, Exception Report, Search, Checksum Report */}

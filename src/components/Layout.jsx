@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { 
   FileText, LogOut, Package, Settings, Link, FileSpreadsheet, 
-  LayoutDashboard, Bell, HelpCircle, Search 
+  LayoutDashboard, Bell, HelpCircle, Search, FolderTree 
 } from 'lucide-react'
 
 export default function Layout() {
@@ -30,6 +30,9 @@ export default function Layout() {
   } else if (path.startsWith('/reconciliation')) {
     crumb = 'Reconciliation'
     pageTitle = 'Reconciliation'
+  } else if (path.startsWith('/folders')) {
+    crumb = 'Folders'
+    pageTitle = 'Linux Document Explorer'
   }
 
   const isDashboardActive = path === '/' || path === '/dashboard'
@@ -38,6 +41,7 @@ export default function Layout() {
   const isJobsActive = path.startsWith('/jobs-configuration')
   const isSearchActive = path.startsWith('/search')
   const isReconciliationActive = path.startsWith('/reconciliation')
+  const isFoldersActive = path.startsWith('/folders')
 
   return (
     <div className="app" style={{ display: 'flex', minHeight: '100vh', width: '100vw', background: '#F4F6F9', overflow: 'hidden' }}>
@@ -115,6 +119,21 @@ export default function Layout() {
           >
             <Package size={16} style={{ opacity: isJobsActive ? 1 : 0.85 }} />
             Jobs Configuration
+          </NavLink>
+
+          <NavLink 
+            to="/folders" 
+            className={`nav-item ${isFoldersActive ? 'active' : ''}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', borderRadius: '6px',
+              color: isFoldersActive ? '#FFFFFF' : '#93A4BD',
+              fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+              background: isFoldersActive ? '#2563EB' : 'transparent',
+              textDecoration: 'none'
+            }}
+          >
+            <FolderTree size={16} style={{ opacity: isFoldersActive ? 1 : 0.85 }} />
+            Folders
           </NavLink>
 
           <NavLink 
