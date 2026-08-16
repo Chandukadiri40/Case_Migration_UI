@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { 
   Plus, Play, Square, Pause, RotateCw, Terminal, CheckCircle2, 
-  XCircle, Clock, AlertCircle, RefreshCw, ShieldAlert 
+  XCircle, Clock, AlertCircle, RefreshCw, Layers, Activity, Database, CheckCircle
 } from 'lucide-react';
 import { JOB_CATEGORIES, INITIAL_JOBS } from '../config/jobsConfig';
 import CreateJobModal from './CreateJobModal';
 import JobLogViewerModal from './JobLogViewerModal';
+import { useAlert } from '../context/AlertContext';
 
 export default function JobsConfiguration() {
+  const { showAlert } = useAlert();
   const [jobs, setJobs] = useState(INITIAL_JOBS);
   const [activeCategory, setActiveCategory] = useState('extraction');
   const [activeFilterPill, setActiveFilterPill] = useState('all');
@@ -35,6 +37,12 @@ export default function JobsConfiguration() {
   };
 
   const filteredJobs = getFilteredJobs();
+
+  // Metric counts
+  const totalCategoryJobs = categoryJobs.length;
+  const runningJobsCount = categoryJobs.filter(j => j.status === 'Running').length;
+  const totalRecordsProcessed = categoryJobs.reduce((acc, j) => acc + (j.records || 0), 0);
+  const failedJobsCount = categoryJobs.filter(j => j.status === 'Failed').length;
 
   // Dynamic filter pill counts based on current category
   const getPillCount = (pillId) => {
@@ -67,12 +75,16 @@ export default function JobsConfiguration() {
     }
   };
 
-  // Status handlers for selected jobs
+  // Status handlers for selected jobs (or all visible jobs if none selected)
   const updateSelectedJobsStatus = (newStatus) => {
-    if (selectedJobIds.length === 0) return alert('Please select at least one job first.');
+    const targetIds = selectedJobIds.length > 0 
+      ? selectedJobIds 
+      : filteredJobs.map(j => j.id);
+
+    if (targetIds.length === 0) return;
     
     setJobs(prevJobs => prevJobs.map(job => {
-      if (selectedJobIds.includes(job.id)) {
+      if (targetIds.includes(job.id)) {
         const timeStr = new Date().toISOString();
         const actionLog = newStatus === 'Running' 
           ? `[INFO] ${timeStr} - Process started by user action.` 
@@ -89,7 +101,11 @@ export default function JobsConfiguration() {
       return job;
     }));
     
-    // Clear selections
+    const statusLabel = newStatus === 'Running' ? 'Started' : newStatus === 'Failed' ? 'Stopped' : newStatus;
+    if (showAlert) {
+      showAlert(`Successfully ${statusLabel.toLowerCase()} ${targetIds.length} ${activeCategory} job(s).`, `Jobs ${statusLabel}`, 'info');
+    }
+    
     setSelectedJobIds([]);
   };
 
@@ -106,11 +122,16 @@ export default function JobsConfiguration() {
   const handleCreateJob = (newJob) => {
     const nextId = (Math.max(...jobs.map(j => Number(j.id))) + 1).toString();
     setJobs([...jobs, { ...newJob, id: nextId }]);
+    if (showAlert) {
+      showAlert(`New ${newJob.type} job "${newJob.name}" created successfully.`, 'Job Configured', 'info');
+    }
   };
 
   const handleRefresh = () => {
     setSelectedJobIds([]);
-    alert('Dashboard and job configurations refreshed successfully!');
+    if (showAlert) {
+      showAlert('Dashboard and job configurations refreshed successfully!', 'Refreshed', 'info');
+    }
   };
 
   // Styling helper for status badges
@@ -140,6 +161,8 @@ export default function JobsConfiguration() {
         color = '#eab308';
         icon = <AlertCircle size={11} />;
         break;
+      default:
+        break;
     }
 
     return (
@@ -156,6 +179,8 @@ export default function JobsConfiguration() {
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', height: '100%', overflowY: 'auto' }}>
       
+
+
       {/* Category Sub-Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', gap: '24px', paddingBottom: '2px' }}>
         {JOB_CATEGORIES.map(cat => (
@@ -197,41 +222,38 @@ export default function JobsConfiguration() {
 
           <button
             onClick={() => updateSelectedJobsStatus('Running')}
-            disabled={selectedJobIds.length === 0}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
               background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '7px',
-              fontSize: '11.5px', fontWeight: '700', cursor: selectedJobIds.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedJobIds.length === 0 ? 0.5 : 1, transition: 'all 0.15s'
+              fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+              opacity: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'all 0.15s'
             }}
           >
-            <Play size={12} style={{ color: '#10b981' }} /> Start
+            <Play size={12} style={{ color: '#10b981', fill: '#10b981' }} /> Start
           </button>
 
           <button
             onClick={() => updateSelectedJobsStatus('Failed')}
-            disabled={selectedJobIds.length === 0}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
               background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '7px',
-              fontSize: '11.5px', fontWeight: '700', cursor: selectedJobIds.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedJobIds.length === 0 ? 0.5 : 1, transition: 'all 0.15s'
+              fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+              opacity: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'all 0.15s'
             }}
           >
-            <Square size={12} style={{ color: '#ef4444' }} /> Stop
+            <Square size={12} style={{ color: '#ef4444', fill: '#ef4444' }} /> Stop
           </button>
 
           <button
             onClick={() => updateSelectedJobsStatus('Paused')}
-            disabled={selectedJobIds.length === 0}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
               background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '7px',
-              fontSize: '11.5px', fontWeight: '700', cursor: selectedJobIds.length === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedJobIds.length === 0 ? 0.5 : 1, transition: 'all 0.15s'
+              fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+              opacity: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', transition: 'all 0.15s'
             }}
           >
-            <Pause size={12} style={{ color: '#eab308' }} /> Pause
+            <Pause size={12} style={{ color: '#eab308', fill: '#eab308' }} /> Pause
           </button>
         </div>
 
@@ -346,7 +368,16 @@ export default function JobsConfiguration() {
                   <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
                     {job.records.toLocaleString()}
                   </td>
-                  <td style={{ padding: '10px 14px' }}>{renderStatusBadge(job.status)}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {renderStatusBadge(job.status)}
+                      {job.status === 'Running' && (
+                        <div style={{ width: '90px', background: '#e2e8f0', height: '4px', borderRadius: '2px', overflow: 'hidden', marginTop: '2px' }}>
+                          <div style={{ width: '78%', background: '#2563eb', height: '100%', transition: 'width 0.5s' }} />
+                        </div>
+                      )}
+                    </div>
+                  </td>
                   <td style={{ padding: '10px 14px', color: '#475569' }}>{job.createdBy}</td>
                   <td style={{ padding: '10px 14px', color: '#64748b' }}>{job.createdDate}</td>
                   <td style={{ padding: '10px 14px', textAlign: 'center' }}>

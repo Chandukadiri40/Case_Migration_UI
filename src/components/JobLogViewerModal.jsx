@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Square, Pause, Copy, Terminal } from 'lucide-react';
+import { X, Play, Square, Pause, Copy, Terminal, Download, Search } from 'lucide-react';
 
 export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobStatus }) {
   if (!isOpen || !job) return null;
@@ -7,15 +7,16 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
   const [logs, setLogs] = useState([...job.logs]);
   const [status, setStatus] = useState(job.status);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const terminalEndRef = useRef(null);
   const simulationIntervalRef = useRef(null);
 
   // Auto-scroll to bottom of terminal when logs update
   useEffect(() => {
-    if (terminalEndRef.current) {
+    if (terminalEndRef.current && !searchTerm) {
       terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [logs]);
+  }, [logs, searchTerm]);
 
   // Clean up simulation on unmount
   useEffect(() => {
@@ -44,7 +45,6 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       return { text: logLine, color: '#fbbf24', fontWeight: 'normal' };
     }
     if (logLine.includes('[INFO]')) {
-      // Highlight INFO level itself differently
       return { text: logLine, color: '#38bdf8', fontWeight: 'normal' };
     }
     return { text: logLine, color: '#e2e8f0', fontWeight: 'normal' };
@@ -123,16 +123,31 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
     alert('Terminal logs copied to clipboard!');
   };
 
+  const handleDownloadLogs = () => {
+    const fullLogText = logs.join('\n');
+    const blob = new Blob([fullLogText], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${job.name.toLowerCase()}_execution.log`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const filteredLogs = searchTerm
+    ? logs.filter(l => l.toLowerCase().includes(searchTerm.toLowerCase()))
+    : logs;
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999
+      background: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(5px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
     }}>
       <div style={{
-        width: '800px', background: '#090D10', borderRadius: '12px',
-        overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
-        border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', height: '600px'
+        width: '840px', background: '#090D10', borderRadius: '12px',
+        overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', height: '620px'
       }}>
         
         {/* Terminal Header */}
@@ -140,9 +155,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
           background: '#0D1117', padding: '12px 18px', borderBottom: '1px solid #21262d',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Terminal size={18} style={{ color: '#38bdf8' }} />
-            <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '13px' }}>{job.name}</span>
+            <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '14px' }}>{job.name}</span>
             <span style={{
               background: getStatusColor(status), color: '#fff', fontSize: '9.5px',
               padding: '2px 8px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase'
@@ -151,43 +166,65 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
             </span>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: '#8b949e' }}>
-            <span>Server: <b>{job.env}</b></span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: '#8b949e' }}>
+            <span>Server: <b style={{ color: '#c9d1d9' }}>{job.env}</b></span>
             <button 
               onClick={onClose} 
               style={{ background: 'transparent', border: 'none', color: '#8b949e', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
         </div>
 
-        {/* Command Subbar */}
+        {/* Command Subbar with Search Filter */}
         <div style={{
           background: '#161B22', padding: '8px 18px', borderBottom: '1px solid #21262d',
-          fontSize: '11px', color: '#c9d1d9', fontVariantLigatures: 'none', fontFamily: 'monospace'
+          fontSize: '11px', color: '#c9d1d9', fontFamily: 'monospace', display: 'flex',
+          justifyContent: 'space-between', alignItems: 'center', gap: '12px'
         }}>
-          <span style={{ color: '#8b949e' }}>Command: </span>
-          <span style={{ color: '#58a6ff' }}>$ {job.command}</span>
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            <span style={{ color: '#8b949e' }}>Command: </span>
+            <span style={{ color: '#58a6ff' }}>$ {job.command}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', padding: '2px 8px', gap: '6px' }}>
+            <Search size={12} color="#8b949e" />
+            <input
+              type="text"
+              placeholder="Filter logs..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{ background: 'transparent', border: 'none', color: '#c9d1d9', fontSize: '10.5px', outline: 'none', width: '130px' }}
+            />
+            {searchTerm && (
+              <X size={12} color="#8b949e" style={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
+            )}
+          </div>
         </div>
 
         {/* Terminal Body */}
         <div style={{
-          flex: 1, padding: '16px', overflowY: 'auto', background: '#090d10',
+          flex: 1, padding: '14px 18px', overflowY: 'auto', background: '#090d10',
           fontFamily: "'Fira Code', 'Courier New', Courier, monospace", fontSize: '11.5px', lineHeight: '1.6'
         }}>
-          {logs.map((line, idx) => {
+          {filteredLogs.map((line, idx) => {
             const parsed = parseLogLevel(line);
             return (
-              <div key={idx} style={{ color: parsed.color, fontWeight: parsed.fontWeight, whiteSpace: 'pre-wrap' }}>
-                {parsed.text}
+              <div key={idx} style={{ display: 'flex', gap: '12px' }}>
+                <span style={{ color: '#484f58', userSelect: 'none', width: '28px', textAlign: 'right', fontSize: '10px' }}>
+                  {idx + 1}
+                </span>
+                <div style={{ color: parsed.color, fontWeight: parsed.fontWeight, whiteSpace: 'pre-wrap', flex: 1 }}>
+                  {parsed.text}
+                </div>
               </div>
             );
           })}
           {isSimulating && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#10b981', marginTop: '6px' }}>
-              <span style={{ width: '6px', height: '12px', background: '#10b981', display: 'inline-block', animation: 'pulse 1s infinite' }}></span>
-              <span>Running simulation...</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', marginTop: '8px', paddingLeft: '40px' }}>
+              <span style={{ width: '6px', height: '12px', background: '#10b981', display: 'inline-block' }}></span>
+              <span>Running live simulation...</span>
             </div>
           )}
           <div ref={terminalEndRef} />
@@ -241,12 +278,23 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
             <button
               onClick={handleCopyLogs}
               style={{
-                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px',
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
                 background: '#21262d', color: '#c9d1d9', border: '1px solid #30363d',
                 borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer'
               }}
             >
-              <Copy size={12} /> Copy Logs
+              <Copy size={12} /> Copy
+            </button>
+
+            <button
+              onClick={handleDownloadLogs}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
+                background: '#21262d', color: '#38bdf8', border: '1px solid #30363d',
+                borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer'
+              }}
+            >
+              <Download size={12} /> Download
             </button>
 
             <button

@@ -1,6 +1,6 @@
 /**
  * Central API client.
- * VITE_API_BASE_URL in .env → set to backend IP, e.g. http://192.168.10.31:8080/api
+ * VITE_API_BASE_URL in .env → set to backend IP, e.g. http://192.168.10.31:8081/api
  */
 export const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -187,4 +187,20 @@ export function apiGetDocumentClasses(appId, type = 'source') {
 
 export function apiGetClassProperties(appId, docClass, type = 'source') {
   return request(`/discovery/class-properties?appId=${appId}&docClass=${docClass}&type=${type}`)
+}
+
+export function apiGetFolderConfig() {
+  return request('/folders/config')
+}
+
+export function apiBrowseFolder(path) {
+  return request(`/folders/browse?path=${encodeURIComponent(path || '')}&_t=${Date.now()}`)
+}
+
+export function apiGetDocumentViewUrl(filePath) {
+  return `${BASE}/folders/view?path=${encodeURIComponent(filePath)}`
+}
+
+export function apiGetDocumentDownloadUrl(filePath) {
+  return `${BASE}/folders/view?path=${encodeURIComponent(filePath)}&download=true`
 }
