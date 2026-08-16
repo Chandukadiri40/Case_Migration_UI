@@ -564,7 +564,7 @@ startxref
               <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Document Name</th>
               <th style={{ padding: '11px 14px', fontWeight: '700', color: '#2563eb' }}>Doc_No</th>
               <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Document Type</th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155', textAlign: 'right' }}>Size</th>
+              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155', textAlign: 'right' }}>Document Size</th>
               <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Last Modified</th>
             </tr>
           </thead>

@@ -82,7 +82,7 @@ function getChecksumStatus(val, row) {
   return 'Pending'
 }
 
-export default function Reconciliation({ activeTab = 'case_metadata' }) {
+export default function Reconciliation({ activeTab = 'is' }) {
   const { showAlert } = useAlert()
   const [subTab, setSubTab] = useState(activeTab)
   const [reconcileTab, setReconcileTab] = useState('summary') // 'summary' | 'report' | 'exception' | 'checksum'
@@ -1190,44 +1190,40 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         {/* Top-Level Row: Mode Switcher & Auto Refresh */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold' }}>
-              <FileSpreadsheet size={16} color="#4f46e5" /> Reconciliation
-            </h2>
-            
-            <div style={{ display: 'flex', gap: '3px', background: '#e2e8f0', padding: '2px', borderRadius: '7px' }}>
-              <button
-                onClick={() => handleSubTabChange('case_metadata')}
-                style={{
-                  padding: '4px 14px',
-                  borderRadius: '5px',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
-                  color: subTab === 'case_metadata' ? '#4f46e5' : '#64748b',
-                  boxShadow: subTab === 'case_metadata' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                  transition: 'all 0.15s'
-                }}
-              >
-                 Case Reconciliation
-              </button>
+            <div style={{ display: 'flex', gap: '3px', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <button
                 onClick={() => handleSubTabChange('is')}
                 style={{
-                  padding: '4px 14px',
-                  borderRadius: '5px',
-                  fontSize: '11px',
+                  padding: '5px 16px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
                   fontWeight: '700',
                   border: 'none',
                   cursor: 'pointer',
                   background: subTab === 'is' ? '#ffffff' : 'transparent',
-                  color: subTab === 'is' ? '#4f46e5' : '#64748b',
-                  boxShadow: subTab === 'is' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  color: subTab === 'is' ? '#2563eb' : '#64748b',
+                  boxShadow: subTab === 'is' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                   transition: 'all 0.15s'
                 }}
               >
-                IS Reconciliation
+                IS Migration
+              </button>
+              <button
+                onClick={() => handleSubTabChange('case_metadata')}
+                style={{
+                  padding: '5px 16px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
+                  color: subTab === 'case_metadata' ? '#2563eb' : '#64748b',
+                  boxShadow: subTab === 'case_metadata' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s'
+                }}
+              >
+                Case Migration
               </button>
             </div>
           </div>
@@ -1245,7 +1241,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
           )}
         </div>
 
-        {/* Sub-Tabs: Reconciliation Dashboard, Recon Report, Exception Report, Checksum Report */}
+        {/* Sub-Tabs: Dashboard, Daily Report, Exception Report, Checksum Report */}
         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
           {['summary', 'report', 'exception', 'checksum'].filter(tab => !(subTab === 'case_metadata' && tab === 'checksum')).map(tab => (
             <button
@@ -1264,7 +1260,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                 whiteSpace: 'nowrap'
               }}
             >
-              {tab === 'summary' ? 'Reconciliation Dashboard' : tab === 'report' ? 'Recon Report' : tab === 'exception' ? 'Exception Report' : 'Checksum Report'}
+              {tab === 'summary' ? 'Dashboard' : tab === 'report' ? 'Daily Report' : tab === 'exception' ? 'Exception Report' : 'Checksum Report'}
             </button>
           ))}
         </div>

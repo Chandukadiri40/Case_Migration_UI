@@ -188,18 +188,31 @@ export default function SearchDocs() {
 
   function extractDocNameFromRow(row) {
     if (!row) return 'Document.pdf'
-    const fmt = row.f_docformat || row.document_format || row.doc_format || ''
-    const nameMatch = fmt.match(/name=["']?([^"']+)["']?/) || fmt.match(/([a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)/)
-    if (nameMatch && nameMatch[1]) {
-      return nameMatch[1]
-    }
+    
     if (row.filename) return row.filename
     if (row.f_filename) return row.f_filename
     if (row.doc_name) return row.doc_name
+
+    const fmt = row.f_docformat || row.document_format || row.doc_format || row.mime_type || row.mimetype || ''
+    const nameMatch = fmt.match(/name=["']?([^"';]+)["']?/) || fmt.match(/([a-zA-Z0-9_\-]+\.[a-zA-Z0-9]{2,5})/)
+    if (nameMatch && nameMatch[1]) {
+      return nameMatch[1]
+    }
     
     const docIds = extractDocIdsFromRow(row)
     const primaryId = docIds[0] || '125044'
-    return `Doc_${primaryId}.pdf`
+
+    let ext = 'pdf'
+    const fmtLower = fmt.toLowerCase()
+    if (fmtLower.includes('jpeg') || fmtLower.includes('jpg')) ext = 'jpg'
+    else if (fmtLower.includes('png')) ext = 'png'
+    else if (fmtLower.includes('tiff') || fmtLower.includes('tif')) ext = 'tif'
+    else if (fmtLower.includes('xml')) ext = 'xml'
+    else if (fmtLower.includes('json')) ext = 'json'
+    else if (fmtLower.includes('csv') || fmtLower.includes('excel') || fmtLower.includes('spreadsheet')) ext = 'csv'
+    else if (fmtLower.includes('text') || fmtLower.includes('plain')) ext = 'txt'
+
+    return `Doc_${primaryId}.${ext}`
   }
 
   function handleOpenViewer(row) {
@@ -216,14 +229,17 @@ export default function SearchDocs() {
     const matchedFile = folderFiles.find(f => (!f.isDirectory && !f.isDir) && f.name && f.name.includes(cleanId))
 
     let resolvedDocName = matchedFile ? matchedFile.name : extractDocNameFromRow(row)
-    let resolvedViewUrl = matchedFile ? apiGetDocumentViewUrl(matchedFile.path) : apiGetDocIdViewUrl(cleanId)
-    let resolvedDownloadUrl = matchedFile ? apiGetDocumentDownloadUrl(matchedFile.path) : apiGetDocIdDownloadUrl(cleanId)
+    let resolvedDocPath = matchedFile ? matchedFile.path : `/home/skts/IS Migration/IS Documents/${resolvedDocName}`
+    
+    // Always use exact file path view URL (same as Folders.jsx View Source Docs tab)
+    let resolvedViewUrl = apiGetDocumentViewUrl(resolvedDocPath)
+    let resolvedDownloadUrl = apiGetDocumentDownloadUrl(resolvedDocPath)
 
     setSelectedModalCase({
       caseId: row.case_id || 'N/A',
       docIds: ids.length > 0 ? ids : [cleanId],
       docName: resolvedDocName,
-      docPath: matchedFile ? matchedFile.path : `/home/skts/IS Migration/IS Documents/${resolvedDocName}`,
+      docPath: resolvedDocPath,
       viewUrl: resolvedViewUrl,
       downloadUrl: resolvedDownloadUrl,
       row
@@ -1342,6 +1358,11 @@ export default function SearchDocs() {
                                 }
 
                                 if (keyLower === 'doc_no' || keyLower === 'f_docnumber' || keyLower === 'documentid' || keyLower === 'p8_doc_id') {
+                                  // In ONLY IS migration tab: Remove doc numbers as clickable hyperlink (plain text display)
+                                  if (subTab === 'is') {
+                                    return <td key={c.key} style={tdStyle}>{val || '—'}</td>
+                                  }
+
                                   const docNumList = String(val || '').split(',').map(s => s.trim()).filter(Boolean)
                                   if (docNumList.length > 0) {
                                     return (

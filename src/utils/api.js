@@ -181,12 +181,14 @@ export function apiDeletePropertyMapping(templateId) {
   })
 }
 
-export function apiGetDocumentClasses(appId, type = 'source') {
-  return request(`/discovery/doc-classes?appId=${appId}&type=${type}`)
+export function apiGetDocumentClasses(appId = '', type = 'source') {
+  return request(`/property-mappings/document-classes?type=${type}`)
+    .catch(() => request(`/discovery/doc-classes?appId=${appId || 'default'}&type=${type}`))
 }
 
-export function apiGetClassProperties(appId, docClass, type = 'source') {
-  return request(`/discovery/class-properties?appId=${appId}&docClass=${docClass}&type=${type}`)
+export function apiGetClassProperties(appId = '', docClass, type = 'source') {
+  return request(`/property-mappings/class-properties?docClass=${encodeURIComponent(docClass)}&type=${type}`)
+    .catch(() => request(`/discovery/class-properties?appId=${appId || 'default'}&docClass=${encodeURIComponent(docClass)}&type=${type}`))
 }
 
 export function apiGetFolderConfig() {

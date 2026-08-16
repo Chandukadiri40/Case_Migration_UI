@@ -259,6 +259,7 @@ export default function Configuration() { // NOSONAR
   const [targetDomain, setTargetDomain] = useState('');
   const [targetTimeout, setTargetTimeout] = useState('30');
   const [targetObjectStore, setTargetObjectStore] = useState('FNOS');
+  const [targetBatchImport, setTargetBatchImport] = useState('yes');
   const [targetDescription, setTargetDescription] = useState('');
   const [targetTestStatus, setTargetTestStatus] = useState('');
   const [testingTarget, setTestingTarget] = useState(false);
@@ -957,7 +958,7 @@ export default function Configuration() { // NOSONAR
               </div>
 
               <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
-                Staging database used by the Migration Environment's Core Services &amp; Connectors — stores job state, mapping, and reconciliation data.
+                Staging database used by the Migration Environment's Core Services &amp; Connectors — stores job state, mapping and reconciliation data.
               </div>
 
               {selectedDbIndex === null ? (
@@ -1155,7 +1156,7 @@ export default function Configuration() { // NOSONAR
             <div style={panelStyle}>
               <div style={sectionLabelStyle}>NAS / SAN Storage Configuration</div>
               <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
-                Local network storage mounted to the Migration Environment (File I/O / NFS) — used by extraction, transformation, and loader jobs for staged files.
+                Local network storage mounted to the Migration Environment (File I/O / NFS) — used by extraction, transformation and loader jobs for staged files.
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
@@ -1296,6 +1297,33 @@ export default function Configuration() { // NOSONAR
               <div>
                 <label style={labelStyle}>Object Store</label>
                 <input type="text" value={targetObjectStore} onChange={e => setTargetObjectStore(e.target.value)} placeholder="FNOS" style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={labelStyle}>Batch Import</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '24px', padding: '6px 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: targetBatchImport === 'yes' ? '#2563eb' : '#475569', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="targetBatchImport" 
+                      value="yes" 
+                      checked={targetBatchImport === 'yes'} 
+                      onChange={() => setTargetBatchImport('yes')} 
+                      style={{ accentColor: '#2563eb', cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    Yes
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600', color: targetBatchImport === 'no' ? '#2563eb' : '#475569', cursor: 'pointer' }}>
+                    <input 
+                      type="radio" 
+                      name="targetBatchImport" 
+                      value="no" 
+                      checked={targetBatchImport === 'no'} 
+                      onChange={() => setTargetBatchImport('no')} 
+                      style={{ accentColor: '#2563eb', cursor: 'pointer', width: '16px', height: '16px' }}
+                    />
+                    No
+                  </label>
+                </div>
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={labelStyle}>Description</label>
