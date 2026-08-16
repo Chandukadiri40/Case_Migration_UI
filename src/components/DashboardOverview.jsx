@@ -203,9 +203,9 @@ export default function DashboardOverview() {
       {/* Auto-refresh indicator */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '10px', paddingRight: '4px' }}>
         <div style={{ 
-          display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
+          display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#6B7280', 
           background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', 
-          fontFamily: 'monospace', fontWeight: 'bold', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          fontWeight: '600', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
         }}>
           <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
           <span>Auto-Refresh: {formatTime(countdown)}</span>

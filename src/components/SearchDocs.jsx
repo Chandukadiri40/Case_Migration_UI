@@ -767,14 +767,9 @@ export default function SearchDocs() {
   return (
     <div className="deliverables-container" style={{ padding: '10px 14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
-      {/* ── Top-Level Row: Mode Switcher (IS Migration vs Case Migration vs View Source Docs) ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+      {/* ── Top-Level Row: Mode Switcher (IS Migration vs Case Migration vs View Source Documents) ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-            <Search size={15} style={{ color: '#2563eb' }} />
-            <span>Search Documents</span>
-          </div>
-
           <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <button
               onClick={() => handleSubTabChange('is')}
@@ -825,7 +820,7 @@ export default function SearchDocs() {
                 transition: 'all 0.15s'
               }}
             >
-              View Source Docs
+              View Source Documents
             </button>
           </div>
         </div>

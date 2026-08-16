@@ -20,7 +20,7 @@ export default function Layout() {
     pageTitle = 'Configurations'
   } else if (path.startsWith('/property-mapping')) {
     crumb = 'Mapping'
-    pageTitle = ''
+    pageTitle = 'Mapping'
   } else if (path.startsWith('/jobs-configuration')) {
     crumb = 'Jobs Configuration'
     pageTitle = 'Jobs Configuration'
@@ -186,7 +186,7 @@ export default function Layout() {
             <div className="user-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 10px', borderRadius: '7px', border: '1px solid #E3E7EE' }}>
               <div className="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#EFF4FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700' }}>M</div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className="uname" style={{ fontSize: '12px', fontWeight: '600', color: '#1F2937', lineHeight: 1.2 }}>migration_user</span>
+                <span className="uname" style={{ fontSize: '12px', fontWeight: '600', color: '#1F2937', lineHeight: 1.2 }}>Migration_User</span>
               </div>
             </div>
           </div>

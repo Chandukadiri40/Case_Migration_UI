@@ -384,9 +384,9 @@ startxref
       {/* Header Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div>
-          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '10px', letterSpacing: '-0.02em' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(37,99,235,0.3)' }}>
-              <Folder color="#ffffff" size={18} />
+          <h2 style={{ margin: 0, color: '#1F2937', fontSize: '15px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(37,99,235,0.25)' }}>
+              <Folder color="#ffffff" size={15} />
             </div>
             Real-Time Linux Document Explorer
           </h2>
@@ -508,10 +508,10 @@ startxref
             })}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: '#475569' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', fontFamily: 'monospace', fontWeight: 'bold' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></span>
-              <span>Auto-refresh: 00:0{countdown}s</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: '#6B7280' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', fontWeight: '600', fontSize: '11.5px', color: '#6B7280', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
+              <span>Auto-Refresh: 00:0{countdown}s</span>
             </div>
 
             <button

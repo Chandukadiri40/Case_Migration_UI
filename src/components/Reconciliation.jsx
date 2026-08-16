@@ -1230,9 +1230,9 @@ export default function Reconciliation({ activeTab = 'is' }) {
           
           {reconcileTab !== 'exception' && (
             <div style={{ 
-              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
-              background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', 
-              fontFamily: 'monospace', fontWeight: 'bold', marginLeft: 'auto', marginRight: '4px',
+              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#6B7280', 
+              background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', 
+              fontWeight: '600', marginLeft: 'auto', marginRight: '4px',
               boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
             }}>
               <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>

@@ -268,7 +268,7 @@ export default function PropertyMapping() {
     const newRows = (rawProps || []).map(p => {
       const srcProp = p.sourceProperty || p.propertyName || p.propertyname;
       const srcSym = p.sourceSymbolicName || p.symbolicName || srcProp;
-      const srcType = p.sourceDataType || p.dataType || p.datatype || 'character varying';
+      const srcType = p.targetDataType || p.sourceDataType || p.dataType || 'STRING';
       const dispName = getSourceFieldDisplayName(srcProp);
 
       let tgtProp = '';
@@ -746,12 +746,9 @@ export default function PropertyMapping() {
       {/* ── Top Header Bar ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexShrink: 0 }}>
         <div>
-          <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 'bold' }}>
-            <FileText size={20} color="#8b5cf6" /> Metadata Mapping
+          <h2 style={{ margin: 0, color: '#1F2937', fontSize: '15px', fontWeight: '700' }}>
+            Metadata Mapping
           </h2>
-          <p style={{ margin: '3px 0 0 0', color: '#64748b', fontSize: '12px' }}>
-            Map source fields to target fields — use dropdowns, auto map, or custom property pairing.
-          </p>
         </div>
         
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
@@ -965,28 +962,31 @@ export default function PropertyMapping() {
                 </thead>
                 <tbody>
                   {viewingTemplate.mappings && viewingTemplate.mappings.length > 0 ? (
-                    viewingTemplate.mappings.map((m, idx) => (
-                      <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
-                        <td style={{ padding: '8px 14px', fontSize: '12.5px', color: '#0f172a', fontWeight: '600' }}>
-                          {getSourceFieldDisplayName(m.sourceProperty)}
-                        </td>
-                        <td style={{ padding: '8px 14px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
-                          <span style={{ fontSize: '11px', color: '#64748b', background: '#f8fafc', padding: '2px 7px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: getTypeColor(m.sourceDataType) }} />
-                            {formatTypeName(m.sourceDataType)}
-                          </span>
-                        </td>
-                        <td style={{ padding: '8px 14px', fontSize: '12.5px', color: '#059669', fontWeight: '700' }}>
-                          {m.targetProperty ? getTargetFieldDisplayName(m.targetProperty) : '—'}
-                        </td>
-                        <td style={{ padding: '8px 14px', fontSize: '11px', color: '#059669', fontWeight: '600' }}>
-                          <span style={{ fontSize: '11px', color: '#059669', background: '#f0fdf4', padding: '2px 7px', borderRadius: '10px', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: getTypeColor(m.targetDataType) }} />
-                            {formatTypeName(m.targetDataType)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    viewingTemplate.mappings.map((m, idx) => {
+                      const matchedType = m.targetDataType || m.sourceDataType || 'STRING';
+                      return (
+                        <tr key={m.sourceProperty || idx} style={{ borderBottom: '1px solid #f1f5f9' }} onMouseOver={e => e.currentTarget.style.background = '#f8fafc'} onMouseOut={e => e.currentTarget.style.background = 'white'}>
+                          <td style={{ padding: '8px 14px', fontSize: '12.5px', color: '#0f172a', fontWeight: '600' }}>
+                            {getSourceFieldDisplayName(m.sourceProperty)}
+                          </td>
+                          <td style={{ padding: '8px 14px', fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                            <span style={{ fontSize: '11px', color: '#64748b', background: '#f8fafc', padding: '2px 7px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: getTypeColor(matchedType) }} />
+                              {formatTypeName(matchedType)}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 14px', fontSize: '12.5px', color: '#059669', fontWeight: '700' }}>
+                            {m.targetProperty ? getTargetFieldDisplayName(m.targetProperty) : '—'}
+                          </td>
+                          <td style={{ padding: '8px 14px', fontSize: '11px', color: '#059669', fontWeight: '600' }}>
+                            <span style={{ fontSize: '11px', color: '#059669', background: '#f0fdf4', padding: '2px 7px', borderRadius: '10px', border: '1px solid #bbf7d0', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: getTypeColor(matchedType) }} />
+                              {formatTypeName(matchedType)}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>No properties mapped.</td>
