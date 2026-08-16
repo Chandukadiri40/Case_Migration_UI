@@ -86,7 +86,7 @@ function formatColumnHeader(colName) {
 
 export default function SearchDocs() {
   const { showAlert } = useAlert()
-  const [subTab, setSubTab] = useState('case_metadata') // 'case_metadata' | 'is'
+  const [subTab, setSubTab] = useState('is') // 'is' | 'case_metadata'
 
   // Core filter states
   const [selectedStatus, setSelectedStatus] = useState('')
@@ -595,56 +595,49 @@ export default function SearchDocs() {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Search Results')
-    XLSX.writeFile(wb, subTab === 'case_metadata' ? 'case_search_results.xlsx' : 'is_search_results.xlsx')
+    XLSX.writeFile(wb, subTab === 'is' ? 'is_migration_results.xlsx' : 'case_migration_results.xlsx')
   }
 
   return (
     <div className="deliverables-container" style={{ padding: '10px 14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
-      {/* ── Top-Level Row: Mode Switcher (Case Search vs IS Search) ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-            <Search size={15} style={{ color: '#4f46e5' }} />
-            <span>Search Documents</span>
-          </div>
-
-          <div style={{ display: 'flex', background: '#f1f5f9', padding: '2px', borderRadius: '7px', border: '1px solid #e2e8f0' }}>
-            <button
-              onClick={() => handleSubTabChange('case_metadata')}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
-                color: subTab === 'case_metadata' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'case_metadata' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.15s'
-              }}
-            >
-              Case Search
-            </button>
-            <button
-              onClick={() => handleSubTabChange('is')}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: subTab === 'is' ? '#ffffff' : 'transparent',
-                color: subTab === 'is' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'is' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.15s'
-              }}
-            >
-              IS Search
-            </button>
-          </div>
+      {/* ── Top-Level Row: Mode Switcher (IS Migration vs Case Migration) ── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+        <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <button
+            onClick={() => handleSubTabChange('is')}
+            style={{
+              padding: '5px 16px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '700',
+              border: 'none',
+              cursor: 'pointer',
+              background: subTab === 'is' ? '#ffffff' : 'transparent',
+              color: subTab === 'is' ? '#2563eb' : '#64748b',
+              boxShadow: subTab === 'is' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s'
+            }}
+          >
+            IS Migration
+          </button>
+          <button
+            onClick={() => handleSubTabChange('case_metadata')}
+            style={{
+              padding: '5px 16px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '700',
+              border: 'none',
+              cursor: 'pointer',
+              background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
+              color: subTab === 'case_metadata' ? '#2563eb' : '#64748b',
+              boxShadow: subTab === 'case_metadata' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s'
+            }}
+          >
+            Case Migration
+          </button>
         </div>
       </div>
 
@@ -672,9 +665,36 @@ export default function SearchDocs() {
             rowGap: '12px',
             alignItems: 'center'
           }}>
-            {/* ── 1. Top-Left: STATUS (4 options only) ── */}
+            {/* ── 1. Top-Left: DOCUMENT ID / CASE ID (Placed Before Status) ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>Status</span>
+              <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', width: '100px', minWidth: '100px', flexShrink: 0 }}>
+                {subTab === 'case_metadata' ? 'Case ID' : 'Document ID'}
+              </span>
+              <input
+                type="text"
+                placeholder={subTab === 'case_metadata' ? 'e.g. CASE-2023-000109' : 'e.g. 125152'}
+                value={selectedIds}
+                onChange={e => setSelectedIds(e.target.value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#0f172a',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  outline: 'none',
+                  width: '190px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* ── 2. Top-Centre: STATUS (4 options only) ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', width: '56px', minWidth: '56px', flexShrink: 0 }}>
+                Status
+              </span>
               <select
                 value={selectedStatus}
                 onChange={e => setSelectedStatus(e.target.value)}
@@ -697,29 +717,6 @@ export default function SearchDocs() {
                 <option value="In Progress">In Progress</option>
                 <option value="Failed">Failed</option>
               </select>
-            </div>
-
-            {/* ── 2. Top-Centre: CASE ID / DOCUMENT ID ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
-              <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>{subTab === 'case_metadata' ? 'Case ID' : 'Doc ID'}</span>
-              <input
-                type="text"
-                placeholder={subTab === 'case_metadata' ? 'e.g. CASE-2023-000109' : 'e.g. 125152'}
-                value={selectedIds}
-                onChange={e => setSelectedIds(e.target.value)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid #cbd5e1',
-                  background: '#f8fafc',
-                  color: '#0f172a',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  outline: 'none',
-                  width: '190px',
-                  boxSizing: 'border-box'
-                }}
-              />
             </div>
 
             {/* ── 3. Top-Right: SEARCH BUTTON ── */}
@@ -752,7 +749,9 @@ export default function SearchDocs() {
 
             {/* ── 4. Bottom-Left: FROM DATE ── */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>From</span>
+              <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', width: '100px', minWidth: '100px', flexShrink: 0 }}>
+                From
+              </span>
               <input
                 type="date"
                 value={selectedFromDate}
@@ -772,8 +771,10 @@ export default function SearchDocs() {
             </div>
 
             {/* ── 5. Bottom-Centre: TO DATE ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
-              <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>To</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap', width: '56px', minWidth: '56px', flexShrink: 0 }}>
+                To
+              </span>
               <input
                 type="date"
                 value={selectedToDate}
@@ -1071,7 +1072,7 @@ export default function SearchDocs() {
             <div className="grid-container" style={{ background: 'white', padding: '12px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 4px' }}>
                 <h3 style={{ margin: 0, color: '#1e293b', fontSize: '13px', fontWeight: 'bold' }}>
-                  {subTab === 'case_metadata' ? 'Case Search Results' : 'IS Search Results'} ({records.length} {records.length === 1 ? 'record' : 'records'})
+                  {subTab === 'is' ? 'IS Migration Results' : 'Case Migration Results'} ({records.length} {records.length === 1 ? 'record' : 'records'})
                 </h3>
                 {records.length > 0 && (
                   <div style={{ display: 'flex', gap: '6px' }}>

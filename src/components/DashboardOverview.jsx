@@ -301,29 +301,50 @@ export default function DashboardOverview() {
         </div>
 
         {/* Donut Chart panel */}
-        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px' }}>
-          <div className="panel-head" style={{ marginBottom: '14px' }}>
-            <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
-              Migration Status <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Current record distribution</small>
+        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div className="panel-head" style={{ marginBottom: '14px' }}>
+              <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
+                Migration Status <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Current record distribution</small>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <svg viewBox="0 0 120 120" width="130" height="130">
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#F4F6F9" strokeWidth="16"/>
+                {/* Dynamic segmented slices */}
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#0F9D58" strokeWidth="16" strokeDasharray={`${successCirc} 283`} strokeDashoffset="0" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#2563EB" strokeWidth="16" strokeDasharray={`${ipCirc} 283`} strokeDashoffset={`-${successCirc}`} transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#D92D20" strokeWidth="16" strokeDasharray={`${failedCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc}`} transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#98A2B3" strokeWidth="16" strokeDasharray={`${pendingCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc + failedCirc}`} transform="rotate(-90 60 60)"/>
+                
+                <text x="60" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#1F2937">{migratedPct}%</text>
+                <text x="60" y="72" textAnchor="middle" fontSize="9" fill="#98A2B3">Migrated</text>
+              </svg>
+              <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '9px', color: '#1F2937' }}>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '6px' }}></span>Migrated — {data.success.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '6px' }}></span>In Progress — {data.inProgress.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '6px' }}></span>Failed — {data.failed.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#98A2B3', borderRadius: '2px', marginRight: '6px' }}></span>Pending — {data.pending.toLocaleString()}</div>
+              </div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <svg viewBox="0 0 120 120" width="130" height="130">
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#F4F6F9" strokeWidth="16"/>
-              {/* Dynamic segmented slices */}
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#0F9D58" strokeWidth="16" strokeDasharray={`${successCirc} 283`} strokeDashoffset="0" transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#2563EB" strokeWidth="16" strokeDasharray={`${ipCirc} 283`} strokeDashoffset={`-${successCirc}`} transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#D92D20" strokeWidth="16" strokeDasharray={`${failedCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc}`} transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#98A2B3" strokeWidth="16" strokeDasharray={`${pendingCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc + failedCirc}`} transform="rotate(-90 60 60)"/>
-              
-              <text x="60" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#1F2937">{migratedPct}%</text>
-              <text x="60" y="72" text-anchor="middle" fontSize="9" fill="#98A2B3">Migrated</text>
-            </svg>
-            <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '9px', color: '#1F2937' }}>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '6px' }}></span>Migrated — {data.success.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '6px' }}></span>In Progress — {data.inProgress.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '6px' }}></span>Failed — {data.failed.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#98A2B3', borderRadius: '2px', marginRight: '6px' }}></span>Pending — {data.pending.toLocaleString()}</div>
+
+          {/* Daily Migrated Reports Summary */}
+          <div style={{ 
+            marginTop: '16px', 
+            padding: '10px 14px', 
+            background: '#F8FAFC', 
+            border: '1px solid #E2E8F0', 
+            borderRadius: '6px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '11px', color: '#64748B', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Daily Migrated Reports:</span>
+              <span style={{ fontSize: '15px', fontWeight: '700', color: '#0F9D58' }}>
+                {data.success.toLocaleString()} <span style={{ fontSize: '11.5px', fontWeight: '500', color: '#64748B' }}>reports</span>
+              </span>
             </div>
           </div>
         </div>
