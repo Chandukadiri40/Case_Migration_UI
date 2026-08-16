@@ -751,61 +751,61 @@ export default function SearchDocs() {
   return (
     <div className="deliverables-container" style={{ padding: '10px 14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
-      {/* ── Top-Level Row: Mode Switcher (Case Search vs IS Search) ── */}
+      {/* ── Top-Level Row: Mode Switcher (IS Migration vs Case Migration vs View Source Docs) ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 'bold', color: '#1e293b' }}>
-            <Search size={15} style={{ color: '#4f46e5' }} />
+            <Search size={15} style={{ color: '#2563eb' }} />
             <span>Search Documents</span>
           </div>
 
-          <div style={{ display: 'flex', background: '#f1f5f9', padding: '2px', borderRadius: '7px', border: '1px solid #e2e8f0' }}>
-            <button
-              onClick={() => handleSubTabChange('case_metadata')}
-              style={{
-                padding: '4px 12px',
-                borderRadius: '5px',
-                fontSize: '11px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
-                color: subTab === 'case_metadata' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'case_metadata' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.15s'
-              }}
-            >
-              Case Search
-            </button>
+          <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <button
               onClick={() => handleSubTabChange('is')}
               style={{
-                padding: '4px 12px',
-                borderRadius: '5px',
-                fontSize: '11px',
+                padding: '5px 16px',
+                borderRadius: '6px',
+                fontSize: '12px',
                 fontWeight: '700',
                 border: 'none',
                 cursor: 'pointer',
                 background: subTab === 'is' ? '#ffffff' : 'transparent',
-                color: subTab === 'is' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'is' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                color: subTab === 'is' ? '#2563eb' : '#64748b',
+                boxShadow: subTab === 'is' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s'
               }}
             >
-              IS Search
+              IS Migration
+            </button>
+            <button
+              onClick={() => handleSubTabChange('case_metadata')}
+              style={{
+                padding: '5px 16px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer',
+                background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
+                color: subTab === 'case_metadata' ? '#2563eb' : '#64748b',
+                boxShadow: subTab === 'case_metadata' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s'
+              }}
+            >
+              Case Migration
             </button>
             <button
               onClick={() => handleSubTabChange('source_docs')}
               style={{
-                padding: '4px 12px',
-                borderRadius: '5px',
-                fontSize: '11px',
+                padding: '5px 16px',
+                borderRadius: '6px',
+                fontSize: '12px',
                 fontWeight: '700',
                 border: 'none',
                 cursor: 'pointer',
                 background: subTab === 'source_docs' ? '#ffffff' : 'transparent',
-                color: subTab === 'source_docs' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'source_docs' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                color: subTab === 'source_docs' ? '#2563eb' : '#64748b',
+                boxShadow: subTab === 'source_docs' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s'
               }}
             >
