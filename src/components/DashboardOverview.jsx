@@ -22,21 +22,6 @@ export default function DashboardOverview() {
 
   const loadData = async (isAutoRefresh = false) => {
     try {
-      if (isAutoRefresh) {
-        // Mutate database: transition 1 pending record to success
-        await apiExecuteQuery(`
-          UPDATE doctaba 
-          SET migration_status = 'success', 
-              f_entrydate = ${Math.floor(Date.now() / (1000 * 60 * 60 * 24))} 
-          WHERE f_docnumber IN (
-            SELECT f_docnumber 
-            FROM doctaba 
-            WHERE LOWER(migration_status) = 'pending' 
-            LIMIT 1
-          )
-        `)
-      }
-
       // 1. Fetch Overall Counts
       const queryOverall = `
         SELECT 

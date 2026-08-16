@@ -68,6 +68,20 @@ function cleanDateToDDMMYYYY(val) {
   return val
 }
 
+// Comprehensive Checksum Status Helper resolving: 'Matched', 'Pending', 'Mismatched'
+function getChecksumStatus(val, row) {
+  const v = String(val || '').toLowerCase().trim()
+  if (v === 'pending') return 'Pending'
+  if (v === 'matched' || v === 'completed' || v === 'success' || v === 'migrated') return 'Matched'
+  if (v === 'mismatched' || v === 'mismatch' || v === 'failed') return 'Mismatched'
+  
+  if (row?.checksumbefore && row?.checksumafter && String(row.checksumbefore).trim() !== '' && String(row.checksumafter).trim() !== '') {
+    return String(row.checksumbefore).trim() === String(row.checksumafter).trim() ? 'Matched' : 'Mismatched'
+  }
+  
+  return 'Pending'
+}
+
 export default function Reconciliation({ activeTab = 'case_metadata' }) {
   const { showAlert } = useAlert()
   const [subTab, setSubTab] = useState(activeTab)
@@ -102,20 +116,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   const [records, setRecords] = useState([])
   const [customMappings, setCustomMappings] = useState([]) // Loaded from doc_class_index
   const [docClasses, setDocClasses] = useState([]) // Loaded from document_class
-
-  const [customReportData, setCustomReportData] = useState([
-    { class: 'WBD_COLD_BL', year: '2009', total: 1004029, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2010', total: 1923950, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2011', total: 1781886, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2012', total: 1697932, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2013', total: 1853505, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2014', total: 1882875, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2015', total: 1627093, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2016', total: 1911698, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2017', total: 1588677, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-    { class: '', year: '2018', total: 1444471, extracted: 1180527, migrated: 0, failed: 0, remaining: 263944, completion: '81.7%', pctFailed: '0.0%', status: 'IN PROGRESS' },
-    { class: '', year: '2019', total: 542731, extracted: 202599, migrated: 0, failed: 0, remaining: 340132, completion: '37.3%', pctFailed: '0.0%', status: 'IN PROGRESS' }
-  ])
+  const [customReportData, setCustomReportData] = useState([])
 
   // Reset status and clear data when tab changes
   useEffect(() => {
@@ -161,38 +162,6 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
     // EXCEPT when in report or summary modes which automatically queries all database records
     if (reconcileTab !== 'report' && reconcileTab !== 'summary' && statusFilter === '' && idsFilter.trim() === '' && fromDateFilter === '' && toDateFilter === '' && !isChecksumMode) return
 
-    if (isAutoRefresh) {
-      try {
-        if (subTab === 'case_metadata') {
-          await apiExecuteQuery(`
-            UPDATE case_metadata 
-            SET migration_status = 'success', 
-                migrated_date = CURRENT_TIMESTAMP 
-            WHERE doc_no IN (
-              SELECT doc_no 
-              FROM case_metadata 
-              WHERE LOWER(migration_status) = 'pending' 
-              LIMIT 1
-            )
-          `)
-        } else {
-          await apiExecuteQuery(`
-            UPDATE doctaba 
-            SET migration_status = 'success', 
-                f_entrydate = ${Math.floor(Date.now() / (1000 * 60 * 60 * 24))} 
-            WHERE f_docnumber IN (
-              SELECT f_docnumber 
-              FROM doctaba 
-              WHERE LOWER(migration_status) = 'pending' 
-              LIMIT 1
-            )
-          `)
-        }
-      } catch (e) {
-        console.error("Failed to mutate database for auto-refresh simulation:", e)
-      }
-    }
-
     setLoading(true)
     setError('')
 
@@ -217,76 +186,73 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
     const toDays = getDaysSinceEpoch(toDateFilter)
 
     try {
-      if (reconcileTab === 'report' && !isCase) {
-        // Fetch custom year-wise report data
-        const reportQuery = `
-          SELECT 
-            TO_CHAR(DATE '1970-01-01' + s.f_entrydate::integer, 'YYYY') as yr,
-            COUNT(*) as total,
-            SUM(CASE WHEN LOWER(s.extracted_status) IN ('extracted', 'success') THEN 1 ELSE 0 END) as extracted,
-            SUM(CASE WHEN LOWER(s.migration_status) IN ('success', 'migrated') THEN 1 ELSE 0 END) as migrated,
-            SUM(CASE WHEN LOWER(s.migration_status) = 'failed' THEN 1 ELSE 0 END) as failed
-          FROM doctaba s
-          GROUP BY yr
-          ORDER BY yr
-        `
-        const dbReportRows = await apiExecuteQuery(reportQuery)
-        
-        let activeClassName = 'WBD_COLD_BL'
-        try {
-          const classRes = await apiExecuteQuery("SELECT f_docclassname FROM public.document_class LIMIT 1")
-          if (classRes && classRes.length > 0 && classRes[0].f_docclassname) {
-            activeClassName = classRes[0].f_docclassname
+      if (reconcileTab === 'report') {
+        if (isCase) {
+          // Fetch dynamic report data from case_metadata table with real data analysis
+          const caseNormDateSql = `(
+            CASE 
+              WHEN case_created_date::text ~ '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}' THEN SUBSTRING(case_created_date::text FROM 1 FOR 4) || '-' || SUBSTRING(case_created_date::text FROM 6 FOR 2) || '-' || SUBSTRING(case_created_date::text FROM 9 FOR 2)
+              WHEN case_created_date::text ~ '^[0-9]{2}[-/][0-9]{2}[-/][0-9]{4}' THEN SUBSTRING(case_created_date::text FROM 7 FOR 4) || '-' || SUBSTRING(case_created_date::text FROM 4 FOR 2) || '-' || SUBSTRING(case_created_date::text FROM 1 FOR 2)
+              WHEN case_created_date::text ~ '^[0-9]+$' THEN TO_CHAR(DATE '1970-01-01' + case_created_date::text::integer, 'YYYY-MM-DD')
+              ELSE SUBSTRING(case_created_date::text FROM 1 FOR 10)
+            END
+          )`
+          const caseReportWhere = []
+          if (idList.length > 0) {
+            const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
+            caseReportWhere.push(`(doc_no::text IN (${idStrList}) OR case_id::text IN (${idStrList}))`)
           }
-        } catch (e) {
-          console.error("Failed to query active f_docclassname for report:", e)
-        }
+          if (fromDateFilter) {
+            caseReportWhere.push(`${caseNormDateSql} >= '${fromDateFilter}'`)
+          }
+          if (toDateFilter) {
+            caseReportWhere.push(`${caseNormDateSql} <= '${toDateFilter}'`)
+          }
+          const whereSql = caseReportWhere.length > 0 ? ` WHERE ${caseReportWhere.join(' AND ')}` : ''
 
-        const baseRows = [
-          { class: activeClassName, year: '2009', total: 1004029, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2010', total: 1923950, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2011', total: 1781886, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2012', total: 1697932, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2013', total: 1853505, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2014', total: 1882875, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2015', total: 1627093, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2016', total: 1911698, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2017', total: 1588677, extracted: null, migrated: null, failed: null, remaining: null, completion: null, pctFailed: null, status: '' },
-          { class: '', year: '2018', total: 1444471, extracted: 1180527, migrated: 0, failed: 0, remaining: 263944, completion: '81.7%', pctFailed: '0.0%', status: 'IN PROGRESS' },
-          { class: '', year: '2019', total: 542731, extracted: 202599, migrated: 0, failed: 0, remaining: 340132, completion: '37.3%', pctFailed: '0.0%', status: 'IN PROGRESS' }
-        ]
-        
-        const updatedRows = [...baseRows]
-        
-        ;(dbReportRows || []).forEach(dbRow => {
-          const yearStr = dbRow.yr
-          const total = Number(dbRow.total) || 0
-          const extracted = Number(dbRow.extracted) || 0
-          const migrated = Number(dbRow.migrated) || 0
-          const failed = Number(dbRow.failed) || 0
-          
-          // No. Remaining = Total - No. Migrated
-          const remaining = total - migrated
-          const completion = total > 0 ? ((migrated / total) * 100).toFixed(1) + '%' : '0.0%'
-          const pctFailed = total > 0 ? ((failed / total) * 100).toFixed(1) + '%' : '0.0%'
-          const status = remaining === 0 ? 'COMPLETED' : 'IN PROGRESS'
-          
-          const existingIdx = updatedRows.findIndex(r => r.year === yearStr)
-          if (existingIdx !== -1) {
-            updatedRows[existingIdx] = {
-              ...updatedRows[existingIdx],
-              total,
-              extracted,
-              migrated,
-              failed,
-              remaining,
-              completion,
-              pctFailed,
-              status
+          const reportQuery = `
+            SELECT 
+              class_name,
+              yr,
+              COUNT(*) as total,
+              SUM(CASE WHEN LOWER(COALESCE(extracted_status, '')) IN ('extracted', 'success') OR extracted_status IS NOT NULL THEN 1 ELSE 0 END) as extracted,
+              SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('success', 'migrated') THEN 1 ELSE 0 END) as migrated,
+              SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'failed' THEN 1 ELSE 0 END) as failed
+            FROM (
+              SELECT 
+                COALESCE(NULLIF(case_type, ''), 'Standard Case') as class_name,
+                COALESCE(NULLIF(SUBSTRING(case_created_date::text FROM '[0-9]{4}'), ''), 'Unknown') as yr,
+                extracted_status,
+                migration_status
+              FROM case_metadata${whereSql}
+            ) sub
+            GROUP BY class_name, yr
+            ORDER BY class_name, yr
+          `
+          const dbReportRows = await apiExecuteQuery(reportQuery)
+          const calculatedRows = (dbReportRows || []).map(dbRow => {
+            const yearStr = (dbRow.yr && dbRow.yr !== 'null' && dbRow.yr !== 'undefined') ? dbRow.yr : '—'
+            const total = Number(dbRow.total) || 0
+            const extractedRaw = Number(dbRow.extracted) || 0
+            const extracted = extractedRaw > 0 ? extractedRaw : total
+            const migrated = Number(dbRow.migrated) || 0
+            const failed = Number(dbRow.failed) || 0
+            
+            const remaining = Math.max(0, total - migrated)
+            const completion = total > 0 ? ((migrated / total) * 100).toFixed(1) + '%' : '0.0%'
+            const pctFailed = total > 0 ? ((failed / total) * 100).toFixed(1) + '%' : '0.0%'
+            
+            let status = 'PENDING'
+            if (migrated === 0 && failed === 0) {
+              status = 'PENDING'
+            } else if (remaining === 0 && total > 0) {
+              status = 'COMPLETED'
+            } else {
+              status = 'IN PROGRESS'
             }
-          } else {
-            updatedRows.push({
-              class: '',
+
+            return {
+              class: dbRow.class_name,
               year: yearStr,
               total,
               extracted,
@@ -296,20 +262,126 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
               completion,
               pctFailed,
               status
-            })
+            }
+          })
+          setCustomReportData(calculatedRows)
+        } else {
+          // Fetch real dynamic year-wise and class-wise report data from doctaba
+          const isReportWhere = []
+          if (idList.length > 0) {
+            const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
+            isReportWhere.push(`s.f_docnumber::text IN (${idStrList})`)
           }
-        })
-        
-        setCustomReportData(updatedRows)
+          if (fromDays != null) {
+            isReportWhere.push(`s.f_entrydate >= ${fromDays}`)
+          }
+          if (toDays != null) {
+            isReportWhere.push(`s.f_entrydate <= ${toDays}`)
+          }
+          const isWhereSql = isReportWhere.length > 0 ? ` WHERE ${isReportWhere.join(' AND ')}` : ''
+
+          const reportQuery = `
+            SELECT 
+              class_num,
+              yr,
+              COUNT(*) as total,
+              SUM(CASE WHEN LOWER(COALESCE(extracted_status, '')) IN ('extracted', 'success') OR extracted_status IS NOT NULL THEN 1 ELSE 0 END) as extracted,
+              SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('success', 'migrated') THEN 1 ELSE 0 END) as migrated,
+              SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'failed' THEN 1 ELSE 0 END) as failed
+            FROM (
+              SELECT 
+                s.f_docclassnumber as class_num,
+                CASE 
+                  WHEN s.f_entrydate::text ~ '^[0-9]+$' THEN TO_CHAR(DATE '1970-01-01' + s.f_entrydate::integer, 'YYYY')
+                  WHEN s.f_entrydate::text ~ '^[0-9]{4}' THEN SUBSTRING(s.f_entrydate::text FROM 1 FOR 4)
+                  ELSE TO_CHAR(CURRENT_DATE, 'YYYY')
+                END as yr,
+                s.extracted_status,
+                s.migration_status
+              FROM doctaba s${isWhereSql}
+            ) sub
+            GROUP BY class_num, yr
+            ORDER BY class_num, yr
+          `
+          const dbReportRows = await apiExecuteQuery(reportQuery)
+          
+          let loadedClasses = docClasses
+          if (!loadedClasses || loadedClasses.length === 0) {
+            try {
+              const classRes = await apiExecuteQuery("SELECT f_docclassnumber, f_docclassname FROM public.document_class")
+              if (classRes && classRes.length > 0) {
+                loadedClasses = classRes
+                setDocClasses(classRes)
+              }
+            } catch (e) {
+              console.error("Failed to query document_class for report:", e)
+            }
+          }
+
+          const calculatedRows = (dbReportRows || []).map(dbRow => {
+            const yearStr = dbRow.yr || '2026'
+            const total = Number(dbRow.total) || 0
+            const extractedRaw = Number(dbRow.extracted) || 0
+            // In IS source table, records in doctaba are extracted documents
+            const extracted = extractedRaw > 0 ? extractedRaw : total
+            const migrated = Number(dbRow.migrated) || 0
+            const failed = Number(dbRow.failed) || 0
+            
+            // No. Remaining = Total - No. Migrated
+            const remaining = Math.max(0, total - migrated)
+            const completion = total > 0 ? ((migrated / total) * 100).toFixed(1) + '%' : '0.0%'
+            const pctFailed = total > 0 ? ((failed / total) * 100).toFixed(1) + '%' : '0.0%'
+            
+            let status = 'PENDING'
+            if (migrated === 0 && failed === 0) {
+              status = 'PENDING'
+            } else if (remaining === 0 && total > 0) {
+              status = 'COMPLETED'
+            } else {
+              status = 'IN PROGRESS'
+            }
+            
+            const matchingClass = (loadedClasses || []).find(dc => Number(dc.f_docclassnumber) === Number(dbRow.class_num))
+            const className = matchingClass?.f_docclassname || (dbRow.class_num ? `Class ${dbRow.class_num}` : 'WBD_COLD_BL')
+
+            return {
+              class: className,
+              year: yearStr,
+              total,
+              extracted,
+              migrated,
+              failed,
+              remaining,
+              completion,
+              pctFailed,
+              status
+            }
+          })
+          
+          setCustomReportData(calculatedRows)
+        }
       } else if (isChecksumMode) {
         // ── Checksum Mode (Queries ischecksumtable) ──
-        // Only shows insights/records for migrated status (Completed/Success)
         let countQuery = `
           SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN LOWER(checksum_status) IN ('completed', 'success', 'migrated') THEN 1 ELSE 0 END) as success,
-            SUM(CASE WHEN LOWER(checksum_status) = 'pending' THEN 1 ELSE 0 END) as pending,
-            SUM(CASE WHEN LOWER(checksum_status) NOT IN ('completed', 'success', 'migrated', 'pending') THEN 1 ELSE 0 END) as failed
+            SUM(CASE 
+              WHEN LOWER(COALESCE(checksum_status, '')) = 'pending' THEN 0
+              WHEN LOWER(COALESCE(checksum_status, '')) IN ('completed', 'success', 'migrated', 'matched') THEN 1
+              WHEN (checksum_status IS NULL OR checksum_status = '') AND checksumbefore IS NOT NULL AND checksumafter IS NOT NULL AND checksumbefore != '' AND checksumafter != '' AND checksumbefore = checksumafter THEN 1
+              ELSE 0 
+            END) as success,
+            SUM(CASE 
+              WHEN LOWER(COALESCE(checksum_status, '')) = 'pending' THEN 0
+              WHEN LOWER(COALESCE(checksum_status, '')) IN ('mismatched', 'failed', 'mismatch') THEN 1
+              WHEN (checksum_status IS NULL OR checksum_status = '') AND checksumbefore IS NOT NULL AND checksumafter IS NOT NULL AND checksumbefore != '' AND checksumafter != '' AND checksumbefore != checksumafter THEN 1
+              ELSE 0 
+            END) as failed,
+            SUM(CASE 
+              WHEN LOWER(COALESCE(checksum_status, '')) = 'pending' THEN 1
+              WHEN (checksum_status IS NULL OR checksum_status = '') AND (checksumafter IS NULL OR checksumafter = '') THEN 1
+              ELSE 0 
+            END) as pending
           FROM ischecksumtable
         `
         const checksumWhereClauses = []
@@ -343,12 +415,11 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
             c.checksum_status 
           FROM ischecksumtable c 
           LEFT JOIN doctaba s ON c.documentid = s.f_docnumber::text 
-          LEFT JOIN public.document_class dc ON s.f_docclassnumber = dc.f_docclassnumber 
-          WHERE LOWER(c.checksum_status) IN ('completed', 'success', 'migrated')
+          LEFT JOIN public.document_class dc ON s.f_docclassnumber = dc.f_docclassnumber
         `
         if (idList.length > 0) {
           const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
-          recordQuery += ` AND c.documentid::text IN (${idStrList})`
+          recordQuery += ` WHERE c.documentid::text IN (${idStrList})`
         }
         recordQuery += ` ORDER BY c.documentid DESC`
 
@@ -358,10 +429,10 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
       } else if (isCase) {
         // ── Case Details Mode (Queries case_metadata with specific column select) ──
         const caseCols = [
-          'case_id', 'case_type', 'case_status', 'customer_id', 'customer_name', 'policy_number',
-          'case_description', 'case_owner', 'department', 'case_created_date', 'case_closed_date',
+          'case_id', 'doc_no', 'case_type', 'customer_id', 'customer_name', 'policy_number',
+          'case_created_date', 'case_description', 'case_status', 'case_owner', 'department', 'case_closed_date',
           'priority', 'source_system', 'document_count', 'extracted_status', 'extracted_date',
-          'migrated_date', 'migration_status', 'error_info', 'filefullpath', 'doc_no', 'p8_doc_id'
+          'migrated_date', 'migration_status', 'error_info', 'filefullpath', 'p8_doc_id'
         ]
         const selectClause = caseCols.join(', ')
 
@@ -375,10 +446,24 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
             SUM(CASE WHEN LOWER(migration_status) IN ('pending') THEN 1 ELSE 0 END) as pending
           FROM case_metadata
         `
+        const caseNormDateSql = `(
+          CASE 
+            WHEN case_created_date::text ~ '^[0-9]{4}[-/][0-9]{2}[-/][0-9]{2}' THEN SUBSTRING(case_created_date::text FROM 1 FOR 4) || '-' || SUBSTRING(case_created_date::text FROM 6 FOR 2) || '-' || SUBSTRING(case_created_date::text FROM 9 FOR 2)
+            WHEN case_created_date::text ~ '^[0-9]{2}[-/][0-9]{2}[-/][0-9]{4}' THEN SUBSTRING(case_created_date::text FROM 7 FOR 4) || '-' || SUBSTRING(case_created_date::text FROM 4 FOR 2) || '-' || SUBSTRING(case_created_date::text FROM 1 FOR 2)
+            WHEN case_created_date::text ~ '^[0-9]+$' THEN TO_CHAR(DATE '1970-01-01' + case_created_date::text::integer, 'YYYY-MM-DD')
+            ELSE SUBSTRING(case_created_date::text FROM 1 FOR 10)
+          END
+        )`
         const caseWhereClauses = []
         if (idList.length > 0) {
           const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
           caseWhereClauses.push(`(doc_no::text IN (${idStrList}) OR case_id::text IN (${idStrList}))`)
+        }
+        if (fromDateFilter) {
+          caseWhereClauses.push(`${caseNormDateSql} >= '${fromDateFilter}'`)
+        }
+        if (toDateFilter) {
+          caseWhereClauses.push(`${caseNormDateSql} <= '${toDateFilter}'`)
         }
         if (caseWhereClauses.length > 0) {
           countQuery += ` WHERE ` + caseWhereClauses.join(' AND ')
@@ -401,11 +486,15 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         const recordWhereClauses = []
         
         if (statusFilter !== 'All' && statusFilter !== '') {
-          const filterVal = statusFilter.toLowerCase()
-          if (filterVal === 'migrated') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated')`)
-          } else if (filterVal === 'in progress' || filterVal === 'inprogress') {
+          const filterVal = statusFilter.toLowerCase().trim()
+          if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
+          } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
             recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
+          } else if (filterVal === 'failed' || filterVal === 'failure') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
+          } else if (filterVal === 'pending') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
           } else if (filterVal === 'remaining') {
             recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
           } else {
@@ -416,11 +505,17 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
           const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
           recordWhereClauses.push(`(doc_no::text IN (${idStrList}) OR case_id::text IN (${idStrList}))`)
         }
+        if (fromDateFilter) {
+          recordWhereClauses.push(`${caseNormDateSql} >= '${fromDateFilter}'`)
+        }
+        if (toDateFilter) {
+          recordWhereClauses.push(`${caseNormDateSql} <= '${toDateFilter}'`)
+        }
         if (recordWhereClauses.length > 0) {
           recordQuery += ` WHERE ` + recordWhereClauses.join(' AND ')
         }
         
-        recordQuery += ` ORDER BY doc_no DESC`
+        recordQuery += ` ORDER BY case_id ASC`
         const res = await apiExecuteQuery(recordQuery)
         setRecords(res || [])
 
@@ -548,11 +643,15 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         const recordWhereClauses = []
 
         if (statusFilter !== 'All' && statusFilter !== '') {
-          const filterVal = statusFilter.toLowerCase()
-          if (filterVal === 'migrated') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated')`)
-          } else if (filterVal === 'in progress' || filterVal === 'inprogress') {
+          const filterVal = statusFilter.toLowerCase().trim()
+          if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
+          } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
             recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
+          } else if (filterVal === 'failed' || filterVal === 'failure') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
+          } else if (filterVal === 'pending') {
+            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
           } else if (filterVal === 'remaining') {
             recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
           } else {
@@ -625,30 +724,97 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   // Calculation utilities
   const getPercent = (n) => summaryData.total ? ((n / summaryData.total) * 100).toFixed(1) + '%' : '0.0%'
 
+  // Helper to format any column key / custom metadata name nicely with spaces (e.g. PolicyNumber -> Policy Number, CIFNum -> CIF Num, AccountNo1 -> Account No 1)
+  const formatColumnHeader = (str) => {
+    if (!str) return ''
+    const trimmed = str.trim()
+    const lower = trimmed.toLowerCase()
+    if (lower === 'f_docnumber' || lower === 'doc_no' || lower === 'doc no' || lower === 'docnumber') return 'Document Number'
+    if (lower === 'f_docclassnumber' || lower === 'doc_class' || lower === 'doc class' || lower === 'docclass') return 'Document Class'
+    if (lower === 'f_docformat' || lower === 'doc_format' || lower === 'doc format' || lower === 'docformat') return 'Document Format'
+    if (lower === 'f_entrydate' || lower === 'entry_date' || lower === 'entrydate') return 'Created Date'
+    if (lower === 'migration_status' || lower === 'checksum_status') return 'Status'
+    if (lower === 'error_info') return 'Failure Message'
+    if (lower === 'migrated_date') return 'Migrated Date'
+    if (lower === 'p8_doc_id') return 'P8 Doc ID'
+    if (lower === 'case_created_date') return 'Created Date'
+    if (lower === 'filename') return 'Document Title'
+    if (lower === 'checksumbefore') return 'Checksum Before'
+    if (lower === 'checksumafter') return 'Checksum After'
+    if (lower === 'filefullpath') return 'File Full Path'
+    if (lower === 'folderpath') return 'Folder Path'
+    if (lower === 'retrieval_name') return 'Retrieval Name'
+
+    return trimmed
+      .replace(/^u_/i, '')
+      .replace(/^f_/i, '')
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase / PascalCase boundary
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2') // Acronym to Camel boundary (CIFNum -> CIF Num)
+      .replace(/([a-zA-Z])([0-9]+)/g, '$1 $2') // Letter to Number boundary (AccountNo1 -> Account No 1)
+      .replace(/([0-9]+)([a-zA-Z])/g, '$1 $2') // Number to Letter boundary
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, c => c.toUpperCase())
+  }
+
   // Dynamic header builder: Lists all columns dynamically based on layout rules
   let activeHeaders = []
 
   if (records.length > 0) {
     if (subTab === 'case_metadata') {
       // Case metadata dynamic columns
-      activeHeaders = Object.keys(records[0]).map(key => {
-        let label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-        if (key.toLowerCase() === 'doc_no') label = 'Case Number'
-        if (key.toLowerCase() === 'case_created_date') label = 'Created Date'
-        if (key.toLowerCase() === 'migration_status') label = 'Migration Status'
-        if (key.toLowerCase() === 'error_info') label = 'Failure Message'
-        return { key, label }
+      const recordKeys = Object.keys(records[0])
+      const isDateCol = (key) => {
+        const kLower = key.toLowerCase()
+        return kLower.includes('date') || kLower.includes('access')
+      }
+      
+      // Preferred column order requested by user: Case Id, Document Number, Case Type...
+      const preferredOrder = [
+        'case_id',
+        'doc_no',
+        'case_type',
+        'customer_id',
+        'customer_name',
+        'policy_number',
+        'case_created_date',
+        'case_description',
+        'department',
+        'priority',
+        'migration_status',
+        'error_info'
+      ]
+
+      // Ignore internal sequence / id keys from dynamic list so that S.No is strictly 1, 2, 3...
+      const ignoredKeys = ['sno', 's_no', 'id', 'serial_no', 'serialno']
+
+      const displayedKeys = preferredOrder.filter(k => 
+        recordKeys.some(rk => rk.toLowerCase() === k.toLowerCase())
+      )
+
+      recordKeys.forEach(k => {
+        const kLower = k.toLowerCase()
+        if (!ignoredKeys.includes(kLower) && !displayedKeys.some(dk => dk.toLowerCase() === kLower)) {
+          displayedKeys.push(k)
+        }
+      })
+
+      activeHeaders = displayedKeys.map(key => {
+        const actualKey = recordKeys.find(rk => rk.toLowerCase() === key.toLowerCase()) || key
+        const label = formatColumnHeader(actualKey)
+        return { key: actualKey, label, isDate: isDateCol(actualKey) }
       })
     } else if (isChecksumMode) {
       // Fixed Checksum Columns requested by the user
       activeHeaders = [
-        { key: 'documentid', label: 'Doc_Id' },
-        { key: 'doc_class', label: 'Doc Class' },
+        { key: 'documentid', label: 'Document Number' },
+        { key: 'doc_class', label: 'Document Class' },
         { key: 'filename', label: 'Document Title' },
-        { key: 'checksumbefore', label: 'checksumbefore' },
-        { key: 'checksumafter', label: 'checksumafter' },
+        { key: 'checksumbefore', label: 'Checksum Before' },
+        { key: 'checksumafter', label: 'Checksum After' },
         { key: 'migrated_date', label: 'Migrated Date', isDate: true },
-        { key: 'checksum_status', label: 'status' }
+        { key: 'checksum_status', label: 'Status' }
       ]
     } else {
       // doctaba mode: dynamic combination of system properties, custom metadata from doc_class_index, and status/path properties
@@ -676,13 +842,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
           return keyLower.startsWith('f_')
         })
         .map(key => {
-          let label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-          const keyLower = key.toLowerCase()
-          if (keyLower === 'f_docnumber') label = 'Doc No'
-          if (keyLower === 'f_docclassnumber') label = 'Doc Class'
-          if (keyLower === 'f_entrydate') label = 'Created Date'
-          if (keyLower === 'f_docformat') label = 'Doc Format'
-          return { key, label, isDate: isDateColumn(key, false) }
+          return { key, label: formatColumnHeader(key), isDate: isDateColumn(key, false) }
         })
 
       // 2. Custom metadata fields mapped in doc_class_index for the active f_docclassnumber
@@ -694,7 +854,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
           const isDate = m.f_indexname.toLowerCase().includes('date')
           return {
             key: actualKey || m.f_columnname,
-            label: m.f_indexname,
+            label: formatColumnHeader(m.f_indexname),
             isDate
           }
         })
@@ -709,10 +869,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         .filter(key => recordKeys.some(rk => rk.toLowerCase() === key.toLowerCase()))
         .map(key => {
           const actualKey = recordKeys.find(rk => rk.toLowerCase() === key.toLowerCase())
-          let label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-          if (key === 'migration_status') label = 'Status'
-          if (key === 'error_info') label = 'Failure Message'
-          return { key: actualKey, label }
+          return { key: actualKey, label: formatColumnHeader(key) }
         })
 
       activeHeaders = [...systemHeaders, ...mappedCustomColumns, ...specificHeaders]
@@ -722,24 +879,32 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   // Custom CSV Exporter for dynamic columns
   function handleExportCSV() {
     if (records.length === 0) return
-    const headers = activeHeaders.map(h => h.label)
+    const headers = ['S.No', ...activeHeaders.map(h => h.label)]
     const keys = activeHeaders.map(h => h.key)
     const escape = v => '"' + String(v ?? '').replace(/"/g, '""') + '"'
     
     const lines = [
       headers.map(escape).join(','),
-      ...records.map(r => keys.map(k => {
-        const colHeader = activeHeaders.find(h => h.key === k)
-        const val = colHeader?.isDate ? cleanDateToDDMMYYYY(r[k]) : r[k]
-        return escape(val)
-      }).join(','))
+      ...records.map((r, i) => [
+        escape(i + 1),
+        ...keys.map(k => {
+          const colHeader = activeHeaders.find(h => h.key === k)
+          let val = colHeader?.isDate ? cleanDateToDDMMYYYY(r[k]) : r[k]
+          if (k === 'checksum_status' || (isChecksumMode && colHeader?.label === 'Status')) {
+            val = getChecksumStatus(val, r)
+          }
+          return escape(val)
+        })
+      ].join(','))
     ]
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     const filename = isChecksumMode
       ? 'is_checksum_report.csv'
-      : (subTab === 'case_metadata' ? 'case_details_reconciliation.csv' : 'is_document_reconciliation.csv')
+      : reconcileTab === 'exception'
+        ? (subTab === 'case_metadata' ? 'case_exception_report.csv' : 'is_exception_report.csv')
+        : (subTab === 'case_metadata' ? 'case_details_reconciliation.csv' : 'is_document_reconciliation.csv')
     
     a.href = url
     a.download = filename
@@ -750,23 +915,82 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   // Custom Excel Exporter for dynamic columns
   function handleExportExcel() {
     if (records.length === 0) return
-    const headers = activeHeaders.map(h => h.label)
+    const headers = ['S.No', ...activeHeaders.map(h => h.label)]
     const keys = activeHeaders.map(h => h.key)
     
-    const rows = records.map(r => keys.map(k => {
-      const colHeader = activeHeaders.find(h => h.key === k)
-      const val = colHeader?.isDate ? cleanDateToDDMMYYYY(r[k]) : r[k]
-      return val ?? ''
-    }))
+    const rows = records.map((r, i) => [
+      i + 1,
+      ...keys.map(k => {
+        const colHeader = activeHeaders.find(h => h.key === k)
+        let val = colHeader?.isDate ? cleanDateToDDMMYYYY(r[k]) : r[k]
+        if (k === 'checksum_status' || (isChecksumMode && colHeader?.label === 'Status')) {
+          val = getChecksumStatus(val, r)
+        }
+        return val ?? ''
+      })
+    ])
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Reconciliation')
     
     const filename = isChecksumMode
       ? 'is_checksum_report.xlsx'
-      : (subTab === 'case_metadata' ? 'case_details_reconciliation.xlsx' : 'is_document_reconciliation.xlsx')
+      : reconcileTab === 'exception'
+        ? (subTab === 'case_metadata' ? 'case_exception_report.xlsx' : 'is_exception_report.xlsx')
+        : (subTab === 'case_metadata' ? 'case_details_reconciliation.xlsx' : 'is_document_reconciliation.xlsx')
     
     XLSX.writeFile(wb, filename)
+  }
+
+  // Recon Report CSV Exporter
+  function handleExportReconReportCSV() {
+    if (customReportData.length === 0) return
+    const headers = ['Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
+    const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const lines = [
+      headers.map(escape).join(','),
+      ...customReportData.map(r => [
+        r.class,
+        r.year,
+        r.total ?? 0,
+        r.extracted ?? 0,
+        r.migrated ?? 0,
+        r.failed ?? 0,
+        r.remaining ?? 0,
+        r.completion ?? '0.0%',
+        r.pctFailed ?? '0.0%',
+        r.status ?? ''
+      ].map(escape).join(','))
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = subTab === 'case_metadata' ? 'case_recon_report.csv' : 'is_recon_report.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Recon Report Excel Exporter
+  function handleExportReconReportExcel() {
+    if (customReportData.length === 0) return
+    const headers = ['Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
+    const rows = customReportData.map(r => [
+      r.class,
+      r.year,
+      r.total ?? 0,
+      r.extracted ?? 0,
+      r.migrated ?? 0,
+      r.failed ?? 0,
+      r.remaining ?? 0,
+      r.completion ?? '0.0%',
+      r.pctFailed ?? '0.0%',
+      r.status ?? ''
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Recon Report')
+    XLSX.writeFile(wb, subTab === 'case_metadata' ? 'case_recon_report.xlsx' : 'is_recon_report.xlsx')
   }
 
   // Handle main Reconciliation page tabs change
@@ -810,6 +1034,19 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
       setToDateFilter('')
       setSelectedToDate('')
       setSearchTrigger(prev => prev + 1)
+    } else if (tab === 'search') {
+      setIsChecksumMode(false)
+      setSelectedChecksumMode(false)
+      setSelectedStatus('')
+      setStatusFilter('')
+      setSelectedIds('')
+      setIdsFilter('')
+      setSelectedFromDate('')
+      setFromDateFilter('')
+      setSelectedToDate('')
+      setToDateFilter('')
+      setRecords([])
+      setSummaryData(INITIAL_SUMMARY)
     } else if (tab === 'checksum') {
       setIsChecksumMode(true)
       setSelectedChecksumMode(true)
@@ -890,6 +1127,11 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   function handleStatusChange(value) {
     setSelectedStatus(value)
     setSelectedChecksumMode(false) // Exit checksum mode when selecting a status
+    if (value === 'All' || value === '') {
+      setSelectedIds('')
+      setSelectedFromDate('')
+      setSelectedToDate('')
+    }
   }
 
   // Handle Search button click
@@ -924,74 +1166,75 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
   }
 
   return (
-    <div className="deliverables-container" style={{ padding: '14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div className="deliverables-container" style={{ padding: '10px 14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
       {/* ── Tabs Header ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px', padding: '0 4px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-        {/* Top-Level Tabs: Case Search and IS Search */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
-          <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '15px', fontWeight: 'bold' }}>
-            <FileSpreadsheet size={18} color="#4f46e5" /> Reconciliation
-          </h2>
-          
-          <div style={{ display: 'flex', gap: '4px', background: '#e2e8f0', padding: '3px', borderRadius: '8px' }}>
-            <button
-              onClick={() => handleSubTabChange('case_metadata')}
-              style={{
-                padding: '5px 16px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
-                color: subTab === 'case_metadata' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'case_metadata' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.15s'
-              }}
-            >
-              Case Search
-            </button>
-            <button
-              onClick={() => handleSubTabChange('is')}
-              style={{
-                padding: '5px 16px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer',
-                background: subTab === 'is' ? '#ffffff' : 'transparent',
-                color: subTab === 'is' ? '#4f46e5' : '#64748b',
-                boxShadow: subTab === 'is' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.15s'
-              }}
-            >
-              IS Search
-            </button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+        {/* Top-Level Row: Mode Switcher & Auto Refresh */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold' }}>
+              <FileSpreadsheet size={16} color="#4f46e5" /> Reconciliation
+            </h2>
+            
+            <div style={{ display: 'flex', gap: '3px', background: '#e2e8f0', padding: '2px', borderRadius: '7px' }}>
+              <button
+                onClick={() => handleSubTabChange('case_metadata')}
+                style={{
+                  padding: '4px 14px',
+                  borderRadius: '5px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: subTab === 'case_metadata' ? '#ffffff' : 'transparent',
+                  color: subTab === 'case_metadata' ? '#4f46e5' : '#64748b',
+                  boxShadow: subTab === 'case_metadata' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s'
+                }}
+              >
+                Case Search
+              </button>
+              <button
+                onClick={() => handleSubTabChange('is')}
+                style={{
+                  padding: '4px 14px',
+                  borderRadius: '5px',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: subTab === 'is' ? '#ffffff' : 'transparent',
+                  color: subTab === 'is' ? '#4f46e5' : '#64748b',
+                  boxShadow: subTab === 'is' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s'
+                }}
+              >
+                IS Search
+              </button>
+            </div>
           </div>
           
           {reconcileTab !== 'exception' && (
             <div style={{ 
-              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
-              background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', 
-              fontFamily: 'monospace', fontWeight: 'bold', marginLeft: 'auto', marginRight: '4px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+              display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', color: '#4b5563', 
+              background: '#fff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', 
+              fontFamily: 'monospace', fontWeight: 'bold'
             }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
+              <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 5px #10b981' }}></span>
               <span>Auto-Refresh: {formatTime(countdown)}</span>
             </div>
           )}
         </div>
 
-        {/* Sub-Tabs: Migration Summary, Reconciliation Report, Exception Report, Checksum Report */}
-        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', padding: '2px 0' }}>
-          {['summary', 'report', 'exception', 'checksum'].filter(tab => !(subTab === 'case_metadata' && tab === 'checksum')).map(tab => (
+        {/* Sub-Tabs: Reconciliation Dashboard, Recon Report, Exception Report, Search, Checksum Report */}
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
+          {['summary', 'report', 'exception', 'search', 'checksum'].filter(tab => !(subTab === 'case_metadata' && tab === 'checksum')).map(tab => (
             <button
               key={tab}
               onClick={() => handleReconcileTabChange(tab)}
               style={{
-                padding: '6px 14px',
+                padding: '5px 12px',
                 borderRadius: '6px',
                 fontSize: '11px',
                 fontWeight: '700',
@@ -1003,7 +1246,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                 whiteSpace: 'nowrap'
               }}
             >
-              {tab === 'summary' ? 'Reconciliation Dashboard' : tab === 'report' ? 'Recon Report' : tab === 'exception' ? 'Exception Report' : 'Checksum Report'}
+              {tab === 'summary' ? 'Reconciliation Dashboard' : tab === 'report' ? 'Recon Report' : tab === 'exception' ? 'Exception Report' : tab === 'search' ? 'Search' : 'Checksum Report'}
             </button>
           ))}
         </div>
@@ -1037,201 +1280,255 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
             
-            {/* Filter controls: Status heading with dropdown & Checksum Report Button beside it */}
-            {reconcileTab !== 'summary' && reconcileTab !== 'report' && reconcileTab !== 'exception' && reconcileTab !== 'checksum' && (
-              <div className="filters-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px', background: 'white', padding: '10px 14px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', flexWrap: 'wrap' }}>
-                {!selectedChecksumMode && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={labelStyle}>Status</span>
-                <select
-                  value={selectedStatus}
-                  onChange={e => handleStatusChange(e.target.value)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: '1.5px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    outline: 'none',
-                    minWidth: '180px'
-                  }}
-                >
-                  <option value="">-- Select Status --</option>
-                  <option value="All">Summary</option>
-                  <option value="Migrated">Migrated</option>
-                  <option value="Pending">Pending</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Failed">Failed</option>
-                </select>
-              </div>
-            )}
+            {/* Filter controls: Shown on Search Tab */}
+            {reconcileTab === 'search' && (
+              <div className="filters-panel" style={{
+                marginBottom: '12px',
+                background: 'white',
+                padding: '12px 18px',
+                borderRadius: '12px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                border: '1px solid #e2e8f0'
+              }}>
+                {(selectedStatus === 'All' || selectedStatus === '') ? (
+                  /* ── Single Compact Inline Row for Summary / Default Status ── */
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>Status</span>
+                      <select
+                        value={selectedStatus}
+                        onChange={e => handleStatusChange(e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          outline: 'none',
+                          width: '190px',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <option value="">-- Select Status --</option>
+                        <option value="All">Summary</option>
+                        <option value="Migrated">Migrated</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Failed">Failed</option>
+                      </select>
+                    </div>
 
-            {!selectedChecksumMode && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={labelStyle}>{subTab === 'case_metadata' ? 'Case ID' : 'Document ID'}</span>
-                <input
-                  type="text"
-                  placeholder=""
-                  value={selectedIds}
-                  onChange={e => setSelectedIds(e.target.value)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    border: '1.5px solid #cbd5e1',
-                    background: '#f8fafc',
-                    color: '#0f172a',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    outline: 'none',
-                    minWidth: '200px'
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Date Range Filters (Only for IS normal mode) */}
-            {subTab === 'is' && !selectedChecksumMode && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={labelStyle}>From</span>
-                  <input
-                    type="date"
-                    value={selectedFromDate}
-                    onChange={e => setSelectedFromDate(e.target.value)}
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: '8px',
-                      border: '1.5px solid #cbd5e1',
-                      background: '#f8fafc',
-                      color: '#0f172a',
-                      fontSize: '11px',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={labelStyle}>To</span>
-                  <input
-                    type="date"
-                    value={selectedToDate}
-                    onChange={e => setSelectedToDate(e.target.value)}
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: '8px',
-                      border: '1.5px solid #cbd5e1',
-                      background: '#f8fafc',
-                      color: '#0f172a',
-                      fontSize: '11px',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {selectedChecksumMode && (
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '14px' }}>ℹ️</span> Displays validation checksums for successfully migrated records.
-              </span>
-            )}
-
-            {!selectedChecksumMode ? (
-              <>
-                {/* Search Button */}
-                <button
-                  onClick={handleSearchClick}
-                  disabled={loading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    padding: '7px 20px',
-                    background: '#4f46e5',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '12px',
-                    transition: 'all 0.2s',
-                    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
-                    opacity: loading ? 0.7 : 1
-                  }}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" /> Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Search size={14} /> Search
-                    </>
-                  )}
-                </button>
-
-                {/* Clear Button */}
-                <button
-                  onClick={handleClearClick}
-                  disabled={loading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    padding: '7px 20px',
-                    background: 'white',
-                    color: '#475569',
-                    border: '1.5px solid #cbd5e1',
-                    borderRadius: '8px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontWeight: 'bold',
-                    fontSize: '12px',
-                    transition: 'all 0.2s',
-                    opacity: loading ? 0.7 : 1
-                  }}
-                >
-                  Clear
-                </button>
-              </>
-            ) : (
-              /* View Checksum Report Button */
-              <button
-                onClick={handleViewChecksumReport}
-                disabled={loading}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '7px 20px',
-                  background: '#4f46e5',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '12px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
-                  opacity: loading ? 0.7 : 1
-                }}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" /> Querying...
-                  </>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={handleSearchClick}
+                        disabled={loading}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '6px 20px',
+                          background: '#4f46e5',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          transition: 'all 0.2s',
+                          boxShadow: '0 3px 8px rgba(79, 70, 229, 0.25)',
+                          opacity: loading ? 0.7 : 1
+                        }}
+                      >
+                        {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Search
+                      </button>
+                      <button
+                        onClick={handleClearClick}
+                        disabled={loading}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '6px 18px',
+                          background: 'white',
+                          color: '#475569',
+                          border: '1.5px solid #cbd5e1',
+                          borderRadius: '8px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          transition: 'all 0.2s',
+                          opacity: loading ? 0.7 : 1
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <Database size={14} /> View Checksum Report
-                  </>
+                  /* ── 2x3 Grid for Specific Statuses (Migrated, Pending, In Progress, Failed) ── */
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto auto auto',
+                    justifyContent: 'start',
+                    columnGap: '32px',
+                    rowGap: '12px',
+                    alignItems: 'center'
+                  }}>
+                    {/* ── 1. Top-Left: STATUS ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>Status</span>
+                      <select
+                        value={selectedStatus}
+                        onChange={e => handleStatusChange(e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          outline: 'none',
+                          width: '190px',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        <option value="">-- Select Status --</option>
+                        <option value="All">Summary</option>
+                        <option value="Migrated">Migrated</option>
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Failed">Failed</option>
+                      </select>
+                    </div>
+
+                    {/* ── 2. Top-Centre: CASE ID / DOC ID ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
+                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>{subTab === 'case_metadata' ? 'Case ID' : 'Doc ID'}</span>
+                      <input
+                        type="text"
+                        placeholder={subTab === 'case_metadata' ? 'e.g. CASE-2023-000109' : 'e.g. 125152'}
+                        value={selectedIds}
+                        onChange={e => setSelectedIds(e.target.value)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                          outline: 'none',
+                          width: '190px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+
+                    {/* ── 3. Top-Right: SEARCH BUTTON ── */}
+                    <div>
+                      <button
+                        onClick={handleSearchClick}
+                        disabled={loading}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          width: '110px',
+                          height: '32px',
+                          background: '#4f46e5',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          transition: 'all 0.2s',
+                          boxShadow: '0 3px 8px rgba(79, 70, 229, 0.25)',
+                          opacity: loading ? 0.7 : 1
+                        }}
+                      >
+                        {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Search
+                      </button>
+                    </div>
+
+                    {/* ── 4. Bottom-Left: FROM DATE ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>From</span>
+                      <input
+                        type="date"
+                        value={selectedFromDate}
+                        onChange={e => setSelectedFromDate(e.target.value)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontSize: '11px',
+                          outline: 'none',
+                          width: '190px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+
+                    {/* ── 5. Bottom-Centre: TO DATE ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
+                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>To</span>
+                      <input
+                        type="date"
+                        value={selectedToDate}
+                        onChange={e => setSelectedToDate(e.target.value)}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '8px',
+                          border: '1.5px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontSize: '11px',
+                          outline: 'none',
+                          width: '190px',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+
+                    {/* ── 6. Bottom-Right: CLEAR BUTTON (Exactly Under Search!) ── */}
+                    <div>
+                      <button
+                        onClick={handleClearClick}
+                        disabled={loading}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          width: '110px',
+                          height: '32px',
+                          background: 'white',
+                          color: '#475569',
+                          border: '1.5px solid #cbd5e1',
+                          borderRadius: '8px',
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          transition: 'all 0.2s',
+                          opacity: loading ? 0.7 : 1
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
                 )}
-              </button>
+              </div>
             )}
-            </div>
-          )}
 
           {error ? (
             /* ── Database Error Banner ── */
@@ -1288,34 +1585,85 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
               {/* ── Summary Insights Tiles (Visible when 'Summary' is selected, or when Checksum Mode is active) ── */}
               {(statusFilter === 'All' || isChecksumMode || reconcileTab === 'summary') && (
                 isChecksumMode ? (
-                  /* ── Checksum Mode Insights (3 Tiles with Match & Mismatch Percentage) ── */
-                  <div className="cs-summary-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', margin: '0 4px' }}>
-                    {/* Total Records Tile */}
-                    <div className="cs-tile" style={{ '--tile-color': 'var(--primary)', padding: '12px 16px' }}>
-                      <div className="cs-tile-label">Total Records</div>
-                      <div className="cs-tile-value" style={{ fontSize: '24px', color: 'var(--primary-dark)' }}>
+                  /* ── Checksum Mode Insights (Total Checked, Matched, Mismatched, Pending Cards evenly distributed) ── */
+                  <div style={{ display: 'grid', gridTemplateColumns: summaryData.pending > 0 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)', gap: '16px', margin: '0 4px 14px 4px' }}>
+                    {/* Total Checked Card */}
+                    <div style={{
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      padding: '14px 20px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center'
+                    }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#64748b', marginBottom: '6px' }}>
+                        Total Checked
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
                         {summaryData.total.toLocaleString()}
                       </div>
-                      <div className="cs-tile-sub">Total documents verified</div>
                     </div>
 
-                    {/* Checksum Success / Matched Tile */}
-                    <div className="cs-tile" style={{ '--tile-color': 'var(--success)', padding: '12px 16px' }}>
-                      <div className="cs-tile-label">Checksum Success (Matched)</div>
-                      <div className="cs-tile-value" style={{ fontSize: '24px', color: 'var(--success)' }}>
+                    {/* Matched Card */}
+                    <div style={{
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      padding: '14px 20px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center'
+                    }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#059669', marginBottom: '6px' }}>
+                        Matched
+                      </div>
+                      <div style={{ fontSize: '24px', fontWeight: '800', color: '#059669', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
                         {summaryData.success.toLocaleString()}
                       </div>
-                      <div className="cs-tile-sub">{getPercent(summaryData.success)} rate</div>
                     </div>
 
-                    {/* Checksum Failed / Mismatched Tile */}
-                    <div className="cs-tile" style={{ '--tile-color': 'var(--danger)', padding: '12px 16px' }}>
-                      <div className="cs-tile-label">Checksum Failed (Mismatched)</div>
-                      <div className="cs-tile-value" style={{ fontSize: '24px', color: 'var(--danger)' }}>
-                        {(summaryData.total - summaryData.success).toLocaleString()}
+                    {/* Mismatched Card */}
+                    <div style={{
+                      background: 'white',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '10px',
+                      padding: '14px 20px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center'
+                    }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#dc2626', marginBottom: '6px' }}>
+                        Mismatched
                       </div>
-                      <div className="cs-tile-sub">{getPercent(summaryData.total - summaryData.success)} rate</div>
+                      <div style={{ fontSize: '24px', fontWeight: '800', color: '#dc2626', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                        {summaryData.failed.toLocaleString()}
+                      </div>
                     </div>
+
+                    {/* Pending Card */}
+                    {summaryData.pending > 0 && (
+                      <div style={{
+                        background: 'white',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '10px',
+                        padding: '14px 20px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center'
+                      }}>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#2563EB', marginBottom: '6px' }}>
+                          Pending
+                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: '800', color: '#2563EB', letterSpacing: '-0.02em', lineHeight: '1.2' }}>
+                          {summaryData.pending.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* ── Normal Mode Insights (Reconciliation Summary panel only) ── */
@@ -1420,149 +1768,146 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
               )}
 
               {reconcileTab === 'report' && (
-                <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 18px', margin: '0 4px 16px 4px', maxWidth: subTab === 'case_metadata' ? '800px' : '100%', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', overflowX: 'auto' }}>
-                  {subTab === 'case_metadata' ? (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-                      <thead>
-                        <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #e2e8f0' }}>
-                          <th style={{ textAlign: 'left', padding: '10px 14px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '10.5px', letterSpacing: '0.05em', width: '260px' }}>Reconciliation Check</th>
-                          <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '10.5px', letterSpacing: '0.05em', width: '130px' }}>Source Count</th>
-                          <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '10.5px', letterSpacing: '0.05em', width: '130px' }}>Target Count</th>
-                          <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '10.5px', letterSpacing: '0.05em', width: '110px' }}>Variance</th>
-                          <th style={{ textAlign: 'center', padding: '10px 14px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '10.5px', letterSpacing: '0.05em', width: '120px' }}>Result</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {/* Row 1: Document Count */}
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#1e293b', fontSize: '14px' }}>Document Count</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.total.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.total.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#64748b' }}>0</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>PASS</span>
-                          </td>
-                        </tr>
-                        {/* Row 2: Successfully Migrated */}
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', background: '#FAFBFC', transition: 'background 0.15s' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#334155', fontSize: '14px' }}>Successfully Migrated</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.total.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.success.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: (summaryData.total - summaryData.success) > 0 ? '#ef4444' : '#64748b' }}>
-                            {(summaryData.total - summaryData.success).toLocaleString()}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            {(summaryData.total - summaryData.success) === 0 ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>PASS</span>
-                            ) : (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#FEE2E2', color: '#991B1B', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>FAIL</span>
-                            )}
-                          </td>
-                        </tr>
-                        {/* Row 3: In-Progress */}
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#1e293b', fontSize: '14px' }}>In-Progress</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.inProgress.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>0</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: summaryData.inProgress > 0 ? '#f59e0b' : '#64748b' }}>
-                            {summaryData.inProgress.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            {summaryData.inProgress === 0 ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>PASS</span>
-                            ) : (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#FEF3C7', color: '#92400E', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>HOLD</span>
-                            )}
-                          </td>
-                        </tr>
-                        {/* Row 4: Pending */}
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', background: '#FAFBFC', transition: 'background 0.15s' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#334155', fontSize: '14px' }}>Pending</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.pending.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>0</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#64748b' }}>
-                            {summaryData.pending.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            {summaryData.pending === 0 ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>PASS</span>
-                            ) : (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#F1F2F4', color: '#6B7280', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>HOLD</span>
-                            )}
-                          </td>
-                        </tr>
-                        {/* Row 5: Failed */}
-                        <tr style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.15s' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: '600', color: '#1e293b', fontSize: '14px' }}>Failed</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>{summaryData.failed.toLocaleString()}</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: '#0f172a' }}>0</td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '13.5px', color: summaryData.failed > 0 ? '#ef4444' : '#64748b' }}>
-                            {summaryData.failed.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                            {summaryData.failed === 0 ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>PASS</span>
-                            ) : (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '65px', padding: '3px 8px', borderRadius: '20px', background: '#FEE2E2', color: '#991B1B', fontSize: '10.5px', fontWeight: '800', letterSpacing: '0.02em' }}>FAIL</span>
-                            )}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  ) : (
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-                      <thead>
-                        <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #e2e8f0' }}>
-                          <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Documentation Class</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Year</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Total Documents</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Extracted</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Migrated</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No of Failed</th>
-                          <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Remaining</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>% Completion</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>% Failed</th>
-                          <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {customReportData.map((row, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 1 ? '#FAFBFC' : 'white', transition: 'background 0.15s' }}>
-                            {idx === 0 ? (
-                              <td rowSpan={customReportData.length} style={{ padding: '10px 12px', fontWeight: 'bold', color: '#0f172a', fontSize: '11.5px', borderRight: '1px solid #f1f5f9', verticalAlign: 'top', background: '#FAFBFC' }}>
-                                {row.class}
-                              </td>
-                            ) : null}
-                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#334155', fontSize: '11px' }}>{row.year}</td>
-                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
-                              {row.total ? Number(row.total).toLocaleString() : '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
-                              {row.extracted ? Number(row.extracted).toLocaleString() : '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
-                              {row.migrated !== '' && row.migrated !== null ? Number(row.migrated).toLocaleString() : '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#ef4444' }}>
-                              {row.failed !== '' && row.failed !== null ? Number(row.failed).toLocaleString() : '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#64748b' }}>
-                              {row.remaining ? Number(row.remaining).toLocaleString() : '—'}
-                            </td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#0f172a' }}>{row.completion || '—'}</td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#ef4444' }}>{row.pctFailed || '—'}</td>
-                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                              {row.status === 'IN PROGRESS' ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '85px', padding: '3px 8px', borderRadius: '20px', background: '#FEF3C7', color: '#92400E', fontSize: '8.5px', fontWeight: '800', letterSpacing: '0.02em' }}>IN PROGRESS</span>
-                              ) : row.status === 'COMPLETED' ? (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: '85px', padding: '3px 8px', borderRadius: '20px', background: '#D1FAE5', color: '#065F46', fontSize: '8.5px', fontWeight: '800', letterSpacing: '0.02em' }}>COMPLETED</span>
-                              ) : '—'}
-                            </td>
+                <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 18px', margin: '0 4px 16px 4px', maxWidth: '100%', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', overflowX: 'auto' }}>
+                  <div>
+                    {/* Recon Report Header Toolbar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 2px' }}>
+                      <h3 style={{ margin: 0, color: '#1e293b', fontSize: '13px', fontWeight: 'bold' }}>
+                        Reconciliation Report ({customReportData.length} {customReportData.length === 1 ? 'row' : 'rows'})
+                      </h3>
+                      {customReportData.length > 0 && (
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button onClick={handleExportReconReportCSV} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#374151' }}>
+                            <Download size={12} /> CSV
+                          </button>
+                          <button onClick={handleExportReconReportExcel} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', fontSize: '11px', border: '1px solid #d1d5db', borderRadius: '6px', background: '#10b981', color: 'white', cursor: 'pointer' }}>
+                            <Download size={12} /> Excel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+                        <thead>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #e2e8f0' }}>
+                            <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Document Class</th>
+                            <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Year</th>
+                            <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Total Documents</th>
+                            <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Extracted</th>
+                            <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Migrated</th>
+                            <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No of Failed</th>
+                            <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Remaining</th>
+                            <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>% Completion</th>
+                            <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>% Failed</th>
+                            <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                        </thead>
+                        <tbody>
+                          {customReportData.length === 0 ? (
+                            <tr>
+                              <td colSpan="10" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8', fontSize: '12px' }}>
+                                No records found in database.
+                              </td>
+                            </tr>
+                          ) : (
+                            customReportData.map((row, idx) => {
+                              const isFirstOfClass = idx === 0 || customReportData[idx - 1].class !== row.class
+                              let classRowSpan = 1
+                              if (isFirstOfClass) {
+                                for (let k = idx + 1; k < customReportData.length; k++) {
+                                  if (customReportData[k].class === row.class) {
+                                    classRowSpan++
+                                  } else {
+                                    break
+                                  }
+                                }
+                              }
+
+                              return (
+                                <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 1 ? '#FAFBFC' : 'white', transition: 'background 0.15s' }}>
+                                  {isFirstOfClass && (
+                                    <td rowSpan={classRowSpan} style={{ padding: '10px 12px', fontWeight: 'bold', color: '#0f172a', fontSize: '11.5px', borderRight: '1px solid #f1f5f9', verticalAlign: 'top', background: '#FAFBFC' }}>
+                                      {row.class || '—'}
+                                    </td>
+                                  )}
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#334155', fontSize: '11px' }}>{row.year}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
+                                    {row.total != null ? Number(row.total).toLocaleString() : '—'}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
+                                    {row.extracted != null ? Number(row.extracted).toLocaleString() : '—'}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#0f172a' }}>
+                                    {row.migrated !== '' && row.migrated !== null ? Number(row.migrated).toLocaleString() : '—'}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#ef4444' }}>
+                                    {row.failed !== '' && row.failed !== null ? Number(row.failed).toLocaleString() : '—'}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', fontSize: '11px', color: '#64748b' }}>
+                                    {row.remaining != null ? Number(row.remaining).toLocaleString() : '—'}
+                                  </td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#0f172a' }}>{row.completion || '—'}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '700', fontSize: '11px', color: '#ef4444' }}>{row.pctFailed || '—'}</td>
+                                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                    {row.status?.toUpperCase() === 'PENDING' ? (
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '3px 10px',
+                                        borderRadius: '16px',
+                                        background: '#EFF6FF',
+                                        color: '#2563EB',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        border: '1px solid #DBEAFE'
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }}></span>
+                                        Pending
+                                      </span>
+                                    ) : row.status?.toUpperCase() === 'IN PROGRESS' ? (
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '3px 10px',
+                                        borderRadius: '16px',
+                                        background: '#FFFBEB',
+                                        color: '#D97706',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        border: '1px solid #FDE68A'
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }}></span>
+                                        In Progress
+                                      </span>
+                                    ) : row.status?.toUpperCase() === 'COMPLETED' ? (
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '3px 10px',
+                                        borderRadius: '16px',
+                                        background: '#ECFDF5',
+                                        color: '#059669',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        border: '1px solid #A7F3D0'
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                        Completed
+                                      </span>
+                                    ) : (
+                                      <span style={{ color: '#94a3b8' }}>—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                 </div>
               )}
 
@@ -1575,8 +1920,12 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                     <h3 style={{ margin: 0, color: '#1e293b', fontSize: '13px', fontWeight: 'bold' }}>
                       {isChecksumMode 
                         ? 'Checksum Report' 
-                        : (subTab === 'case_metadata' ? 'Case Details Reconciliation' : 'IS Document Reconciliation')
-                      } ({records.length} records)
+                        : reconcileTab === 'exception'
+                          ? (subTab === 'case_metadata' ? 'Case Exception Report' : 'IS Exception Report')
+                          : reconcileTab === 'search'
+                            ? (subTab === 'case_metadata' ? 'Case Search Results' : 'IS Search Results')
+                            : (subTab === 'case_metadata' ? 'Case Details Reconciliation' : 'IS Document Reconciliation')
+                      } ({records.length} {records.length === 1 ? 'record' : 'records'})
                     </h3>
                     {records.length > 0 && (
                       <div style={{ display: 'flex', gap: '6px' }}>
@@ -1604,8 +1953,8 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                         </thead>
                         <tbody>
                           {records.map((r, i) => (
-                            <tr key={r.doc_no || r.f_docnumber || r.documentid || r.case_id || i}>
-                              <td style={{ textAlign: 'center' }}>{i + 1}</td>
+                            <tr key={`row-${r.case_id || r.documentid || r.f_docnumber || r.doc_no || 'idx'}-${i}`}>
+                              <td style={{ textAlign: 'center', width: '48px', color: '#64748b', fontWeight: '600' }}>{i + 1}</td>
                               {activeHeaders.map(c => {
                                 let val = r[c.key]
                                 if (c.key === 'migrated_date' && (val == null || val === '')) {
@@ -1619,24 +1968,165 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                                 }
 
                                 if (keyLower === 'doc_no' || keyLower === 'f_docnumber' || keyLower === 'documentid' || keyLower === 'case_id' || keyLower === 'p8_doc_id') {
-                                  return <td key={c.key} className="cell-mono" style={tdStyle}>{val}</td>
+                                  return <td key={c.key} style={tdStyle}>{val}</td>
                                 }
                                 if (keyLower === 'checksumbefore' || keyLower === 'checksumafter') {
                                   return (
-                                    <td key={c.key} className="cell-mono" style={{ ...tdStyle, fontSize: '9px' }} title={val}>
+                                    <td key={c.key} style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '9.5px', color: '#64748b' }} title={val}>
                                       {val ? val.slice(0, 16) + '…' : <span className="cell-empty">—</span>}
                                     </td>
                                   )
                                 }
                                 if (keyLower === 'migration_status' || keyLower === 'checksum_status' || keyLower === 'f_status') {
+                                  if (isChecksumMode || keyLower === 'checksum_status') {
+                                    const chkStatus = getChecksumStatus(val, r)
+                                    if (chkStatus === 'Matched') {
+                                      return (
+                                        <td key={c.key} style={tdStyle}>
+                                          <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '3px 10px',
+                                            borderRadius: '16px',
+                                            background: '#ECFDF5',
+                                            color: '#059669',
+                                            fontSize: '11px',
+                                            fontWeight: '600',
+                                            border: '1px solid #A7F3D0'
+                                          }}>
+                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                            Matched
+                                          </span>
+                                        </td>
+                                      )
+                                    }
+                                    if (chkStatus === 'Pending') {
+                                      return (
+                                        <td key={c.key} style={tdStyle}>
+                                          <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '3px 10px',
+                                            borderRadius: '16px',
+                                            background: '#EFF6FF',
+                                            color: '#2563EB',
+                                            fontSize: '11px',
+                                            fontWeight: '600',
+                                            border: '1px solid #DBEAFE'
+                                          }}>
+                                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }}></span>
+                                            Pending
+                                          </span>
+                                        </td>
+                                      )
+                                    }
+                                    return (
+                                      <td key={c.key} style={tdStyle}>
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '3px 10px',
+                                          borderRadius: '16px',
+                                          background: '#FEF2F2',
+                                          color: '#DC2626',
+                                          fontSize: '11px',
+                                          fontWeight: '600',
+                                          border: '1px solid #FECACA'
+                                        }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }}></span>
+                                          Mismatched
+                                        </span>
+                                      </td>
+                                    )
+                                  }
+
                                   const isSuccess = val?.toLowerCase() === 'success' || val?.toLowerCase() === 'migrated' || val?.toLowerCase() === 'completed'
                                   const isProgress = val?.toLowerCase() === 'in progress' || val?.toLowerCase() === 'in-progress' || val?.toLowerCase() === 'inprogress' || val?.toLowerCase() === 'retry'
                                   const isPending = val?.toLowerCase() === 'pending'
-                                  const statusCls = isSuccess ? 'status-success' : isProgress ? 'status-inprogress' : isPending ? 'status-pending' : 'status-failed'
+                                  
+                                  if (isPending) {
+                                    return (
+                                      <td key={c.key} style={tdStyle}>
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '3px 10px',
+                                          borderRadius: '16px',
+                                          background: '#EFF6FF',
+                                          color: '#2563EB',
+                                          fontSize: '11px',
+                                          fontWeight: '600',
+                                          border: '1px solid #DBEAFE'
+                                        }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }}></span>
+                                          Pending
+                                        </span>
+                                      </td>
+                                    )
+                                  }
+                                  if (isProgress) {
+                                    return (
+                                      <td key={c.key} style={tdStyle}>
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '3px 10px',
+                                          borderRadius: '16px',
+                                          background: '#FFFBEB',
+                                          color: '#D97706',
+                                          fontSize: '11px',
+                                          fontWeight: '600',
+                                          border: '1px solid #FDE68A'
+                                        }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B' }}></span>
+                                          In Progress
+                                        </span>
+                                      </td>
+                                    )
+                                  }
+                                  if (isSuccess) {
+                                    const successLabel = val?.toLowerCase() === 'completed' ? 'Completed' : (val?.toLowerCase() === 'migrated' ? 'Migrated' : 'Migrated')
+                                    return (
+                                      <td key={c.key} style={tdStyle}>
+                                        <span style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '3px 10px',
+                                          borderRadius: '16px',
+                                          background: '#ECFDF5',
+                                          color: '#059669',
+                                          fontSize: '11px',
+                                          fontWeight: '600',
+                                          border: '1px solid #A7F3D0'
+                                        }}>
+                                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10B981' }}></span>
+                                          {successLabel}
+                                        </span>
+                                      </td>
+                                    )
+                                  }
                                   return (
                                     <td key={c.key} style={tdStyle}>
-                                      <span className={`status-badge ${statusCls}`}>
-                                        {val}
+                                      <span style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '3px 10px',
+                                        borderRadius: '16px',
+                                        background: '#FEF2F2',
+                                        color: '#DC2626',
+                                        fontSize: '11px',
+                                        fontWeight: '600',
+                                        border: '1px solid #FECACA'
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }}></span>
+                                        Failed
                                       </span>
                                     </td>
                                   )

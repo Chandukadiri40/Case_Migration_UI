@@ -3,7 +3,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 const AGGREGATED_HEADERS = [
-  'S.No', 'Object Stores', 'Documentation Class',
+  'S.No', 'Object Stores', 'Document Class',
   'Total No Documents', 'Total Files Size (in GB)', 'No. Extracted(FileNet)',
   'No. Extraction Failed', 'No. Remaining', 'Extracted File Size (in GB)',
   '% Completion', '% Failed'

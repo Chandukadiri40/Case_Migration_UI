@@ -56,9 +56,7 @@ export default function Layout() {
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 0' }}>
-          <div className="nav-section-label" style={{ color: '#5C6B85', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 20px 6px' }}>Phase 1</div>
-          
+        <div style={{ flex: 1, overflow: 'hidden', padding: '12px 0' }}>
           <NavLink 
             to="/" 
             className={`nav-item ${isDashboardActive ? 'active' : ''}`}
@@ -148,32 +146,6 @@ export default function Layout() {
             <FileSpreadsheet size={16} style={{ opacity: isReconciliationActive ? 1 : 0.85 }} />
             Reconciliation
           </NavLink>
-
-          <div className="nav-section-label" style={{ color: '#5C6B85', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 20px 6px' }}>Phase 2</div>
-          
-          <div className="nav-item disabled" style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', opacity: 0.45, cursor: 'not-allowed', color: '#93A4BD' }}>
-            <FileText size={16} />
-            Reports
-            <span className="phase-tag" style={{ marginLeft: 'auto', fontSize: '9px', background: '#2A3B57', color: '#9FB1CC', padding: '1px 6px', borderRadius: '10px', fontWeight: '600' }}>Later</span>
-          </div>
-
-          <div className="nav-item disabled" style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', opacity: 0.45, cursor: 'not-allowed', color: '#93A4BD' }}>
-            <FileText size={16} />
-            Audit Logs
-            <span className="phase-tag" style={{ marginLeft: 'auto', fontSize: '9px', background: '#2A3B57', color: '#9FB1CC', padding: '1px 6px', borderRadius: '10px', fontWeight: '600' }}>Later</span>
-          </div>
-
-          <div className="nav-item disabled" style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', opacity: 0.45, cursor: 'not-allowed', color: '#93A4BD' }}>
-            <FileText size={16} />
-            Users
-            <span className="phase-tag" style={{ marginLeft: 'auto', fontSize: '9px', background: '#2A3B57', color: '#9FB1CC', padding: '1px 6px', borderRadius: '10px', fontWeight: '600' }}>Later</span>
-          </div>
-
-          <div className="nav-item disabled" style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', opacity: 0.45, cursor: 'not-allowed', color: '#93A4BD' }}>
-            <Settings size={16} />
-            Settings
-            <span className="phase-tag" style={{ marginLeft: 'auto', fontSize: '9px', background: '#2A3B57', color: '#9FB1CC', padding: '1px 6px', borderRadius: '10px', fontWeight: '600' }}>Later</span>
-          </div>
         </div>
 
         <div className="sidebar-footer" style={{ padding: '8px 14px', borderTop: '1px solid #1B2A42' }}>
@@ -196,46 +168,20 @@ export default function Layout() {
         
         {/* Top Header */}
         <header className="topheader" style={{
-          height: '64px', background: '#fff', borderBottom: '1px solid #E3E7EE',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', flexShrink: 0,
+          height: '48px', background: '#fff', borderBottom: '1px solid #E3E7EE',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', flexShrink: 0,
           position: 'sticky', top: 0, zIndex: 20
         }}>
-          <div className="header-left" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <div className="breadcrumb" style={{ fontSize: '11.5px', color: '#98A2B3' }}>
-              TrueMigrate Center &nbsp;›&nbsp; <b style={{ color: '#6B7280', fontWeight: '600' }}>{crumb}</b>
-            </div>
-            <div className="page-title" style={{ fontSize: '16.5px', fontWeight: '700', color: '#1F2937' }}>{pageTitle}</div>
+          <div className="header-left" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="page-title" style={{ fontSize: '15px', fontWeight: '700', color: '#1F2937' }}>{pageTitle}</div>
           </div>
           
-          <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <div className="search-box" style={{
-              display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid #E3E7EE', borderRadius: '7px', padding: '0 10px',
-              height: '34px', width: '250px', color: '#98A2B3', background: '#F4F6F9'
-            }}>
-              <Search size={14} />
-              <span style={{ fontSize: '11.5px' }}>Search Job ID, Doc ID, Record ID…</span>
-            </div>
-            
-            <div className="icon-btn" style={{
-              width: '34px', height: '34px', borderRadius: '7px', border: '1px solid #E3E7EE', background: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', position: 'relative', cursor: 'pointer'
-            }}>
-              <Bell size={16} />
-              <span className="badge-dot" style={{ position: 'absolute', top: '5px', right: '6px', width: '7px', height: '7px', borderRadius: '50%', background: '#D92D20', border: '1.5px solid #fff' }}></span>
-            </div>
-            
-            <div className="icon-btn" style={{
-              width: '34px', height: '34px', borderRadius: '7px', border: '1px solid #E3E7EE', background: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', cursor: 'pointer'
-            }}>
-              <HelpCircle size={16} />
-            </div>
-
-            <div className="user-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px 4px 4px', borderRadius: '7px', border: '1px solid #E3E7EE', marginLeft: '6px' }}>
-              <div className="avatar" style={{ width: '26px', height: '26px', borderRadius: '50%', background: '#EFF4FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700' }}>AU</div>
+          <div className="header-right" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="user-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px 3px 4px', borderRadius: '7px', border: '1px solid #E3E7EE' }}>
+              <div className="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#EFF4FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', fontWeight: '700' }}>AU</div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className="uname" style={{ fontSize: '11.5px', fontWeight: '600', color: '#1F2937', lineHeight: 1.25 }}>Admin User</span>
-                <span className="urole" style={{ fontSize: '9.5px', color: '#98A2B3' }}>Migration Manager</span>
+                <span className="uname" style={{ fontSize: '11px', fontWeight: '600', color: '#1F2937', lineHeight: 1.2 }}>Admin User</span>
+                <span className="urole" style={{ fontSize: '9px', color: '#98A2B3' }}>Migration Manager</span>
               </div>
             </div>
           </div>
