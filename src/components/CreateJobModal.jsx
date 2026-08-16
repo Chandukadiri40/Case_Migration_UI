@@ -1,69 +1,197 @@
 import React, { useState, useEffect } from 'react';
-import { X, Cpu, Server, FileText } from 'lucide-react';
+import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save } from 'lucide-react';
+import { JOB_CATEGORIES } from '../config/jobsConfig';
 
-export default function CreateJobModal({ isOpen, onClose, onCreateJob }) {
+export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCategory = 'import', existingJobs = [] }) {
   if (!isOpen) return null;
 
+  const [creationMode, setCreationMode] = useState('form'); // 'form' or 'terminal'
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('extraction');
-  const [type, setType] = useState('Bulk');
-  const [source, setSource] = useState('FileNet P8');
-  const [dateRange, setDateRange] = useState('01-May-2025 – 07-May-2025');
-  const [filterCriteria, setFilterCriteria] = useState('Document Date');
+  const [category, setCategory] = useState(initialCategory || 'import');
+
+  // Under Import Jobs: 'case' (Case Migration - Java) vs 'is' (IS Migration - .NET FileNet)
+  const [importTarget, setImportTarget] = useState('case');
+
+  const [type, setType] = useState('Ad-hoc'); // Default Ad-hoc / Standard for metadata
+  const [source, setSource] = useState('PostgreSQL');
+  const [startDate, setStartDate] = useState('2024-01-12');
+  const [endDate, setEndDate] = useState('2024-01-12');
+  const [docIds, setDocIds] = useState(''); // Default empty for Ad-hoc text file pick on server
+  const [filterCriteria, setFilterCriteria] = useState('Standard Run');
   const [records, setRecords] = useState('10000');
-  const [env, setEnv] = useState('Linux RHEL 8 (192.168.1.105)');
+  // Load server environment paths & settings from .env file
+  const serverEnvName = import.meta.env.VITE_SERVER_ENV_NAME || 'Ubuntu Server 24.04 LTS (192.168.1.105)';
+  const caseJarPath = import.meta.env.VITE_CASE_INGESTION_JAR_PATH || '"/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"';
+  const filenetCmd = import.meta.env.VITE_FILENET_MIGRATOR_CMD || 'dotnet TrueMigrator.dll';
+  const isExtractScript = import.meta.env.VITE_IS_EXTRACTION_SCRIPT || 'python3 /opt/truemigrate/scripts/extract_is_docs.py';
+  const logDir = import.meta.env.VITE_LOG_DIRECTORY_PATH || '/var/log/truemigrate';
+
+  const [env, setEnv] = useState(serverEnvName);
+
+  // Processing Parameters (Empty by default for user input)
+  const [workerThreads, setWorkerThreads] = useState('');
+  const [batchSize, setBatchSize] = useState('');
+  const [retryCount, setRetryCount] = useState('');
+  const [retryInterval, setRetryInterval] = useState('');
+
+  // Migration Options Checkboxes
+  const [preserveMetadata, setPreserveMetadata] = useState(true);
+  const [preserveCreatedDate, setPreserveCreatedDate] = useState(true);
+  const [preserveModifiedDate, setPreserveModifiedDate] = useState(true);
+  const [validateChecksum, setValidateChecksum] = useState(true);
+  const [continueOnError, setContinueOnError] = useState(false);
+  const [generateAudit, setGenerateAudit] = useState(true);
+
+  // Command & Log path state
   const [command, setCommand] = useState('');
   const [logPath, setLogPath] = useState('');
+  const [isManuallyEdited, setIsManuallyEdited] = useState(false);
 
-  // Dynamically update shell command template when settings change
+  // Real-time unique name check
+  const isDuplicateName = name.trim() !== '' && existingJobs.some(
+    j => j.name && j.name.trim().toUpperCase() === name.trim().toUpperCase()
+  );
+
+  // Sync category state and dates whenever initialCategory or modal opening changes
   useEffect(() => {
-    const jobKey = name.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'job_new';
-    if (category === 'extraction') {
-      if (type === 'Bulk') {
-        setCommand(`bash /opt/truemigrate/scripts/extract_filenet_bulk.sh --source p8_prod --batch ${records || 10000}`);
-        setLogPath(`/var/log/truemigrate/extract_${jobKey}.log`);
-      } else if (type === 'Ad-hoc') {
-        setCommand(`bash /opt/truemigrate/scripts/extract_sp_adhoc.sh --folder "/Contracts" --limit ${records || 100}`);
-        setLogPath(`/var/log/truemigrate/extract_adhoc_${jobKey}.log`);
-      } else {
-        setCommand(`bash /opt/truemigrate/scripts/retry_exceptions.sh --error 500 --limit ${records || 100}`);
-        setLogPath(`/var/log/truemigrate/retry_${jobKey}.log`);
-      }
-    } else {
-      if (type === 'Bulk') {
-        setCommand(`bash /opt/truemigrate/scripts/import_p8_bulk.sh --dest "/Imported" --batch ${records || 10000}`);
-        setLogPath(`/var/log/truemigrate/import_${jobKey}.log`);
-      } else if (type === 'Ad-hoc') {
-        setCommand(`unzip /opt/truemigrate/uploads/test_upload.zip -d /opt/truemigrate/imports/`);
-        setLogPath(`/var/log/truemigrate/import_adhoc_${jobKey}.log`);
-      } else {
-        setCommand(`bash /opt/truemigrate/scripts/retry_failed_imports.sh --batch ${records || 100}`);
-        setLogPath(`/var/log/truemigrate/import_exc_${jobKey}.log`);
+    if (initialCategory) {
+      setCategory(initialCategory);
+      if (initialCategory === 'import') {
+        setImportTarget('case');
+        setType('Ad-hoc');
+        setStartDate('2024-01-12');
+        setEndDate('2024-01-12');
+        setSource('PostgreSQL');
+      } else if (initialCategory === 'extraction') {
+        setType('Bulk');
+        setSource('IBM Image Services');
       }
     }
-  }, [name, category, type, records]);
+  }, [initialCategory, isOpen]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return alert('Please enter a job name');
-    
+  // Handle importTarget change
+  useEffect(() => {
+    if (category === 'import') {
+      if (importTarget === 'case') {
+        setSource('PostgreSQL');
+        setStartDate('2024-01-12');
+        setEndDate('2024-01-12');
+        if (type === 'Bulk') setFilterCriteria('Status = Pending');
+        else if (type === 'Exception') setFilterCriteria('Status = Failed');
+        else setFilterCriteria('Standard Ingestion');
+      } else { // IS Migration
+        setSource('FileNet P8');
+        setStartDate('11-08-2026');
+        setEndDate('14-08-2026');
+        if (type === 'Ad-hoc') setFilterCriteria(docIds.trim() ? 'docids=' + docIds.trim() : 'Ad-hoc Text File');
+        else setFilterCriteria(type === 'Exception' ? 'Status = Failed' : 'Status = Pending');
+      }
+    }
+  }, [importTarget, category, type, docIds]);
+
+  // Dynamically update shell command template when fields change
+  useEffect(() => {
+    if (creationMode === 'terminal' || isManuallyEdited) return;
+
+    const jobKey = name.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'job_new';
+
+    if (category === 'import') {
+      if (importTarget === 'case') {
+        const safeJarPath = caseJarPath.startsWith('"') && caseJarPath.endsWith('"') ? caseJarPath : `"${caseJarPath.replace(/^"|"$/g, '')}"`;
+        if (type === 'Bulk') {
+          const formattedStart = startDate.includes('-') && startDate.split('-')[0].length === 2
+            ? startDate.split('-').reverse().join('-')
+            : (startDate || '2024-01-12');
+          const formattedEnd = endDate.includes('-') && endDate.split('-')[0].length === 2
+            ? endDate.split('-').reverse().join('-')
+            : (endDate || '2024-01-12');
+          setCommand(`java -jar ${safeJarPath} --status=Pending --startDate=${formattedStart} --endDate=${formattedEnd}`);
+          setLogPath(`${logDir}/case_pending_${jobKey}.log`);
+        } else if (type === 'Exception') {
+          setCommand(`java -jar ${safeJarPath} --status=Failed`);
+          setLogPath(`${logDir}/case_failed_${jobKey}.log`);
+        } else { // Standard Ingestion
+          setCommand(`java -jar ${safeJarPath}`);
+          setLogPath(`${logDir}/case_default_${jobKey}.log`);
+        }
+      } else {
+        // .NET IS Migration
+        if (type === 'Bulk') {
+          setCommand(`${filenetCmd} status=Pending startdate=${startDate || '11-08-2026'} enddate=${endDate || '14-08-2026'}`);
+          setLogPath(`${logDir}/is_pending_${jobKey}.log`);
+        } else if (type === 'Ad-hoc') {
+          const trimmedIds = docIds ? docIds.trim() : '';
+          const docParam = trimmedIds ? ` docids=${trimmedIds}` : '';
+          setCommand(`${filenetCmd} status=Adhoc${docParam}`);
+          setLogPath(`${logDir}/is_adhoc_${jobKey}.log`);
+        } else if (type === 'Exception') {
+          setCommand(`${filenetCmd} status=Failed startdate=${startDate || '11-08-2026'} enddate=${endDate || '14-08-2026'}`);
+          setLogPath(`${logDir}/is_failed_${jobKey}.log`);
+        }
+      }
+    } else if (category === 'extraction') {
+      setCommand(isExtractScript);
+      setLogPath(`${logDir}/is_extract_${jobKey}.log`);
+    }
+  }, [name, category, importTarget, type, startDate, endDate, docIds, creationMode, isManuallyEdited, caseJarPath, filenetCmd, isExtractScript, logDir]);
+
+  const handleSubmit = (e, autoStart = false) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    if (isDuplicateName) {
+      alert(`Job name "${name.toUpperCase()}" already exists! Job names must be unique.`);
+      return;
+    }
+
+    const finalName = name.trim() ? name.toUpperCase() : ('JOB_' + Date.now().toString().slice(-4));
+
+    let dateRangeStr = `${startDate} – ${endDate}`;
+    let runTypeDisplay = type;
+
+    if (category === 'import') {
+      if (importTarget === 'case') {
+        if (type === 'Ad-hoc') {
+          runTypeDisplay = 'Standard Ingestion';
+          dateRangeStr = 'N/A (Standard Run)';
+        } else if (type === 'Bulk') {
+          runTypeDisplay = 'Pending Date Filter';
+          dateRangeStr = `${startDate} – ${endDate}`;
+        } else if (type === 'Exception') {
+          runTypeDisplay = 'Failed Recovery';
+          dateRangeStr = 'N/A (Failed Recovery)';
+        }
+      } else { // IS Migration
+        if (type === 'Ad-hoc') {
+          runTypeDisplay = 'Ad-hoc';
+          dateRangeStr = docIds.trim() ? `DocIDs: ${docIds.trim()}` : 'Server Text File';
+        }
+      }
+    }
+
+    const migrationSource = source || (category === 'import'
+      ? (importTarget === 'case' ? 'FileNet P8' : 'FileNet P8 (IS Migration)')
+      : 'IBM Image Services');
+
     onCreateJob({
-      name: name.toUpperCase(),
-      category,
+      name: finalName,
+      category: category || 'import',
+      importTarget,
       type,
-      source,
-      dateRange,
+      runTypeDisplay,
+      source: migrationSource,
+      dateRange: creationMode === 'terminal' ? 'Direct Terminal Command' : dateRangeStr,
       filterCriteria,
-      records: Number(records) || 0,
-      status: 'Pending',
+      records: Number(records) || 10000,
+      recordsProcessed: 0,
+      status: autoStart ? 'Running' : 'Pending',
       createdBy: 'admin',
       createdDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
       env,
-      command,
-      logPath,
-      logs: [`[INFO] Job ${name.toUpperCase()} created successfully by admin. Status set to Pending.`]
+      command: command || 'java -jar target/caseingestion-0.0.1.jar',
+      logPath: logPath || `/var/log/truemigrate/job_${Date.now()}.log`,
+      processPid: null
     });
-    
+
     onClose();
   };
 
@@ -79,169 +207,363 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob }) {
 
   const inputStyle = {
     width: '100%',
-    padding: '8px 12px',
-    border: '1.5px solid #cbd5e1',
+    padding: '7px 10px',
+    border: isDuplicateName ? '1.5px solid #ef4444' : '1.5px solid #cbd5e1',
     borderRadius: '6px',
-    fontSize: '12.5px',
+    fontSize: '12px',
     outline: 'none',
     color: '#1e293b',
-    background: '#fff',
-    transition: 'border 0.15s'
+    background: isDuplicateName ? '#fef2f2' : '#fff',
+    transition: 'all 0.15s'
+  };
+
+  const sectionDividerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '11px',
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginTop: '6px'
   };
 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)',
+      background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999
     }}>
       <div style={{
-        width: '600px', background: 'white', borderRadius: '12px',
-        overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-        border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column'
+        width: '680px', maxH: '90vh', background: 'white', borderRadius: '12px',
+        overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+        border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column'
       }}>
-        
+
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#0f172a' }}>+ Create New Migration Job</h3>
+          <div>
+            <h3 style={{ margin: '0 0 2px 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>Create Import Job</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Configure a new target data import job</p>
+          </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
             <X size={18} />
           </button>
         </div>
 
+        {/* Mode Selector Header Tabs */}
+        <div style={{ display: 'flex', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '0 20px' }}>
+          <button
+            type="button"
+            onClick={() => setCreationMode('form')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              background: 'transparent', border: 'none',
+              borderBottom: creationMode === 'form' ? '2.5px solid #2563eb' : '2.5px solid transparent',
+              color: creationMode === 'form' ? '#2563eb' : '#64748b',
+              fontWeight: '700', fontSize: '12px', cursor: 'pointer'
+            }}
+          >
+            <Sliders size={14} /> Guided Form Builder
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreationMode('terminal')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 16px',
+              background: 'transparent', border: 'none',
+              borderBottom: creationMode === 'terminal' ? '2.5px solid #2563eb' : '2.5px solid transparent',
+              color: creationMode === 'terminal' ? '#2563eb' : '#64748b',
+              fontWeight: '700', fontSize: '12px', cursor: 'pointer'
+            }}
+          >
+            <Terminal size={14} /> CLI Terminal Prompt
+          </button>
+        </div>
+
         {/* Form Body */}
-        <form onSubmit={handleSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          
-          {/* Main Info Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <label style={labelStyle}>Job Name</label>
-              <input 
-                type="text" 
-                placeholder="e.g. EXT_JOB_003" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                style={inputStyle}
-                required
-              />
+        <form onSubmit={(e) => handleSubmit(e, false)} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto', maxHeight: '72vh' }}>
+
+          {creationMode === 'form' ? (
+            <>
+              {/* Row 1: Target & Run Type */}
+              <div style={{ display: 'grid', gridTemplateColumns: category === 'import' ? '1fr 1fr' : '1fr', gap: '14px' }}>
+                {category === 'import' && (
+                  <div>
+                    <label style={labelStyle}>Import Migration Suite / Target</label>
+                    <select
+                      value={importTarget}
+                      onChange={(e) => {
+                        const targetVal = e.target.value;
+                        setImportTarget(targetVal);
+                        if (targetVal === 'case') setType('Ad-hoc');
+                        else setType('Bulk');
+                        setIsManuallyEdited(false);
+                      }}
+                      style={inputStyle}
+                    >
+                      <option value="case">Case Migration</option>
+                      <option value="is">IS Migration</option>
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label style={labelStyle}>Run Type</label>
+                  <select value={type} onChange={(e) => { setType(e.target.value); setIsManuallyEdited(false); }} style={inputStyle}>
+                    {category === 'import' && importTarget === 'case' ? (
+                      <>
+                        <option value="Ad-hoc">Standard Ingestion</option>
+                        <option value="Bulk">Pending Date Filter</option>
+                        <option value="Exception">Failed Recovery</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Bulk">Bulk</option>
+                        <option value="Ad-hoc">Ad-hoc</option>
+                        <option value="Exception">Exception</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Job Name & Target System */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div>
+                  <label style={labelStyle}>Job Name (Must be Unique)</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={
+                      category === 'import'
+                        ? (importTarget === 'case' ? 'e.g. Case_IMP_JOB_001' : 'e.g. IS_IMP_JOB_001')
+                        : 'e.g. IS_EXT_JOB_001'
+                    }
+                    style={inputStyle}
+                    required
+                  />
+                  {isDuplicateName && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontSize: '10.5px', fontWeight: 'bold', marginTop: '4px' }}>
+                      <AlertTriangle size={12} /> A job named "{name.toUpperCase()}" already exists. Job names must be unique!
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label style={labelStyle}>Target System</label>
+                  <select
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="FileNet P8">FileNet P8</option>
+                    <option value="IBM Image Services">IBM Image Services</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dynamic Inputs based on Job Mode & Target */}
+              {category === 'import' && importTarget === 'is' && type === 'Ad-hoc' ? (
+                <div>
+                  <label style={labelStyle}>Document IDs (Comma-separated)</label>
+                  <input
+                    type="text"
+                    value={docIds}
+                    onChange={(e) => { setDocIds(e.target.value); setIsManuallyEdited(false); }}
+                    style={inputStyle}
+                  />
+                </div>
+              ) : category === 'import' && importTarget === 'case' && (type === 'Ad-hoc' || type === 'Exception') ? null : (
+                <>
+                  <div style={sectionDividerStyle}>
+                    <span>Date Range</span>
+                    <span style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div>
+                      <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Start Date</label>
+                      <input
+                        type="text"
+                        value={startDate}
+                        onChange={(e) => { setStartDate(e.target.value); setIsManuallyEdited(false); }}
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>End Date</label>
+                      <input
+                        type="text"
+                        value={endDate}
+                        onChange={(e) => { setEndDate(e.target.value); setIsManuallyEdited(false); }}
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* SECTION: PROCESSING (Matching Screenshot) */}
+              <div style={sectionDividerStyle}>
+                <span>Processing</span>
+                <span style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Worker Threads</label>
+                  <input
+                    type="number"
+                    value={workerThreads}
+                    onChange={(e) => setWorkerThreads(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Batch Size</label>
+                  <input
+                    type="number"
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Retry Count</label>
+                  <input
+                    type="number"
+                    value={retryCount}
+                    onChange={(e) => setRetryCount(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Retry Interval (sec)</label>
+                  <input
+                    type="number"
+                    value={retryInterval}
+                    onChange={(e) => setRetryInterval(e.target.value)}
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            /* CLI Terminal Prompt Mode */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>Job Name (Must be Unique)</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  style={inputStyle}
+                />
+                {isDuplicateName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontSize: '10.5px', fontWeight: 'bold', marginTop: '4px' }}>
+                    <AlertTriangle size={12} /> A job named "{name.toUpperCase()}" already exists. Job names must be unique!
+                  </div>
+                )}
+              </div>
+
+              {/* Editable Command String Box */}
+              <div style={{
+                marginTop: '6px', padding: '14px', background: '#090d10',
+                borderRadius: '8px', border: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: '10px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '11px', fontWeight: 'bold', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Cpu size={14} style={{ color: '#38bdf8' }} /> Target Execution Command (CLI Prompt)
+                  </h4>
+                  {isManuallyEdited && (
+                    <span style={{ fontSize: '9.5px', color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+                      Custom Command Enabled
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '9.5px', color: '#94a3b8' }}>Command String:</label>
+                  <div style={{ display: 'flex', alignItems: 'center', background: '#161b22', border: '1px solid #30363d', borderRadius: '6px', padding: '0 10px' }}>
+                    <span style={{ color: '#10b981', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '13px', marginRight: '6px' }}>$</span>
+                    <input
+                      type="text"
+                      value={command}
+                      onChange={(e) => {
+                        setCommand(e.target.value);
+                        setIsManuallyEdited(true);
+                      }}
+                      style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11.5px', background: 'transparent', color: '#58a6ff', border: 'none', padding: '8px 0' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ ...labelStyle, fontSize: '9.5px', color: '#94a3b8' }}>Linux Output Log File Path</label>
+                  <input
+                    type="text"
+                    value={logPath}
+                    onChange={(e) => setLogPath(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d' }}
+                  />
+                </div>
+              </div>
+
             </div>
-            
-            <div>
-              <label style={labelStyle}>Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
-                <option value="extraction">Extraction Jobs</option>
-                <option value="import">Import Jobs</option>
-              </select>
-            </div>
-          </div>
+          )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <label style={labelStyle}>Job Type</label>
-              <select value={type} onChange={(e) => setType(e.target.value)} style={inputStyle}>
-                <option value="Bulk">Bulk</option>
-                <option value="Ad-hoc">Ad-hoc</option>
-                <option value="Exception">Exception</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={labelStyle}>Source System</label>
-              <select value={source} onChange={(e) => setSource(e.target.value)} style={inputStyle}>
-                <option value="FileNet P8">FileNet P8</option>
-                <option value="SharePoint">SharePoint</option>
-                <option value="Database">Database</option>
-                <option value="Local File System">Local File System</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <div>
-              <label style={labelStyle}>Date Range / Target</label>
-              <input 
-                type="text" 
-                value={dateRange} 
-                onChange={(e) => setDateRange(e.target.value)} 
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={labelStyle}>Expected Records</label>
-              <input 
-                type="number" 
-                value={records} 
-                onChange={(e) => setRecords(e.target.value)} 
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          <div>
-            <label style={labelStyle}>Filter Criteria</label>
-            <input 
-              type="text" 
-              value={filterCriteria} 
-              onChange={(e) => setFilterCriteria(e.target.value)} 
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Linux Command Configuration Section */}
-          <div style={{
-            marginTop: '10px', padding: '14px', background: '#f8fafc',
-            borderRadius: '8px', border: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', gap: '10px'
-          }}>
-            <h4 style={{ margin: '0 0 4px 0', fontSize: '11px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Cpu size={14} style={{ color: '#4f46e5' }} /> Linux Shell Command Configuration
-            </h4>
-
-            <div>
-              <label style={{ ...labelStyle, fontSize: '9.5px', color: '#64748b' }}>Target Execution Environment</label>
-              <select value={env} onChange={(e) => setEnv(e.target.value)} style={{ ...inputStyle, background: '#fff' }}>
-                <option value="Linux RHEL 8 (192.168.1.105)">Linux RHEL 8 (192.168.1.105)</option>
-                <option value="Linux Ubuntu 22.04">Linux Ubuntu 22.04</option>
-                <option value="Local Shell Process">Local Shell Process</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ ...labelStyle, fontSize: '9.5px', color: '#64748b' }}>Shell Command / Script Path</label>
-              <input 
-                type="text" 
-                value={command} 
-                onChange={(e) => setCommand(e.target.value)} 
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', background: '#fff' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ ...labelStyle, fontSize: '9.5px', color: '#64748b' }}>Output Log Path</label>
-              <input 
-                type="text" 
-                value={logPath} 
-                onChange={(e) => setLogPath(e.target.value)} 
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', background: '#fff' }}
-              />
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
-            <button 
-              type="button" 
-              onClick={onClose} 
+          {/* Action Buttons (Matching Screenshot) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+            <button
+              type="button"
+              onClick={onClose}
               style={{ padding: '7px 16px', background: 'white', color: '#475569', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
-              style={{ padding: '7px 20px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
-            >
-              Create Job
-            </button>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="submit"
+                disabled={isDuplicateName}
+                style={{
+                  padding: '7px 18px',
+                  background: 'white',
+                  color: isDuplicateName ? '#cbd5e1' : '#1e293b',
+                  border: '1.5px solid #cbd5e1',
+                  borderRadius: '6px',
+                  cursor: isDuplicateName ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px'
+                }}
+              >
+                <Save size={14} /> Save
+              </button>
+
+              <button
+                type="button"
+                disabled={isDuplicateName}
+                onClick={(e) => handleSubmit(e, true)}
+                style={{
+                  padding: '7px 20px',
+                  background: isDuplicateName ? '#94a3b8' : '#2563eb',
+                  color: 'white', border: 'none', borderRadius: '6px',
+                  cursor: isDuplicateName ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px',
+                  boxShadow: '0 2px 6px rgba(37,99,235,0.2)'
+                }}
+              >
+                <Play size={13} style={{ fill: 'white' }} /> Save & Start
+              </button>
+            </div>
           </div>
 
         </form>

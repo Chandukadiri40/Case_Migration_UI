@@ -1,0 +1,39 @@
+[16/8/2026, 10:57:37 pm] [INFO] Initiating SSH connection to skts@192.168.1.102...
+[INFO] Target Command: java -jar "/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"
+[INFO] Target System: PostgreSQL (Case Migration)
+[INFO] Remote Log File: /var/log/truemigrate/case_default_fgsdg.log
+--------------------------------------------------------------------------------
+[16/8/2026, 10:57:37 pm] [INFO] SSH Connection Established cleanly with skts@192.168.1.102!
+[INFO] Spawning remote process execution...
+[17:27:46] Initializing TrueMigrator Case Ingestion Engine...
+[17:27:46] Loading Spring Services & System Drivers...
+[INIT] Created JSON output directory: /home/skts/IS Migration/Migration_Tools/CaseMigration/Metadata-Json-Files
+[17:28:09] Testing connection to PostgreSQL Database...
+[17:28:13] SUCCESS: Connected to Database successfully!
+[17:28:13] Testing connection to FileNet CEWS at https://192.168.1.104:9443/wsi/FNCEWS40MTOM/...
+[17:28:21] SUCCESS: Connected to FileNet successfully!
+[===================================] Progress: 100/100
+[===================================] Progress: 100/100
+[===================================] Progress: 200/200
+[===================================] Progress: 200/200
+[===================================] Progress: 300/300
+[===================================] Progress: 300/300
+[===================================] Progress: 400/400
+[===================================] Progress: 400/400
+[===================================] Progress: 500/500
+[===================================] Progress: 500/500
+[===================================] Progress: 600/600
+[===================================] Progress: 600/600
+[===================================] Progress: 700/700
+[===================================] Progress: 700/700
+[===================================] Progress: 800/800
+[===================================] Progress: 800/800
+[===================================] Progress: 900/900
+[===================================] Progress: 900/900
+[===================================] Progress: 1000/1000
+[===================================] Progress: 1000/1000
+
+Migration completed for all available records!
+
+--------------------------------------------------------------------------------
+[16/8/2026, 11:02:57 pm] [INFO] SSH Remote Process exited with code 0 (SUCCESS).

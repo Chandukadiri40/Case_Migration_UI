@@ -1,0 +1,19 @@
+[17/8/2026, 12:24:50 am] [INFO] Initiating SSH connection to skts@192.168.1.102...
+[INFO] Target Command: java -jar "/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"
+[INFO] Target System: PostgreSQL (Case Migration)
+[INFO] Remote Log File: /var/log/truemigrate/case_default_case_imp_002.log
+--------------------------------------------------------------------------------
+[17/8/2026, 12:24:51 am] [INFO] SSH Connection Established cleanly with skts@192.168.1.102!
+[INFO] Spawning remote process execution...
+[INFO] Remote Process PID: 146062
+[18:55:03] Initializing TrueMigrator Case Ingestion Engine...
+[18:55:03] Loading Spring Services & System Drivers...
+[18:55:20] Testing connection to PostgreSQL Database...
+[18:55:22] SUCCESS: Connected to Database successfully!
+[18:55:22] Testing connection to FileNet CEWS at https://192.168.1.104:9443/wsi/FNCEWS40MTOM/...
+[18:55:27] SUCCESS: Connected to FileNet successfully!
+[===================================] Progress: 100/100
+Migration completed for all available records!
+
+--------------------------------------------------------------------------------
+[17/8/2026, 12:26:11 am] [INFO] SSH Remote Process exited with code 0 (SUCCESS).

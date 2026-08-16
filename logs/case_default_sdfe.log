@@ -1,0 +1,16 @@
+[16/8/2026, 10:27:03 pm] [INFO] Initiating SSH connection to skts@192.168.1.102...
+[INFO] Target Command: java -jar "/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"
+[INFO] Target System: PostgreSQL (Case Migration)
+[INFO] Remote Log File: /var/log/truemigrate/case_default_sdfe.log
+--------------------------------------------------------------------------------
+[16/8/2026, 10:27:03 pm] [INFO] SSH Connection Established cleanly with skts@192.168.1.102!
+[INFO] Spawning remote process execution...
+[16:57:33] Initializing TrueMigrator Case Ingestion Engine...
+[16:57:33] Loading Spring Services & System Drivers...
+[16:58:34] Testing connection to PostgreSQL Database...
+[16:58:42] SUCCESS: Connected to Database successfully!
+[16:58:42] Testing connection to FileNet CEWS at https://192.168.1.104:9443/wsi/FNCEWS40MTOM/...
+[16:58:57] SUCCESS: Connected to FileNet successfully!
+[-----------------------------------] Progress: 0/100[-----------------------------------] Progress: 1/100[-----------------------------------] Progress: 2/100[=>---------------------------------] Progress: 3/100[=>---------------------------------] Progress: 4/100[=>---------------------------------] Progress: 5/100[==>--------------------------------] Progress: 6/100[==>--------------------------------] Progress: 7/100[==>--------------------------------] Progress: 8/100[===>-------------------------------] Progress: 9/100[===>-------------------------------] Progress: 10/100[===>-------------------------------] Progress: 11/100[====>------------------------------] Progress: 12/100[====>------------------------------] Progress: 13/100[====>------------------------------] Progress: 14/100[=====>-----------------------------] Progress: 15/100[=====>-----------------------------] Progress: 16/100[=====>-----------------------------] Progress: 17/100[======>----------------------------] Progress: 18/100
+--------------------------------------------------------------------------------
+[16/8/2026, 10:29:36 pm] [INFO] SSH Remote Process exited with code undefined (FAILED).

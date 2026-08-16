@@ -1,0 +1,21 @@
+[16/8/2026, 10:18:19 pm] [INFO] Initiating SSH connection to skts@192.168.1.243...
+[INFO] Target Command: dotnet TrueMigrator.dll status=Pending startdate=11-08-2026 enddate=14-08-2026
+[INFO] Target System: FileNet P8 (IS Migration)
+[INFO] Remote Log File: /var/log/truemigrate/is_pending_is_migration.log
+--------------------------------------------------------------------------------
+[16/8/2026, 10:18:19 pm] [INFO] SSH Connection Established cleanly with skts@192.168.1.243!
+[INFO] Spawning remote process execution...
+The command could not be loaded, possibly because:
+  * You intended to execute a .NET application:
+      The application 'TrueMigrator.dll' does not exist.
+  * You intended to execute a .NET SDK command:
+      No .NET SDKs were found.
+
+Download a .NET SDK:
+https://aka.ms/dotnet/download
+
+Learn about SDK resolution:
+https://aka.ms/dotnet/sdk-not-found
+
+--------------------------------------------------------------------------------
+[16/8/2026, 10:18:20 pm] [INFO] SSH Remote Process exited with code 145 (FAILED).

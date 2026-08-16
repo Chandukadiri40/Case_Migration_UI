@@ -1,0 +1,8 @@
+[16/8/2026, 8:54:48 pm] [INFO] Initiating SSH connection to skts@192.168.1.105...
+[INFO] Target Command: java -jar "/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"
+[INFO] Target System: PostgreSQL (Case Migration)
+[INFO] Remote Log File: /var/log/truemigrate/case_default_job1.log
+--------------------------------------------------------------------------------
+[16/8/2026, 8:54:58 pm] [ERROR] SSH Connection Error to 192.168.1.105: Timed out while waiting for handshake
+[INFO] Falling back to host execution mode...
+Error: Unable to access jarfile /home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar

@@ -1,31 +1,73 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Square, Pause, Copy, Terminal, Download, Search } from 'lucide-react';
+import { X, Play, Square, Pause, Copy, Terminal, Download, Search, RefreshCw } from 'lucide-react';
+import axios from 'axios';
 
 export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobStatus }) {
   if (!isOpen || !job) return null;
 
-  const [logs, setLogs] = useState([...job.logs]);
+  const [logs, setLogs] = useState([]);
   const [status, setStatus] = useState(job.status);
-  const [isSimulating, setIsSimulating] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
   const terminalEndRef = useRef(null);
-  const simulationIntervalRef = useRef(null);
+  const terminalContainerRef = useRef(null);
+  const pollIntervalRef = useRef(null);
 
-  // Auto-scroll to bottom of terminal when logs update
-  useEffect(() => {
-    if (terminalEndRef.current && !searchTerm) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  // Detect when user manually scrolls up in the terminal
+  const handleTerminalScroll = () => {
+    const el = terminalContainerRef.current;
+    if (!el) return;
+    // If user is within 100px of the bottom, consider them "at bottom"
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    setUserScrolledUp(!isNearBottom);
+  };
+
+  // Fetch real logs from backend API
+  const fetchLiveLogs = async () => {
+    try {
+      setIsFetching(true);
+      const res = await axios.get(`/api/jobs/${job.id}/logs`);
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setLogs(res.data);
+      } else if (job.logs && Array.isArray(job.logs)) {
+        setLogs(job.logs);
+      } else {
+        setLogs([`[INFO] Target log file path: ${job.logPath}`, `[INFO] Waiting for output stream...`]);
+      }
+    } catch (err) {
+      if (job.logs && Array.isArray(job.logs)) {
+        setLogs(job.logs);
+      } else {
+        setLogs([`[INFO] Target log file path: ${job.logPath}`, `[INFO] ${job.command}`]);
+      }
+    } finally {
+      setIsFetching(false);
     }
-  }, [logs, searchTerm]);
+  };
 
-  // Clean up simulation on unmount
   useEffect(() => {
+    setStatus(job.status);
+    fetchLiveLogs();
+
+    // Poll live log output every 3 seconds if process is running
+    if (job.status === 'Running') {
+      pollIntervalRef.current = setInterval(fetchLiveLogs, 3000);
+    }
+
     return () => {
-      if (simulationIntervalRef.current) {
-        clearInterval(simulationIntervalRef.current);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
       }
     };
-  }, []);
+  }, [job]);
+
+  // Auto-scroll to bottom ONLY if user hasn't scrolled up manually
+  useEffect(() => {
+    if (terminalEndRef.current && !searchTerm && !userScrolledUp) {
+      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, searchTerm, userScrolledUp]);
 
   const getStatusColor = (currentStatus) => {
     switch (currentStatus) {
@@ -38,7 +80,8 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
   };
 
   const parseLogLevel = (logLine) => {
-    if (logLine.includes('[ERROR]')) {
+    if (typeof logLine !== 'string') return { text: String(logLine), color: '#e2e8f0', fontWeight: 'normal' };
+    if (logLine.includes('[ERROR]') || logLine.includes('FATAL')) {
       return { text: logLine, color: '#f87171', fontWeight: 'bold' };
     }
     if (logLine.includes('[WARN]')) {
@@ -50,71 +93,37 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
     return { text: logLine, color: '#e2e8f0', fontWeight: 'normal' };
   };
 
-  // Simulate shell command running and logging
-  const handleRunCommand = () => {
-    if (isSimulating) return;
-
-    setStatus('Running');
-    onUpdateJobStatus(job.id, 'Running');
-    setIsSimulating(true);
-
-    const simulationLogs = [
-      `[INFO] ${new Date().toISOString()} - Initializing simulation engine...`,
-      `[INFO] Executing script: ${job.command}`,
-      `[INFO] Target environment validation: SUCCESS`,
-      `[INFO] Fetching records index from ${job.source}...`,
-      `[INFO] Extracted record batch index loaded successfully.`,
-      `[INFO] Processing record chunk 1/10...`,
-      `[INFO] Processing record chunk 2/10...`,
-      `[WARN] API Response delay: 150ms. Continuing...`,
-      `[INFO] Processing record chunk 3/10...`,
-      `[INFO] Processing record chunk 4/10...`,
-      `[INFO] Processing record chunk 5/10...`,
-      `[ERROR] Server connection error on chunk 6/10. Retrying...`,
-      `[INFO] Retry SUCCESS. Connection restored.`,
-      `[INFO] Processing record chunk 6/10...`,
-      `[INFO] Processing record chunk 7/10...`,
-      `[INFO] Processing record chunk 8/10...`,
-      `[INFO] Processing record chunk 9/10...`,
-      `[INFO] Processing record chunk 10/10...`,
-      `[INFO] Finalizing output logs at ${job.logPath}...`,
-      `[INFO] Process completed successfully. Exit code: 0`
-    ];
-
-    let currentLogIndex = 0;
-    setLogs([`$ ${job.command}`, `[INFO] --- Starting Simulated Shell Run ---`]);
-
-    simulationIntervalRef.current = setInterval(() => {
-      if (currentLogIndex < simulationLogs.length) {
-        setLogs(prev => [...prev, simulationLogs[currentLogIndex]]);
-        currentLogIndex++;
-      } else {
-        clearInterval(simulationIntervalRef.current);
-        setIsSimulating(false);
-        setStatus('Completed');
-        onUpdateJobStatus(job.id, 'Completed');
-      }
-    }, 1000);
+  const handleRunCommand = async () => {
+    try {
+      setStatus('Running');
+      onUpdateJobStatus(job.id, 'Running');
+      await axios.post(`/api/jobs/${job.id}/start`);
+      fetchLiveLogs();
+    } catch (err) {
+      fetchLiveLogs();
+    }
   };
 
-  const handleStopProcess = () => {
-    if (simulationIntervalRef.current) {
-      clearInterval(simulationIntervalRef.current);
+  const handleStopProcess = async () => {
+    try {
+      setStatus('Failed');
+      onUpdateJobStatus(job.id, 'Failed');
+      await axios.post(`/api/jobs/${job.id}/stop`);
+      fetchLiveLogs();
+    } catch (err) {
+      fetchLiveLogs();
     }
-    setIsSimulating(false);
-    setStatus('Failed');
-    onUpdateJobStatus(job.id, 'Failed');
-    setLogs(prev => [...prev, `[ERROR] Process STOPPED by user administrative command. Exit code: 130`]);
   };
 
-  const handlePauseProcess = () => {
-    if (simulationIntervalRef.current) {
-      clearInterval(simulationIntervalRef.current);
+  const handlePauseProcess = async () => {
+    try {
+      setStatus('Paused');
+      onUpdateJobStatus(job.id, 'Paused');
+      await axios.post(`/api/jobs/${job.id}/pause`);
+      fetchLiveLogs();
+    } catch (err) {
+      fetchLiveLogs();
     }
-    setIsSimulating(false);
-    setStatus('Paused');
-    onUpdateJobStatus(job.id, 'Paused');
-    setLogs(prev => [...prev, `[WARN] Process PAUSED by user configuration request.`]);
   };
 
   const handleCopyLogs = () => {
@@ -135,7 +144,7 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
   };
 
   const filteredLogs = searchTerm
-    ? logs.filter(l => l.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? logs.filter(l => String(l).toLowerCase().includes(searchTerm.toLowerCase()))
     : logs;
 
   return (
@@ -145,7 +154,7 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
     }}>
       <div style={{
-        width: '840px', background: '#090D10', borderRadius: '12px',
+        width: '860px', background: '#090D10', borderRadius: '12px',
         overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', height: '620px'
       }}>
@@ -164,6 +173,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
             }}>
               {status}
             </span>
+            {job.processPid && (
+              <span style={{ color: '#94a3b8', fontSize: '10.5px', fontFamily: 'monospace' }}>PID: {job.processPid}</span>
+            )}
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '11px', color: '#8b949e' }}>
@@ -188,23 +200,34 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
             <span style={{ color: '#58a6ff' }}>$ {job.command}</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', padding: '2px 8px', gap: '6px' }}>
-            <Search size={12} color="#8b949e" />
-            <input
-              type="text"
-              placeholder="Filter logs..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: '#c9d1d9', fontSize: '10.5px', outline: 'none', width: '130px' }}
-            />
-            {searchTerm && (
-              <X size={12} color="#8b949e" style={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={fetchLiveLogs}
+              style={{ background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <RefreshCw size={11} className={isFetching ? "animate-spin" : ""} /> Refresh
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', background: '#0d1117', border: '1px solid #30363d', borderRadius: '6px', padding: '2px 8px', gap: '6px' }}>
+              <Search size={12} color="#8b949e" />
+              <input
+                type="text"
+                placeholder="Filter logs..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{ background: 'transparent', border: 'none', color: '#c9d1d9', fontSize: '10.5px', outline: 'none', width: '130px' }}
+              />
+              {searchTerm && (
+                <X size={12} color="#8b949e" style={{ cursor: 'pointer' }} onClick={() => setSearchTerm('')} />
+              )}
+            </div>
           </div>
         </div>
 
         {/* Terminal Body */}
-        <div style={{
+        <div
+          ref={terminalContainerRef}
+          onScroll={handleTerminalScroll}
+          style={{
           flex: 1, padding: '14px 18px', overflowY: 'auto', background: '#090d10',
           fontFamily: "'Fira Code', 'Courier New', Courier, monospace", fontSize: '11.5px', lineHeight: '1.6'
         }}>
@@ -221,12 +244,6 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
               </div>
             );
           })}
-          {isSimulating && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', marginTop: '8px', paddingLeft: '40px' }}>
-              <span style={{ width: '6px', height: '12px', background: '#10b981', display: 'inline-block' }}></span>
-              <span>Running live simulation...</span>
-            </div>
-          )}
           <div ref={terminalEndRef} />
         </div>
 
@@ -238,24 +255,25 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={handleRunCommand}
-              disabled={isSimulating}
+              disabled={status === 'Running'}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px',
-                background: isSimulating ? '#1f2937' : '#238636', color: isSimulating ? '#8b949e' : '#fff',
+                background: status === 'Running' ? '#1f2937' : '#238636', color: status === 'Running' ? '#8b949e' : '#fff',
                 border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold',
-                cursor: isSimulating ? 'not-allowed' : 'pointer', transition: 'all 0.2s'
+                cursor: status === 'Running' ? 'not-allowed' : 'pointer', transition: 'all 0.2s'
               }}
             >
-              <Play size={12} /> Run Command
+              <Play size={12} /> {status === 'Paused' ? 'Resume Job' : 'Start Job'}
             </button>
             
             <button
               onClick={handleStopProcess}
-              disabled={status === 'Completed' || status === 'Failed'}
+              disabled={status !== 'Running' && status !== 'Paused'}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px',
                 background: '#da3633', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold',
-                cursor: 'pointer', transition: 'all 0.2s', opacity: (status === 'Completed' || status === 'Failed') ? 0.4 : 1
+                cursor: (status !== 'Running' && status !== 'Paused') ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s', opacity: (status !== 'Running' && status !== 'Paused') ? 0.4 : 1
               }}
             >
               <Square size={12} /> Stop Process
@@ -267,7 +285,7 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px',
                 background: '#eab308', color: '#000', border: 'none', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold',
-                cursor: 'pointer', transition: 'all 0.2s', opacity: status !== 'Running' ? 0.4 : 1
+                cursor: status !== 'Running' ? 'not-allowed' : 'pointer', transition: 'all 0.2s', opacity: status !== 'Running' ? 0.4 : 1
               }}
             >
               <Pause size={12} /> Pause
