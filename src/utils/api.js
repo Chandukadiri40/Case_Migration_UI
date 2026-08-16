@@ -204,3 +204,11 @@ export function apiGetDocumentViewUrl(filePath) {
 export function apiGetDocumentDownloadUrl(filePath) {
   return `${BASE}/folders/view?path=${encodeURIComponent(filePath)}&download=true`
 }
+
+export function apiGetDocIdViewUrl(docId) {
+  return `${BASE}/folders/resolve-by-docid?docId=${encodeURIComponent(docId)}`
+}
+
+export function apiGetDocIdDownloadUrl(docId) {
+  return `${BASE}/folders/resolve-by-docid?docId=${encodeURIComponent(docId)}&download=true`
+}

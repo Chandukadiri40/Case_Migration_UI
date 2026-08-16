@@ -121,20 +121,7 @@ export default function Layout() {
             Jobs Configuration
           </NavLink>
 
-          <NavLink 
-            to="/folders" 
-            className={`nav-item ${isFoldersActive ? 'active' : ''}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', borderRadius: '6px',
-              color: isFoldersActive ? '#FFFFFF' : '#93A4BD',
-              fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-              background: isFoldersActive ? '#2563EB' : 'transparent',
-              textDecoration: 'none'
-            }}
-          >
-            <FolderTree size={16} style={{ opacity: isFoldersActive ? 1 : 0.85 }} />
-            Folders
-          </NavLink>
+
 
           <NavLink 
             to="/search" 
