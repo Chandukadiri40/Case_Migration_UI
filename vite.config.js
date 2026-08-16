@@ -41,23 +41,25 @@ try {
   }
 } catch (e) {}
 
-// Function to trigger REAL SSH execution on Remote Ubuntu Server (192.168.1.105)
+// Function to trigger REAL SSH execution on Remote Ubuntu Server
 function executeJobOnRemoteServer(jobId, envVars) {
-  const jobs = readJobsStore();
-  const job = jobs.find(j => j.id == jobId);
-  if (!job) return;
+  const baseUrl = (envVars.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
+  
+  fetch(`${baseUrl}/jobs/${jobId}`)
+    .then(r => r.json())
+    .then(job => {
+      if (!job) return;
 
-  const host = envVars.VITE_SSH_HOST || '192.168.1.105';
+  const host = envVars.VITE_SSH_HOST || '192.168.1.243';
   const username = envVars.VITE_SSH_USER || 'skts';
   const password = envVars.VITE_SSH_PASS || 'Skts@123';
-  const remoteLogPath = job.logPath || `/var/log/truemigrate/job_${jobId}.log`;
+  // Always use the Job ID for the local Windows log cache so the UI log fetcher can find it
+  const localLogFileName = `job_${jobId}.log`;
+  const localLogPath = path.resolve(LOGS_DIR, localLogFileName);
 
-  // Local fallback log path on Windows machine for offline UI caching
-  const localLogPath = path.resolve(LOGS_DIR, path.basename(remoteLogPath));
   const initHeader = `[${new Date().toLocaleString()}] [INFO] Initiating SSH connection to ${username}@${host}...\n` +
                      `[INFO] Target Command: ${job.command}\n` +
                      `[INFO] Target System: ${job.source}\n` +
-                     `[INFO] Remote Log File: ${remoteLogPath}\n` +
                      `--------------------------------------------------------------------------------\n`;
   try { fs.writeFileSync(localLogPath, initHeader, 'utf-8'); } catch (e) {}
 
@@ -72,8 +74,11 @@ function executeJobOnRemoteServer(jobId, envVars) {
     // Execute exact command directly on Ubuntu server after cd'ing to working directory
     let fullRemoteCmd = job.command;
     if (fullRemoteCmd.includes('caseingestion') && !fullRemoteCmd.startsWith('cd')) {
-      const jarFolder = "/home/skts/IS Migration/Migration_Tools/CaseMigration";
+      const jarFolder = envVars.VITE_CASE_MIGRATION_DIR || "/home/skts/IS Migration/Migration_Tools/CaseMigration";
       fullRemoteCmd = `cd "${jarFolder}" && ${fullRemoteCmd}`;
+    } else if (fullRemoteCmd.includes('TrueMigrator.dll') && !fullRemoteCmd.startsWith('cd')) {
+      const dotnetFolder = envVars.VITE_IS_MIGRATION_DIR || "/home/skts/IS Migration/Migration_Tools/TrueMigrator";
+      fullRemoteCmd = `cd "${dotnetFolder}" && ${fullRemoteCmd}`;
     }
 
     // Wrap the command to echo the real PID so we can capture it for kill/pause
@@ -86,26 +91,22 @@ function executeJobOnRemoteServer(jobId, envVars) {
         conn.end();
         activeSshClients.delete(jobId);
         
-        const currentJobs = readJobsStore();
-        saveJobsStore(currentJobs.map(j => j.id == jobId ? { ...j, status: 'Failed', processPid: null } : j));
+        fetch(`${baseUrl}/jobs/${jobId}/status`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Failed', processPid: null })
+        }).catch(e => {});
         return;
       }
 
       // Mark as Running initially; real PID will be captured from stdout
-      const updatedJobs = readJobsStore().map(j => {
-        if (j.id == jobId) {
-          return {
-            ...j,
-            status: 'Running',
-            processPid: null,
-            startTime: Date.now()
-          };
-        }
-        return j;
-      });
-      saveJobsStore(updatedJobs);
+      fetch(`${baseUrl}/jobs/${jobId}/status`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Running', startTime: true })
+      }).catch(e => {});
 
       let realPidCaptured = false;
+      let lastRecordsProcessed = 0;
+      let lastRecordsTotal = 0;
 
       // Simulate real terminal \r behavior in the log file:
       // - \r alone = overwrite the last progress line (single updating line, like a terminal)
@@ -128,9 +129,18 @@ function executeJobOnRemoteServer(jobId, envVars) {
             const pidLog = `[INFO] Remote Process PID: ${realPid}\n`;
             try { fs.appendFileSync(localLogPath, pidLog); } catch (e) {}
             // Update the stored PID to the real one
-            const currentJobs = readJobsStore();
-            saveJobsStore(currentJobs.map(j => j.id == jobId ? { ...j, processPid: realPid } : j));
+            fetch(`${baseUrl}/jobs/${jobId}/status`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processPid: realPid })
+            }).catch(e => {});
           }
+        }
+
+        // Capture progress counts from output like "Progress: 500/1000"
+        const progressMatch = text.match(/Progress:\s*(\d+)\s*\/\s*(\d+)/);
+        if (progressMatch) {
+          lastRecordsProcessed = parseInt(progressMatch[1], 10);
+          lastRecordsTotal = parseInt(progressMatch[2], 10);
         }
 
         for (let i = 0; i < text.length; i++) {
@@ -185,18 +195,25 @@ function executeJobOnRemoteServer(jobId, envVars) {
                         `[${new Date().toLocaleString()}] [INFO] SSH Remote Process exited with code ${code} (${isSuccess ? 'SUCCESS' : 'FAILED'}).\n`;
         try { fs.appendFileSync(localLogPath, exitMsg); } catch (e) {}
 
-        const currentJobs = readJobsStore();
-        saveJobsStore(currentJobs.map(j => {
-          if (j.id == jobId) {
-            return {
-              ...j,
-              status: isSuccess ? 'Completed' : 'Failed',
+        const finalStatus = isSuccess ? 'Completed' : 'Failed';
+        
+        fetch(`${baseUrl}/jobs/${jobId}`)
+          .then(r => r.json())
+          .then(j => {
+            const startStr = j.startTime || new Date().toISOString();
+            const durationSecs = Math.max(1, Math.floor((Date.now() - new Date(startStr).getTime()) / 1000));
+            const updatePayload = {
+              status: finalStatus,
               processPid: null,
-              duration: `${Math.max(1, Math.floor((Date.now() - (j.startTime || Date.now())) / 1000))}s`
+              duration: `${durationSecs}s`,
+              recordsProcessed: lastRecordsProcessed || j.recordsProcessed || 0,
+              records: lastRecordsTotal || j.records || 0
             };
-          }
-          return j;
-        }));
+            fetch(`${baseUrl}/jobs/${jobId}/status`, {
+              method: 'PUT', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updatePayload)
+            }).catch(e => {});
+          }).catch(e => {});
       });
     });
 
@@ -207,7 +224,7 @@ function executeJobOnRemoteServer(jobId, envVars) {
     try { fs.appendFileSync(localLogPath, failMsg); } catch (e) {}
 
     // Fallback: If SSH fails (e.g. server IP unreachable on local network), run via local shell
-    executeLocalJobFallback(jobId, localLogPath);
+    executeLocalJobFallback(jobId, localLogPath, envVars);
   }).connect({
     host,
     port: 22,
@@ -215,38 +232,47 @@ function executeJobOnRemoteServer(jobId, envVars) {
     password,
     readyTimeout: 10000
   });
+  }).catch(e => console.error(e)); // close the fetch promise
 }
 
 // Local fallback execution if server SSH is unreachable
-function executeLocalJobFallback(jobId, localLogPath) {
-  const jobs = readJobsStore();
-  const job = jobs.find(j => j.id == jobId);
-  if (!job) return;
+// Local fallback execution if server SSH is unreachable
+function executeLocalJobFallback(jobId, localLogPath, envVars) {
+  const baseUrl = (envVars.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
+  
+  fetch(`${baseUrl}/jobs/${jobId}`)
+    .then(r => r.json())
+    .then(job => {
+      if (!job) return;
 
-  try {
-    const child = spawn(job.command, { shell: true, cwd: process.cwd() });
-    const pid = child.pid;
-    activeChildProcesses.set(jobId, child);
+      try {
+        const child = spawn(job.command, { shell: true, cwd: process.cwd() });
+        const pid = child.pid;
+        activeChildProcesses.set(jobId, child);
 
-    const updatedJobs = readJobsStore().map(j => {
-      if (j.id == jobId) {
-        return { ...j, status: 'Running', processPid: pid, startTime: Date.now() };
+        fetch(`${baseUrl}/jobs/${jobId}/status`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Running', processPid: pid, startTime: true })
+        }).catch(e => {});
+
+        child.stdout.on('data', d => fs.appendFileSync(localLogPath, d.toString()));
+        child.stderr.on('data', d => fs.appendFileSync(localLogPath, d.toString()));
+
+        child.on('close', code => {
+          activeChildProcesses.delete(jobId);
+          const isSuccess = code === 0;
+          fetch(`${baseUrl}/jobs/${jobId}/status`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: isSuccess ? 'Completed' : 'Failed', processPid: null })
+          }).catch(e => {});
+        });
+      } catch (err) {
+        fetch(`${baseUrl}/jobs/${jobId}/status`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'Failed', processPid: null })
+        }).catch(e => {});
       }
-      return j;
-    });
-    saveJobsStore(updatedJobs);
-
-    child.stdout.on('data', d => fs.appendFileSync(localLogPath, d.toString()));
-    child.stderr.on('data', d => fs.appendFileSync(localLogPath, d.toString()));
-
-    child.on('close', code => {
-      activeChildProcesses.delete(jobId);
-      const isSuccess = code === 0;
-      saveJobsStore(readJobsStore().map(j => j.id == jobId ? { ...j, status: isSuccess ? 'Completed' : 'Failed', processPid: null } : j));
-    });
-  } catch (err) {
-    saveJobsStore(readJobsStore().map(j => j.id == jobId ? { ...j, status: 'Failed', processPid: null } : j));
-  }
+    }).catch(e => {});
 }
 
 export default defineConfig(({ mode }) => {
@@ -270,75 +296,27 @@ export default defineConfig(({ mode }) => {
 
               res.setHeader('Content-Type', 'application/json');
 
-              // GET /api/jobs
-              if (pathname === '/api/jobs' && method === 'GET') {
-                const jobs = readJobsStore();
-                res.end(JSON.stringify(jobs));
-                return;
-              }
-
-              // POST /api/jobs (Create new job)
-              if (pathname === '/api/jobs' && method === 'POST') {
-                let body = '';
-                req.on('data', chunk => { body += chunk; });
-                req.on('end', () => {
-                  const newJob = JSON.parse(body || '{}');
-                  const jobs = readJobsStore();
-                  const newId = Date.now();
-                  const isAutoStart = newJob.status === 'Running';
-                  
-                  const created = {
-                    id: newId,
-                    ...newJob,
-                    recordsProcessed: 0,
-                    status: isAutoStart ? 'Running' : 'Pending',
-                    processPid: null,
-                    startTime: isAutoStart ? Date.now() : null,
-                    createdDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-                    createdBy: newJob.createdBy || 'admin'
-                  };
-
-                  const newList = [created, ...jobs];
-                  saveJobsStore(newList);
-
-                  if (isAutoStart) {
-                    setTimeout(() => executeJobOnRemoteServer(newId, envVars), 100);
-                  }
-
-                  res.end(JSON.stringify(created));
-                });
-                return;
-              }
-
+              // We ONLY intercept specific SSH actions. Standard CRUD passes through to Java backend.
               // GET /api/jobs/:id/logs (Read ACTUAL log file from disk / SSH)
               const logsMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/logs$/);
               if (logsMatch && method === 'GET') {
                 const jobId = Number(logsMatch[1]) || logsMatch[1];
-                const jobs = readJobsStore();
-                const targetJob = jobs.find(j => j.id == jobId);
-
-                if (targetJob) {
-                  const remotePath = targetJob.logPath;
-                  const localPath = path.resolve(LOGS_DIR, path.basename(remotePath || `job_${jobId}.log`));
-
-                  if (fs.existsSync(localPath)) {
-                    try {
-                      const content = fs.readFileSync(localPath, 'utf-8');
-                      const lines = content.split('\n').filter(Boolean);
-                      res.end(JSON.stringify(lines));
-                      return;
-                    } catch (e) {}
-                  }
-
-                  res.end(JSON.stringify([
-                    `[INFO] Target Command: ${targetJob.command}`,
-                    `[INFO] Remote Log Path: ${targetJob.logPath}`,
-                    `[INFO] Connecting to SSH stream...`
-                  ]));
-                  return;
+                // For logs, we just fetch from disk based on the filename in local LOGS_DIR
+                const localPath = path.resolve(LOGS_DIR, `job_${jobId}.log`);
+                if (fs.existsSync(localPath)) {
+                  try {
+                    const content = fs.readFileSync(localPath, 'utf-8');
+                    const lines = content.split('\n').filter(Boolean);
+                    res.end(JSON.stringify(lines));
+                    return;
+                  } catch (e) {}
                 }
 
-                res.end(JSON.stringify([]));
+                res.end(JSON.stringify([
+                  `[INFO] Target Command: (Fetching...)`,
+                  `[INFO] Remote Log Path: (Fetching...)`,
+                  `[INFO] Connecting to SSH stream...`
+                ]));
                 return;
               }
 
@@ -349,7 +327,7 @@ export default defineConfig(({ mode }) => {
                   conn.on('ready', () => {
                     conn.exec(remoteCmd, () => conn.end());
                   }).on('error', () => {}).connect({
-                    host: envVars.VITE_SSH_HOST || '192.168.1.102',
+                    host: envVars.VITE_SSH_HOST || '192.168.1.243',
                     port: 22,
                     username: envVars.VITE_SSH_USER || 'skts',
                     password: envVars.VITE_SSH_PASS || 'Skts@123',
@@ -362,15 +340,25 @@ export default defineConfig(({ mode }) => {
               const startMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/start$/);
               if (startMatch && method === 'POST') {
                 const jobId = Number(startMatch[1]) || startMatch[1];
-                const jobs = readJobsStore();
-                const targetJob = jobs.find(j => j.id == jobId);
+                const baseUrl = (envVars.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
 
-                if (targetJob && targetJob.status === 'Paused' && targetJob.processPid) {
-                  sendRemoteControlCmd(`kill -CONT ${targetJob.processPid}`);
-                  saveJobsStore(jobs.map(j => j.id == jobId ? { ...j, status: 'Running' } : j));
-                } else {
-                  executeJobOnRemoteServer(jobId, envVars);
-                }
+                
+                fetch(`${baseUrl}/jobs/${jobId}`)
+                  .then(r => r.json())
+                  .then(targetJob => {
+
+                    if (targetJob && targetJob.status === 'Paused' && targetJob.processPid) {
+
+                      sendRemoteControlCmd(`kill -CONT ${targetJob.processPid}`);
+                      fetch(`${baseUrl}/jobs/${jobId}/status`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'Running' })
+                      });
+                    } else {
+
+                      executeJobOnRemoteServer(jobId, envVars);
+                    }
+                  }).catch(e => console.error(e));
                 res.end(JSON.stringify({ success: true }));
                 return;
               }
@@ -379,40 +367,31 @@ export default defineConfig(({ mode }) => {
               const stopMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/stop$/);
               if (stopMatch && method === 'POST') {
                 const jobId = Number(stopMatch[1]) || stopMatch[1];
-                const jobs = readJobsStore();
-                const targetJob = jobs.find(j => j.id == jobId);
+                const baseUrl = (envVars.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
+                
+                fetch(`${baseUrl}/jobs/${jobId}`)
+                  .then(r => r.json())
+                  .then(targetJob => {
+                    if (targetJob) {
+                      const killCmds = [];
+                      if (targetJob.processPid) {
+                        killCmds.push(`kill -9 ${targetJob.processPid}`);
+                      }
+                      killCmds.push(`pkill -9 -f caseingestion; pkill -9 -f TrueMigrator.dll`);
+                      sendRemoteControlCmd(killCmds.join('; '));
+                    }
+                  }).catch(e => console.error(e));
 
-                // Kill the actual remote Java process using real PID + pkill fallback
-                if (targetJob) {
-                  const killCmds = [];
-                  if (targetJob.processPid) {
-                    killCmds.push(`kill -9 ${targetJob.processPid}`);
-                  }
-                  // Always pkill by jar name pattern as reliable fallback
-                  killCmds.push(`pkill -9 -f caseingestion`);
-                  sendRemoteControlCmd(killCmds.join('; '));
-                }
-
-                // Close the SSH stream connection
                 const sshConn = activeSshClients.get(jobId);
-                if (sshConn) {
-                  try { sshConn.end(); } catch (e) {}
-                  activeSshClients.delete(jobId);
-                }
-
+                if (sshConn) { try { sshConn.end(); } catch (e) {} activeSshClients.delete(jobId); }
                 const child = activeChildProcesses.get(jobId);
-                if (child) {
-                  try { child.kill('SIGTERM'); } catch (e) {}
-                  activeChildProcesses.delete(jobId);
-                }
+                if (child) { try { child.kill('SIGTERM'); } catch (e) {} activeChildProcesses.delete(jobId); }
 
-                const updated = jobs.map(j => {
-                  if (j.id == jobId) {
-                    return { ...j, status: 'Failed', processPid: null };
-                  }
-                  return j;
-                });
-                saveJobsStore(updated);
+                fetch(`${baseUrl}/jobs/${jobId}/status`, {
+                  method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'Failed', processPid: null, duration: '(Stopped)' })
+                }).catch(e => console.error(e));
+                
                 res.end(JSON.stringify({ success: true }));
                 return;
               }
@@ -421,46 +400,21 @@ export default defineConfig(({ mode }) => {
               const pauseMatch = pathname.match(/^\/api\/jobs\/([^/]+)\/pause$/);
               if (pauseMatch && method === 'POST') {
                 const jobId = Number(pauseMatch[1]) || pauseMatch[1];
-                const jobs = readJobsStore();
-                const targetJob = jobs.find(j => j.id == jobId);
+                const baseUrl = (envVars.VITE_API_BASE_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
+                
+                fetch(`${baseUrl}/jobs/${jobId}`)
+                  .then(r => r.json())
+                  .then(targetJob => {
+                    if (targetJob && targetJob.processPid) {
+                      sendRemoteControlCmd(`kill -STOP ${targetJob.processPid}`);
+                    }
+                  }).catch(e => console.error(e));
 
-                if (targetJob && targetJob.processPid) {
-                  sendRemoteControlCmd(`kill -STOP ${targetJob.processPid}`);
-                }
+                fetch(`${baseUrl}/jobs/${jobId}/status`, {
+                  method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'Paused' })
+                }).catch(e => console.error(e));
 
-                const updated = jobs.map(j => {
-                  if (j.id == jobId) {
-                    return { ...j, status: 'Paused' };
-                  }
-                  return j;
-                });
-                saveJobsStore(updated);
-                res.end(JSON.stringify({ success: true }));
-                return;
-              }
-
-              // DELETE /api/jobs/:id
-              const deleteMatch = pathname.match(/^\/api\/jobs\/([^/]+)$/);
-              if (deleteMatch && method === 'DELETE') {
-                const jobId = Number(deleteMatch[1]) || deleteMatch[1];
-                const sshConn = activeSshClients.get(jobId);
-                if (sshConn) {
-                  try { sshConn.end(); } catch (e) {}
-                  activeSshClients.delete(jobId);
-                }
-                const child = activeChildProcesses.get(jobId);
-                if (child) {
-                  try { child.kill('SIGKILL'); } catch (e) {}
-                  activeChildProcesses.delete(jobId);
-                }
-                const jobs = readJobsStore();
-                const targetJob = jobs.find(j => j.id == jobId);
-                if (targetJob && targetJob.processPid) {
-                  sendRemoteControlCmd(`kill -9 ${targetJob.processPid}`);
-                }
-
-                const updated = jobs.filter(j => j.id != jobId);
-                saveJobsStore(updated);
                 res.end(JSON.stringify({ success: true }));
                 return;
               }
@@ -473,8 +427,8 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       proxy: {
-        '/api_external': {
-          target: 'http://localhost:8080',
+        '/api': {
+          target: 'http://127.0.0.1:8080',
           changeOrigin: true
         },
       },

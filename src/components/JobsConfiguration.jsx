@@ -171,16 +171,31 @@ export default function JobsConfiguration() {
   };
 
   const handleCreateJob = async (newJob) => {
+    let createdJob = null;
     try {
       const res = await axios.post('/api/jobs', newJob);
-      setJobs(prev => [res.data, ...prev]);
+      createdJob = res.data;
+      setJobs(prev => [createdJob, ...prev]);
     } catch (e) {
       const nextId = (Math.max(...jobs.map(j => Number(j.id) || 0)) + 1);
-      setJobs([ { ...newJob, id: nextId }, ...jobs]);
+      createdJob = { ...newJob, id: nextId };
+      setJobs([ createdJob, ...jobs]);
     }
     
     if (showAlert) {
       showAlert(`New job "${newJob.name}" created successfully.`, 'Job Configured', 'info');
+    }
+
+    // If auto-start is enabled, trigger the SSH execution immediately
+    if (createdJob && createdJob.status === 'Running' && createdJob.id) {
+      try {
+        await axios.post(`/api/jobs/${createdJob.id}/start`);
+      } catch (e) {
+        console.error('Failed to auto-start job:', e);
+      }
+      // Auto-open the log viewer so user can see the terminal
+      setSelectedJobForLogs(createdJob);
+      setIsLogViewerOpen(true);
     }
   };
 
@@ -247,20 +262,20 @@ export default function JobsConfiguration() {
   };
 
   return (
-    <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: '20px', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflowY: 'auto' }}>
       
       {/* Top Breadcrumb & Page Title Header */}
       <div>
-        <div style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '4px', fontWeight: '500' }}>
+        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px', fontWeight: '500' }}>
           TrueMigrate Center &nbsp;›&nbsp; <span style={{ color: '#0f172a', fontWeight: '600' }}>Jobs Configuration</span>
         </div>
-        <h2 style={{ margin: 0, fontSize: '22px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em' }}>
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em' }}>
           Jobs Configuration
         </h2>
       </div>
 
       {/* TOP PHASE NAVIGATION TABS (Extraction Jobs | Transformation Jobs | Import Jobs | Scheduling) */}
-      <div style={{ display: 'flex', gap: '28px', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
+      <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
         {[
           { id: 'extraction', label: 'Extraction Jobs' },
           { id: 'transformation', label: 'Transformation Jobs' },
@@ -277,13 +292,13 @@ export default function JobsConfiguration() {
                 setSelectedJobIds([]);
               }}
               style={{
-                padding: '10px 4px 12px 4px',
+                padding: '6px 4px 8px 4px',
                 background: 'transparent',
                 border: 'none',
                 borderBottom: isActive ? '3px solid #2563eb' : '3px solid transparent',
                 color: isActive ? '#2563eb' : '#64748b',
                 fontWeight: isActive ? '800' : '600',
-                fontSize: '13.5px',
+                fontSize: '12.5px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
@@ -317,54 +332,54 @@ export default function JobsConfiguration() {
         </div>
       ) : (
         /* MAIN CONSOLE FOR IMPORT JOBS & EXTRACTION JOBS */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#fff', padding: '20px', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 14px rgba(0,0,0,0.02)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', padding: '16px', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 14px rgba(0,0,0,0.02)' }}>
           
           {/* Action Toolbar Row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               
               <button
                 onClick={() => setIsCreateOpen(true)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
-                  background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px',
-                  fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 6px rgba(37,99,235,0.18)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
+                  background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px',
+                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 6px rgba(37,99,235,0.18)'
                 }}
               >
-                <Plus size={15} /> Create New Job
+                <Plus size={13} /> Create New Job
               </button>
 
               <button
                 onClick={() => updateSelectedJobsStatus('Running')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '8px',
-                  fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
+                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
               >
-                <Play size={12} style={{ color: '#10b981', fill: '#10b981' }} /> Start
+                <Play size={10} style={{ color: '#10b981', fill: '#10b981' }} /> Start
               </button>
 
               <button
                 onClick={() => updateSelectedJobsStatus('Failed')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '8px',
-                  fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
+                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
               >
-                <Square size={12} style={{ color: '#ef4444', fill: '#ef4444' }} /> Stop
+                <Square size={10} style={{ color: '#ef4444', fill: '#ef4444' }} /> Stop
               </button>
 
               <button
                 onClick={() => updateSelectedJobsStatus('Paused')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '8px',
-                  fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
+                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
               >
-                <Pause size={12} style={{ color: '#eab308', fill: '#eab308' }} /> Pause
+                <Pause size={10} style={{ color: '#eab308', fill: '#eab308' }} /> Pause
               </button>
             </div>
 
@@ -420,7 +435,7 @@ export default function JobsConfiguration() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px 14px', width: '30px' }}>
+                  <th style={{ padding: '12px 6px', width: '26px', textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       onChange={handleSelectAll} 
@@ -428,15 +443,15 @@ export default function JobsConfiguration() {
                       style={{ cursor: 'pointer' }}
                     />
                   </th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>JOB NAME</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>JOB TYPE</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>TARGET SYSTEM</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>DATE RANGE</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'right' }}>RECORDS</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>STATUS</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CREATED BY</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em' }}>CREATED DATE</th>
-                  <th style={{ padding: '12px 14px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', textAlign: 'center' }}>ACTIONS</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>JOB NAME</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>JOB TYPE</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>TARGET SYSTEM</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>DATE RANGE</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px', textAlign: 'right' }}>RECORDS</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>STATUS</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>CREATED BY</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>CREATED DATE</th>
+                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px', textAlign: 'center', minWidth: '95px' }}>ACTIONS</th>
                 </tr>
               </thead>
               <tbody>
@@ -456,7 +471,7 @@ export default function JobsConfiguration() {
                         transition: 'background 0.15s' 
                       }}
                     >
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 6px', textAlign: 'center' }}>
                         <input 
                           type="checkbox" 
                           checked={selectedJobIds.includes(job.id)}
@@ -464,7 +479,7 @@ export default function JobsConfiguration() {
                           style={{ cursor: 'pointer' }}
                         />
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 8px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <span style={{ fontWeight: '800', color: '#0f172a' }}>{job.name}</span>
                           {job.processPid && (
@@ -478,20 +493,20 @@ export default function JobsConfiguration() {
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: '12px 14px', fontWeight: '600', color: '#334155' }}>
+                      <td style={{ padding: '12px 8px', fontWeight: '600', color: '#334155', fontSize: '11.5px' }}>
                         {job.runTypeDisplay || (job.type === 'Ad-hoc' ? 'Standard Ingestion' : job.type === 'Exception' ? 'Failed Recovery' : job.type === 'Bulk' ? 'Pending Date Filter' : job.type)}
                       </td>
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>{job.source || 'FileNet P8'}</td>
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>{job.dateRange}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.source || 'FileNet P8'}</td>
+                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.dateRange}</td>
+                      <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
                         {(job.records || 0).toLocaleString()}
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 8px' }}>
                         {renderStatusBadge(job.status)}
                       </td>
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>{job.createdBy}</td>
-                      <td style={{ padding: '12px 14px', color: '#64748b', fontSize: '11px' }}>{job.createdDate}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.createdBy}</td>
+                      <td style={{ padding: '12px 8px', color: '#64748b', fontSize: '10.5px', whiteSpace: 'nowrap' }}>{job.createdDate}</td>
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           <button
                             onClick={() => {

@@ -1,0 +1,15 @@
+[17/8/2026, 4:10:08 am] [INFO] Initiating SSH connection to skts@192.168.1.243...
+[INFO] Target Command: dotnet TrueMigrator.dll status=Adhoc docids=121825,121914
+[INFO] Target System: FileNet P8
+--------------------------------------------------------------------------------
+[17/8/2026, 4:10:09 am] [INFO] SSH Connection Established cleanly with skts@192.168.1.243!
+[INFO] Spawning remote process execution...
+[INFO] Remote Process PID: 141476
+[?1h=[22:40:11] Testing connection to PostgreSQL Database...
+[22:40:11] SUCCESS: Connected to Database successfully!
+[22:40:11] Testing connection to FileNet CEWS at https://192.168.1.104:9443/wsi/FNCEWS40MTOM/...
+[22:40:12] SUCCESS: Connected to FileNet successfully!
+[====================--------------------] Progress: 1/2                       
+
+--------------------------------------------------------------------------------
+[17/8/2026, 4:10:14 am] [INFO] SSH Remote Process exited with code 0 (SUCCESS).

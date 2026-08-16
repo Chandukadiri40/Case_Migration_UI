@@ -1,0 +1,25 @@
+[17/8/2026, 1:17:47 am] [INFO] Initiating SSH connection to skts@192.168.1.243...
+[INFO] Target Command: dotnet TrueMigrator.dll status=Pending startdate=11-08-2026 enddate=14-08-2026
+[INFO] Target System: FileNet P8
+--------------------------------------------------------------------------------
+[17/8/2026, 1:17:47 am] [INFO] SSH Connection Established cleanly with skts@192.168.1.243!
+[INFO] Spawning remote process execution...
+[INFO] Remote Process PID: 114568
+[?1h=[19:47:51] Testing connection to PostgreSQL Database...
+[19:47:52] SUCCESS: Connected to Database successfully!
+[19:47:52] Testing connection to FileNet CEWS at https://192.168.1.104:9443/wsi/FNCEWS40MTOM/...
+[19:47:53] SUCCESS: Connected to FileNet successfully!
+[====================--------------------] Progress: 5/10                      Error in WCF ExecuteChanges for Document: A required property value has not been set. Required property PolicyNumber is missing.
+[========--------------------------------] Progress: 42/50                     Error in WCF ExecuteChanges for Document: The value given for a property or list element lies outside the permitted range or value set, or exceeds the maximum length allowed. The length of the value (9) specified for property AgentID exceeds the maximum permitted length (8).
+[========================================] Progress: 244/244                   
+Migration completed for all available records!
+[========--------------------------------] Progress: 256/264                   Error in WCF ExecuteChanges for Document: A required property value has not been set. Required property PolicyNumber is missing.
+[========--------------------------------] Progress: 276/284                   Error in WCF ExecuteChanges for Document: The value given for a property or list element lies outside the permitted range or value set, or exceeds the maximum length allowed. The length of the value (9) specified for property AgentID exceeds the maximum permitted length (8).
+[========================================] Progress: 488/488                   
+Migration completed for all available records!
+[========================================] Progress: 508/508                   Error in WCF ExecuteChanges for Document: A required property value has not been set. Required property PolicyNumber is missing.
+[========================================] Progress: 528/528                   Error in WCF ExecuteChanges for Document: The value given for a property or list element lies outside the permitted range or value set, or exceeds the maximum length allowed. The length of the value (9) specified for property AgentID exceeds the maximum permitted length (8).
+[========================================] Progress: 608/608                   bash: line 1: 114568 Killed                  cd "/home/skts/IS Migration/Migration_Tools/TrueMigrator" && dotnet TrueMigrator.dll status=Pending startdate=11-08-2026 enddate=14-08-2026
+
+--------------------------------------------------------------------------------
+[17/8/2026, 1:31:26 am] [INFO] SSH Remote Process exited with code 137 (FAILED).

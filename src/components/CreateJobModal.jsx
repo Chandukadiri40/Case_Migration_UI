@@ -13,12 +13,11 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [importTarget, setImportTarget] = useState('case');
 
   const [type, setType] = useState('Ad-hoc'); // Default Ad-hoc / Standard for metadata
-  const [source, setSource] = useState('PostgreSQL');
-  const [startDate, setStartDate] = useState('2024-01-12');
-  const [endDate, setEndDate] = useState('2024-01-12');
+  const [source, setSource] = useState('FileNet P8');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [docIds, setDocIds] = useState(''); // Default empty for Ad-hoc text file pick on server
   const [filterCriteria, setFilterCriteria] = useState('Standard Run');
-  const [records, setRecords] = useState('10000');
   // Load server environment paths & settings from .env file
   const serverEnvName = import.meta.env.VITE_SERVER_ENV_NAME || 'Ubuntu Server 24.04 LTS (192.168.1.105)';
   const caseJarPath = import.meta.env.VITE_CASE_INGESTION_JAR_PATH || '"/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"';
@@ -42,9 +41,8 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [continueOnError, setContinueOnError] = useState(false);
   const [generateAudit, setGenerateAudit] = useState(true);
 
-  // Command & Log path state
+  // Command state
   const [command, setCommand] = useState('');
-  const [logPath, setLogPath] = useState('');
   const [isManuallyEdited, setIsManuallyEdited] = useState(false);
 
   // Real-time unique name check
@@ -52,37 +50,41 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
     j => j.name && j.name.trim().toUpperCase() === name.trim().toUpperCase()
   );
 
-  // Sync category state and dates whenever initialCategory or modal opening changes
   useEffect(() => {
     if (initialCategory) {
       setCategory(initialCategory);
       if (initialCategory === 'import') {
         setImportTarget('case');
         setType('Ad-hoc');
-        setStartDate('2024-01-12');
-        setEndDate('2024-01-12');
-        setSource('PostgreSQL');
+        setStartDate('');
+        setEndDate('');
       } else if (initialCategory === 'extraction') {
         setType('Bulk');
-        setSource('IBM Image Services');
       }
     }
   }, [initialCategory, isOpen]);
 
-  // Handle importTarget change
+  // Handle importTarget reset defaults (Target System, Dates)
   useEffect(() => {
     if (category === 'import') {
       if (importTarget === 'case') {
-        setSource('PostgreSQL');
-        setStartDate('2024-01-12');
-        setEndDate('2024-01-12');
+        setStartDate('');
+        setEndDate('');
+      } else { // IS Migration
+        setStartDate('');
+        setEndDate('');
+      }
+    }
+  }, [importTarget, category]);
+
+  // Handle dynamic filterCriteria based on type/docIds
+  useEffect(() => {
+    if (category === 'import') {
+      if (importTarget === 'case') {
         if (type === 'Bulk') setFilterCriteria('Status = Pending');
         else if (type === 'Exception') setFilterCriteria('Status = Failed');
         else setFilterCriteria('Standard Ingestion');
       } else { // IS Migration
-        setSource('FileNet P8');
-        setStartDate('11-08-2026');
-        setEndDate('14-08-2026');
         if (type === 'Ad-hoc') setFilterCriteria(docIds.trim() ? 'docids=' + docIds.trim() : 'Ad-hoc Text File');
         else setFilterCriteria(type === 'Exception' ? 'Status = Failed' : 'Status = Pending');
       }
@@ -93,47 +95,42 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   useEffect(() => {
     if (creationMode === 'terminal' || isManuallyEdited) return;
 
-    const jobKey = name.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'job_new';
-
     if (category === 'import') {
       if (importTarget === 'case') {
         const safeJarPath = caseJarPath.startsWith('"') && caseJarPath.endsWith('"') ? caseJarPath : `"${caseJarPath.replace(/^"|"$/g, '')}"`;
         if (type === 'Bulk') {
           const formattedStart = startDate.includes('-') && startDate.split('-')[0].length === 2
             ? startDate.split('-').reverse().join('-')
-            : (startDate || '2024-01-12');
+            : (startDate || '');
           const formattedEnd = endDate.includes('-') && endDate.split('-')[0].length === 2
             ? endDate.split('-').reverse().join('-')
-            : (endDate || '2024-01-12');
-          setCommand(`java -jar ${safeJarPath} --status=Pending --startDate=${formattedStart} --endDate=${formattedEnd}`);
-          setLogPath(`${logDir}/case_pending_${jobKey}.log`);
+            : (endDate || '');
+          const startParam = formattedStart ? ` --startDate=${formattedStart}` : '';
+          const endParam = formattedEnd ? ` --endDate=${formattedEnd}` : '';
+          setCommand(`java -jar ${safeJarPath} --status=Pending${startParam}${endParam}`);
         } else if (type === 'Exception') {
           setCommand(`java -jar ${safeJarPath} --status=Failed`);
-          setLogPath(`${logDir}/case_failed_${jobKey}.log`);
         } else { // Standard Ingestion
           setCommand(`java -jar ${safeJarPath}`);
-          setLogPath(`${logDir}/case_default_${jobKey}.log`);
         }
       } else {
         // .NET IS Migration
+        const startParamNET = startDate ? ` startdate=${startDate}` : '';
+        const endParamNET = endDate ? ` enddate=${endDate}` : '';
         if (type === 'Bulk') {
-          setCommand(`${filenetCmd} status=Pending startdate=${startDate || '11-08-2026'} enddate=${endDate || '14-08-2026'}`);
-          setLogPath(`${logDir}/is_pending_${jobKey}.log`);
+          setCommand(`${filenetCmd} status=Pending${startParamNET}${endParamNET}`);
         } else if (type === 'Ad-hoc') {
           const trimmedIds = docIds ? docIds.trim() : '';
           const docParam = trimmedIds ? ` docids=${trimmedIds}` : '';
           setCommand(`${filenetCmd} status=Adhoc${docParam}`);
-          setLogPath(`${logDir}/is_adhoc_${jobKey}.log`);
         } else if (type === 'Exception') {
-          setCommand(`${filenetCmd} status=Failed startdate=${startDate || '11-08-2026'} enddate=${endDate || '14-08-2026'}`);
-          setLogPath(`${logDir}/is_failed_${jobKey}.log`);
+          setCommand(`${filenetCmd} status=Failed${startParamNET}${endParamNET}`);
         }
       }
     } else if (category === 'extraction') {
       setCommand(isExtractScript);
-      setLogPath(`${logDir}/is_extract_${jobKey}.log`);
     }
-  }, [name, category, importTarget, type, startDate, endDate, docIds, creationMode, isManuallyEdited, caseJarPath, filenetCmd, isExtractScript, logDir]);
+  }, [name, category, importTarget, type, startDate, endDate, docIds, creationMode, isManuallyEdited, caseJarPath, filenetCmd, isExtractScript]);
 
   const handleSubmit = (e, autoStart = false) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -169,7 +166,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
     }
 
     const migrationSource = source || (category === 'import'
-      ? (importTarget === 'case' ? 'FileNet P8' : 'FileNet P8 (IS Migration)')
+      ? 'FileNet P8'
       : 'IBM Image Services');
 
     onCreateJob({
@@ -181,14 +178,13 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
       source: migrationSource,
       dateRange: creationMode === 'terminal' ? 'Direct Terminal Command' : dateRangeStr,
       filterCriteria,
-      records: Number(records) || 10000,
+      records: 0,
       recordsProcessed: 0,
       status: autoStart ? 'Running' : 'Pending',
       createdBy: 'admin',
       createdDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
       env,
       command: command || 'java -jar target/caseingestion-0.0.1.jar',
-      logPath: logPath || `/var/log/truemigrate/job_${Date.now()}.log`,
       processPid: null
     });
 
@@ -413,7 +409,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                 <span style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Worker Threads</label>
                   <input
@@ -443,9 +439,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                     style={inputStyle}
                   />
                 </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ ...labelStyle, textTransform: 'none', color: '#334155' }}>Retry Interval (sec)</label>
                   <input
@@ -466,6 +460,11 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  placeholder={
+                    category === 'import'
+                      ? (importTarget === 'case' ? 'e.g. Case_IMP_JOB_001' : 'e.g. IS_IMP_JOB_001')
+                      : 'e.g. IS_EXT_JOB_001'
+                  }
                   style={inputStyle}
                 />
                 {isDuplicateName && (
@@ -507,15 +506,6 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ ...labelStyle, fontSize: '9.5px', color: '#94a3b8' }}>Linux Output Log File Path</label>
-                  <input
-                    type="text"
-                    value={logPath}
-                    onChange={(e) => setLogPath(e.target.value)}
-                    style={{ ...inputStyle, fontFamily: 'monospace', fontSize: '11px', background: '#161b22', color: '#c9d1d9', border: '1px solid #30363d' }}
-                  />
-                </div>
               </div>
 
             </div>

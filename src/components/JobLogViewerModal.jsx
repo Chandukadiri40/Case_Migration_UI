@@ -3,64 +3,72 @@ import { X, Play, Square, Pause, Copy, Terminal, Download, Search, RefreshCw } f
 import axios from 'axios';
 
 export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobStatus }) {
-  if (!isOpen || !job) return null;
-
   const [logs, setLogs] = useState([]);
-  const [status, setStatus] = useState(job.status);
+  const [status, setStatus] = useState(job?.status || 'Pending');
   const [isFetching, setIsFetching] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const terminalEndRef = useRef(null);
   const terminalContainerRef = useRef(null);
-  const pollIntervalRef = useRef(null);
+  const pollTimerRef = useRef(null);
+  const jobIdRef = useRef(job?.id);
+
+  // Keep jobId ref in sync
+  jobIdRef.current = job?.id;
 
   // Detect when user manually scrolls up in the terminal
   const handleTerminalScroll = () => {
     const el = terminalContainerRef.current;
     if (!el) return;
-    // If user is within 100px of the bottom, consider them "at bottom"
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
     setUserScrolledUp(!isNearBottom);
   };
 
-  // Fetch real logs from backend API
-  const fetchLiveLogs = async () => {
+  // Simple direct fetch — uses ref for stable job ID
+  const doFetchLogs = async () => {
+    const id = jobIdRef.current;
+    if (!id) return;
     try {
       setIsFetching(true);
-      const res = await axios.get(`/api/jobs/${job.id}/logs`);
+      const res = await axios.get(`/api/jobs/${id}/logs?t=${Date.now()}`);
       if (Array.isArray(res.data) && res.data.length > 0) {
         setLogs(res.data);
-      } else if (job.logs && Array.isArray(job.logs)) {
-        setLogs(job.logs);
-      } else {
-        setLogs([`[INFO] Target log file path: ${job.logPath}`, `[INFO] Waiting for output stream...`]);
       }
     } catch (err) {
-      if (job.logs && Array.isArray(job.logs)) {
-        setLogs(job.logs);
-      } else {
-        setLogs([`[INFO] Target log file path: ${job.logPath}`, `[INFO] ${job.command}`]);
-      }
+      // silently ignore fetch errors during polling
     } finally {
       setIsFetching(false);
     }
   };
 
+  // Sync status from props
   useEffect(() => {
-    setStatus(job.status);
-    fetchLiveLogs();
+    if (job) {
+      setStatus(job.status);
+      doFetchLogs();
+    }
+  }, [job?.id, job?.status]);
 
-    // Poll live log output every 3 seconds if process is running
-    if (job.status === 'Running') {
-      pollIntervalRef.current = setInterval(fetchLiveLogs, 3000);
+  // Polling: start/stop based on status
+  useEffect(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+
+    if (status === 'Running' && isOpen) {
+      // Poll every 2 seconds using a simple setInterval
+      // doFetchLogs reads jobIdRef.current each time, so it's always fresh
+      pollTimerRef.current = setInterval(doFetchLogs, 2000);
     }
 
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
     };
-  }, [job]);
+  }, [status, isOpen]);
 
   // Auto-scroll to bottom ONLY if user hasn't scrolled up manually
   useEffect(() => {
@@ -68,6 +76,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, searchTerm, userScrolledUp]);
+
+  // Early return AFTER all hooks (React Rules of Hooks compliance)
+  if (!isOpen || !job) return null;
 
   const getStatusColor = (currentStatus) => {
     switch (currentStatus) {
@@ -98,9 +109,10 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       setStatus('Running');
       onUpdateJobStatus(job.id, 'Running');
       await axios.post(`/api/jobs/${job.id}/start`);
-      fetchLiveLogs();
+      // Give SSH a moment to create the log file, then fetch
+      setTimeout(doFetchLogs, 1500);
     } catch (err) {
-      fetchLiveLogs();
+      doFetchLogs();
     }
   };
 
@@ -109,9 +121,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       setStatus('Failed');
       onUpdateJobStatus(job.id, 'Failed');
       await axios.post(`/api/jobs/${job.id}/stop`);
-      fetchLiveLogs();
+      doFetchLogs();
     } catch (err) {
-      fetchLiveLogs();
+      doFetchLogs();
     }
   };
 
@@ -120,9 +132,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       setStatus('Paused');
       onUpdateJobStatus(job.id, 'Paused');
       await axios.post(`/api/jobs/${job.id}/pause`);
-      fetchLiveLogs();
+      doFetchLogs();
     } catch (err) {
-      fetchLiveLogs();
+      doFetchLogs();
     }
   };
 
@@ -154,19 +166,19 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999
     }}>
       <div style={{
-        width: '860px', background: '#090D10', borderRadius: '12px',
+        width: 'min(860px, 92vw)', background: '#090D10', borderRadius: '10px',
         overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', height: '620px'
+        border: '1px solid #1f2937', display: 'flex', flexDirection: 'column', height: 'min(580px, 82vh)'
       }}>
         
         {/* Terminal Header */}
         <div style={{
-          background: '#0D1117', padding: '12px 18px', borderBottom: '1px solid #21262d',
+          background: '#0D1117', padding: '8px 14px', borderBottom: '1px solid #21262d',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Terminal size={18} style={{ color: '#38bdf8' }} />
-            <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '14px' }}>{job.name}</span>
+            <Terminal size={15} style={{ color: '#38bdf8' }} />
+            <span style={{ color: '#e2e8f0', fontWeight: 'bold', fontSize: '12.5px' }}>{job.name}</span>
             <span style={{
               background: getStatusColor(status), color: '#fff', fontSize: '9.5px',
               padding: '2px 8px', borderRadius: '20px', fontWeight: 'bold', textTransform: 'uppercase'
@@ -191,9 +203,9 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
 
         {/* Command Subbar with Search Filter */}
         <div style={{
-          background: '#161B22', padding: '8px 18px', borderBottom: '1px solid #21262d',
-          fontSize: '11px', color: '#c9d1d9', fontFamily: 'monospace', display: 'flex',
-          justifyContent: 'space-between', alignItems: 'center', gap: '12px'
+          background: '#161B22', padding: '5px 14px', borderBottom: '1px solid #21262d',
+          fontSize: '10.5px', color: '#c9d1d9', fontFamily: 'monospace', display: 'flex',
+          justifyContent: 'space-between', alignItems: 'center', gap: '10px'
         }}>
           <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
             <span style={{ color: '#8b949e' }}>Command: </span>
@@ -202,7 +214,7 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
-              onClick={fetchLiveLogs}
+              onClick={doFetchLogs}
               style={{ background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
             >
               <RefreshCw size={11} className={isFetching ? "animate-spin" : ""} /> Refresh
@@ -228,8 +240,8 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
           ref={terminalContainerRef}
           onScroll={handleTerminalScroll}
           style={{
-          flex: 1, padding: '14px 18px', overflowY: 'auto', background: '#090d10',
-          fontFamily: "'Fira Code', 'Courier New', Courier, monospace", fontSize: '11.5px', lineHeight: '1.6'
+          flex: 1, padding: '10px 14px', overflowY: 'auto', background: '#090d10',
+          fontFamily: "'Fira Code', 'Courier New', Courier, monospace", fontSize: '11px', lineHeight: '1.5'
         }}>
           {filteredLogs.map((line, idx) => {
             const parsed = parseLogLevel(line);
@@ -249,7 +261,7 @@ export default function JobLogViewerModal({ job, isOpen, onClose, onUpdateJobSta
 
         {/* Action Controls Footer */}
         <div style={{
-          background: '#0D1117', padding: '12px 18px', borderTop: '1px solid #21262d',
+          background: '#0D1117', padding: '8px 14px', borderTop: '1px solid #21262d',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center'
         }}>
           <div style={{ display: 'flex', gap: '8px' }}>

@@ -1,5 +1,25 @@
 [
   {
+    "id": 1786910864171,
+    "name": "34RE",
+    "category": "import",
+    "importTarget": "is",
+    "type": "Bulk",
+    "runTypeDisplay": "Bulk",
+    "source": "FileNet P8",
+    "dateRange": "11-08-2026 – 14-08-2026",
+    "filterCriteria": "Status = Pending",
+    "records": 10000,
+    "recordsProcessed": 0,
+    "status": "Pending",
+    "createdBy": "admin",
+    "createdDate": "17-Aug-2026",
+    "env": "Ubuntu Server 24.04 LTS (192.168.1.243)",
+    "command": "dotnet TrueMigrator.dll status=Pending startdate=11-08-2026 enddate=14-08-2026",
+    "processPid": null,
+    "startTime": null
+  },
+  {
     "id": 1786906490337,
     "name": "CASE_IMP_002",
     "category": "import",
