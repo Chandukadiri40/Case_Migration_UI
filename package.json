@@ -14,15 +14,23 @@
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.344.0",
+    "mammoth": "^1.12.1",
     "papaparse": "^5.4.1",
+    "pdfjs-dist": "^3.11.174",
     "pg": "^8.23.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-pdf": "^7.7.1",
     "react-router-dom": "^6.22.0",
-    "ssh2": "^1.17.0"
+    "react-syntax-highlighter": "^16.1.1",
+    "ssh2": "^1.17.0",
+    "utif": "^3.1.0",
+    "x-data-spreadsheet": "^1.1.9",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
+    "less": "^4.9.0",
     "vite": "^6.4.3"
   }
 }

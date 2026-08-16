@@ -37,9 +37,9 @@ export default function App() {
             <Route index element={<DashboardOverview />} />
             <Route path="dashboard" element={<DashboardOverview />} />
             <Route path="search" element={<SearchDocs />} />
-            <Route path="reconciliation" element={<Navigate to="reconciliation/case" replace />} />
-            <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
+            <Route path="reconciliation" element={<Navigate to="reconciliation/is" replace />} />
             <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
+            <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
             
             <Route path="jobs-configuration" element={<JobsConfiguration />} />
             <Route path="folders" element={<Folders />} />

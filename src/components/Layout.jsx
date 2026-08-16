@@ -20,13 +20,13 @@ export default function Layout() {
     pageTitle = 'Configurations'
   } else if (path.startsWith('/property-mapping')) {
     crumb = 'Mapping'
-    pageTitle = 'Metadata Mapping'
+    pageTitle = 'Mapping'
   } else if (path.startsWith('/jobs-configuration')) {
     crumb = 'Jobs Configuration'
     pageTitle = 'Jobs Configuration'
   } else if (path.startsWith('/search')) {
     crumb = 'Search Docs'
-    pageTitle = 'Search Migrated Documents'
+    pageTitle = 'Search Documents'
   } else if (path.startsWith('/reconciliation')) {
     crumb = 'Reconciliation'
     pageTitle = 'Reconciliation'
@@ -55,8 +55,8 @@ export default function Layout() {
         <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 20px 20px 20px', borderBottom: '1px solid #1B2A42' }}>
           <div className="brand-mark" style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'linear-gradient(135deg, #2563EB, #60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: '700', fontSize: '13px', flexShrink: 0 }}>TM</div>
           <div>
-            <div className="brand-name" style={{ color: '#fff', fontWeight: '600', fontSize: '14.5px', lineHeight: '1.2' }}>TrueMigrate Center</div>
-            <div className="brand-sub" style={{ color: '#93A4BD', fontSize: '10.5px', letterSpacing: '.04em' }}>MIGRATION MANAGEMENT</div>
+            <div className="brand-name" style={{ color: '#fff', fontWeight: '600', fontSize: '14.5px', lineHeight: '1.2' }}>TrueMigrator</div>
+            <div className="brand-sub" style={{ color: '#93A4BD', fontSize: '10.5px', letterSpacing: '.04em' }}>Monitoring &amp; Search</div>
           </div>
         </div>
 
@@ -121,20 +121,7 @@ export default function Layout() {
             Jobs Configuration
           </NavLink>
 
-          <NavLink 
-            to="/folders" 
-            className={`nav-item ${isFoldersActive ? 'active' : ''}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', borderRadius: '6px',
-              color: isFoldersActive ? '#FFFFFF' : '#93A4BD',
-              fontSize: '13px', fontWeight: '500', cursor: 'pointer',
-              background: isFoldersActive ? '#2563EB' : 'transparent',
-              textDecoration: 'none'
-            }}
-          >
-            <FolderTree size={16} style={{ opacity: isFoldersActive ? 1 : 0.85 }} />
-            Folders
-          </NavLink>
+
 
           <NavLink 
             to="/search" 
@@ -152,7 +139,7 @@ export default function Layout() {
           </NavLink>
 
           <NavLink 
-            to="/reconciliation/case" 
+            to="/reconciliation/is" 
             className={`nav-item ${isReconciliationActive ? 'active' : ''}`}
             style={{
               display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', borderRadius: '6px',
@@ -196,11 +183,10 @@ export default function Layout() {
           </div>
           
           <div className="header-right" style={{ display: 'flex', alignItems: 'center' }}>
-            <div className="user-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 8px 3px 4px', borderRadius: '7px', border: '1px solid #E3E7EE' }}>
-              <div className="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#EFF4FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10.5px', fontWeight: '700' }}>AU</div>
+            <div className="user-chip" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 10px', borderRadius: '7px', border: '1px solid #E3E7EE' }}>
+              <div className="avatar" style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#EFF4FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700' }}>M</div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className="uname" style={{ fontSize: '11px', fontWeight: '600', color: '#1F2937', lineHeight: 1.2 }}>Admin User</span>
-                <span className="urole" style={{ fontSize: '9px', color: '#98A2B3' }}>Migration Manager</span>
+                <span className="uname" style={{ fontSize: '12px', fontWeight: '600', color: '#1F2937', lineHeight: 1.2 }}>Migration_User</span>
               </div>
             </div>
           </div>

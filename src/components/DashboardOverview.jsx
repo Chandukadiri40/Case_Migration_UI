@@ -203,9 +203,9 @@ export default function DashboardOverview() {
       {/* Auto-refresh indicator */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '10px', paddingRight: '4px' }}>
         <div style={{ 
-          display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
+          display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#6B7280', 
           background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', 
-          fontFamily: 'monospace', fontWeight: 'bold', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          fontWeight: '600', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
         }}>
           <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
           <span>Auto-Refresh: {formatTime(countdown)}</span>
@@ -301,96 +301,34 @@ export default function DashboardOverview() {
         </div>
 
         {/* Donut Chart panel */}
-        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px' }}>
-          <div className="panel-head" style={{ marginBottom: '14px' }}>
-            <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
-              Migration Status <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Current record distribution</small>
+        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div className="panel-head" style={{ marginBottom: '14px' }}>
+              <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
+                Migration Status <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Current record distribution</small>
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <svg viewBox="0 0 120 120" width="130" height="130">
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#F4F6F9" strokeWidth="16"/>
-              {/* Dynamic segmented slices */}
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#0F9D58" strokeWidth="16" strokeDasharray={`${successCirc} 283`} strokeDashoffset="0" transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#2563EB" strokeWidth="16" strokeDasharray={`${ipCirc} 283`} strokeDashoffset={`-${successCirc}`} transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#D92D20" strokeWidth="16" strokeDasharray={`${failedCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc}`} transform="rotate(-90 60 60)"/>
-              <circle cx="60" cy="60" r="45" fill="none" stroke="#98A2B3" strokeWidth="16" strokeDasharray={`${pendingCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc + failedCirc}`} transform="rotate(-90 60 60)"/>
-              
-              <text x="60" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#1F2937">{migratedPct}%</text>
-              <text x="60" y="72" text-anchor="middle" fontSize="9" fill="#98A2B3">Migrated</text>
-            </svg>
-            <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '9px', color: '#1F2937' }}>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '6px' }}></span>Migrated — {data.success.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '6px' }}></span>In Progress — {data.inProgress.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '6px' }}></span>Failed — {data.failed.toLocaleString()}</div>
-              <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#98A2B3', borderRadius: '2px', marginRight: '6px' }}></span>Pending — {data.pending.toLocaleString()}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <svg viewBox="0 0 120 120" width="130" height="130">
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#F4F6F9" strokeWidth="16"/>
+                {/* Dynamic segmented slices */}
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#0F9D58" strokeWidth="16" strokeDasharray={`${successCirc} 283`} strokeDashoffset="0" transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#2563EB" strokeWidth="16" strokeDasharray={`${ipCirc} 283`} strokeDashoffset={`-${successCirc}`} transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#D92D20" strokeWidth="16" strokeDasharray={`${failedCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc}`} transform="rotate(-90 60 60)"/>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#98A2B3" strokeWidth="16" strokeDasharray={`${pendingCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc + failedCirc}`} transform="rotate(-90 60 60)"/>
+                
+                <text x="60" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#1F2937">{migratedPct}%</text>
+                <text x="60" y="72" textAnchor="middle" fontSize="9" fill="#98A2B3">Migrated</text>
+              </svg>
+              <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '9px', color: '#1F2937' }}>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '6px' }}></span>Migrated — {data.success.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '6px' }}></span>In Progress — {data.inProgress.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '6px' }}></span>Failed — {data.failed.toLocaleString()}</div>
+                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#98A2B3', borderRadius: '2px', marginRight: '6px' }}></span>Pending — {data.pending.toLocaleString()}</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Recent Jobs Table */}
-      <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px' }}>
-        <div className="panel-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
-            Recent Jobs <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Latest extraction and import activity</small>
-          </div>
-          <button 
-            onClick={() => navigate('/deliverables')} 
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: '600',
-              border: '1px solid #E3E7EE',
-              background: '#fff',
-              cursor: 'pointer',
-              color: '#4b5563',
-              transition: 'all 0.15s'
-            }}
-          >
-            View All Jobs
-          </button>
-        </div>
-        
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12.5px' }}>
-          <thead>
-            <tr style={{ background: '#FAFBFC' }}>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>Job Name</th>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>Job Type</th>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>Records</th>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>Status</th>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>Start Time</th>
-              <th style={{ textAlign: 'left', fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '.03em', color: '#98A2B3', fontWeight: '700', padding: '9px 12px', borderBottom: '1px solid #E3E7EE' }}>End Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style={{ borderBottom: '1px solid #E3E7EE' }}>
-              <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>EXT_JOB_001</td>
-              <td style={{ padding: '10px 12px' }}>Extraction</td>
-              <td style={{ padding: '10px 12px' }}>{data.total.toLocaleString()}</td>
-              <td style={{ padding: '10px 12px' }}><span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '12px', background: '#E7F7EE', color: '#0F9D58', fontSize: '11px', fontWeight: '600' }}>Completed</span></td>
-              <td style={{ padding: '10px 12px' }}>08:00</td>
-              <td style={{ padding: '10px 12px' }}>09:15</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid #E3E7EE' }}>
-              <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>IMP_JOB_001</td>
-              <td style={{ padding: '10px 12px' }}>Import</td>
-              <td style={{ padding: '10px 12px' }}>{data.success.toLocaleString()}</td>
-              <td style={{ padding: '10px 12px' }}><span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '12px', background: '#EFF4FF', color: '#2563EB', fontSize: '11px', fontWeight: '600' }}>In Progress</span></td>
-              <td style={{ padding: '10px 12px' }}>09:30</td>
-              <td style={{ padding: '10px 12px' }}>—</td>
-            </tr>
-            <tr style={{ borderBottom: '1px solid #E3E7EE' }}>
-              <td style={{ padding: '10px 12px', fontFamily: 'monospace' }}>EXT_JOB_002</td>
-              <td style={{ padding: '10px 12px' }}>Extraction</td>
-              <td style={{ padding: '10px 12px' }}>{(data.pending + data.inProgress).toLocaleString()}</td>
-              <td style={{ padding: '10px 12px' }}><span style={{ display: 'inline-flex', padding: '2px 8px', borderRadius: '12px', background: '#F1F2F4', color: '#6B7280', fontSize: '11px', fontWeight: '600' }}>Pending</span></td>
-              <td style={{ padding: '10px 12px' }}>—</td>
-              <td style={{ padding: '10px 12px' }}>—</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
   )
