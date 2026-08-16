@@ -168,12 +168,31 @@ function deriveColumns(records, active) {
     if (docTitleKey) orderedKeys.push(docTitleKey);
     orderedKeys.push(...customKeys);
 
-    return orderedKeys.map(key => ({
-      key,
-      label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim(),
-      sortable: true,
-      visible: true,
-    }));
+    return orderedKeys.map(key => {
+      let label = key
+        .replace(/^u_/i, '')
+        .replace(/^f_/i, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+        .replace(/([a-zA-Z])([0-9]+)/g, '$1 $2')
+        .replace(/([0-9]+)([a-zA-Z])/g, '$1 $2')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase())
+      const lower = key.toLowerCase()
+      if (lower === 'f_docnumber' || lower === 'doc_no' || lower === 'docnumber') label = 'Document Number'
+      if (lower === 'f_docclassnumber' || lower === 'doc_class' || lower === 'docclass') label = 'Document Class'
+      if (lower === 'f_docformat' || lower === 'docformat') label = 'Document Format'
+      if (lower === 'f_entrydate') label = 'Created Date'
+      if (lower === 'migration_status') label = 'Status'
+      return {
+        key,
+        label,
+        sortable: true,
+        visible: true,
+      }
+    });
   } else {
     return [
       ...SYSTEM_FIELDS.map(f => ({ key: f.key, label: f.label, sortable: true, visible: true })),

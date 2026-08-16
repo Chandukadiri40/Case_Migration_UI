@@ -640,7 +640,7 @@ function MigrationReportTab() {
                     <tr>
                       <th>S.No</th>
                       <th>Application</th>
-                      <th>Documentation Class</th>
+                      <th>Document Class</th>
                       <th>Total No Documents</th>
                       <th>Total Files Size (in GB)</th>
                       <th>No. Extracted(FileNet)</th>
