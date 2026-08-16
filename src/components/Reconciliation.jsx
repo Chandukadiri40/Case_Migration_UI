@@ -431,7 +431,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         const caseCols = [
           'case_id', 'doc_no', 'case_type', 'customer_id', 'customer_name', 'policy_number',
           'case_created_date', 'case_description', 'case_status', 'case_owner', 'department', 'case_closed_date',
-          'priority', 'source_system', 'document_count', 'extracted_status', 'extracted_date',
+          'priority', 'source_system', 'document_count',
           'migrated_date', 'migration_status', 'error_info', 'filefullpath', 'p8_doc_id'
         ]
         const selectClause = caseCols.join(', ')
@@ -481,43 +481,47 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
           })
         }
 
-        // 2. Fetch specific records grid data
-        let recordQuery = `SELECT ${selectClause} FROM case_metadata`
-        const recordWhereClauses = []
-        
-        if (statusFilter !== 'All' && statusFilter !== '') {
-          const filterVal = statusFilter.toLowerCase().trim()
-          if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
-          } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
-          } else if (filterVal === 'failed' || filterVal === 'failure') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
-          } else if (filterVal === 'pending') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
-          } else if (filterVal === 'remaining') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
-          } else {
-            recordWhereClauses.push(`LOWER(migration_status) = '${filterVal}'`)
+        // 2. Fetch specific records grid data (only for filtered status/criteria, not full Summary)
+        if (statusFilter !== 'All' || idList.length > 0 || fromDateFilter || toDateFilter) {
+          let recordQuery = `SELECT ${selectClause} FROM case_metadata`
+          const recordWhereClauses = []
+          
+          if (statusFilter !== 'All' && statusFilter !== '') {
+            const filterVal = statusFilter.toLowerCase().trim()
+            if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
+            } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
+            } else if (filterVal === 'failed' || filterVal === 'failure') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
+            } else if (filterVal === 'pending') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
+            } else if (filterVal === 'remaining') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
+            } else {
+              recordWhereClauses.push(`LOWER(migration_status) = '${filterVal}'`)
+            }
           }
+          if (idList.length > 0) {
+            const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
+            recordWhereClauses.push(`(doc_no::text IN (${idStrList}) OR case_id::text IN (${idStrList}))`)
+          }
+          if (fromDateFilter) {
+            recordWhereClauses.push(`${caseNormDateSql} >= '${fromDateFilter}'`)
+          }
+          if (toDateFilter) {
+            recordWhereClauses.push(`${caseNormDateSql} <= '${toDateFilter}'`)
+          }
+          if (recordWhereClauses.length > 0) {
+            recordQuery += ` WHERE ` + recordWhereClauses.join(' AND ')
+          }
+          
+          recordQuery += ` ORDER BY case_id ASC`
+          const res = await apiExecuteQuery(recordQuery)
+          setRecords(res || [])
+        } else {
+          setRecords([])
         }
-        if (idList.length > 0) {
-          const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
-          recordWhereClauses.push(`(doc_no::text IN (${idStrList}) OR case_id::text IN (${idStrList}))`)
-        }
-        if (fromDateFilter) {
-          recordWhereClauses.push(`${caseNormDateSql} >= '${fromDateFilter}'`)
-        }
-        if (toDateFilter) {
-          recordWhereClauses.push(`${caseNormDateSql} <= '${toDateFilter}'`)
-        }
-        if (recordWhereClauses.length > 0) {
-          recordQuery += ` WHERE ` + recordWhereClauses.join(' AND ')
-        }
-        
-        recordQuery += ` ORDER BY case_id ASC`
-        const res = await apiExecuteQuery(recordQuery)
-        setRecords(res || [])
 
       } else {
         // ── IS Reconciliation normal mode (Queries doctaba dynamically with specific columns and date conversion) ──
@@ -544,19 +548,14 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         const classMappings = customMappings.filter(m => Number(m.f_docclassnumber) === docClassNum)
         const customCols = classMappings.map(m => m.f_columnname.toLowerCase())
 
-        // System properties of doctaba
+        // System properties of doctaba (Only: Document Number, Document Class, Created Date, Document Format)
         const systemCols = [
-          'f_docnumber', 'f_docclassnumber', 'f_entrydate', 'f_lastaccess', 'f_annotationflag',
-          'f_archivedate', 'f_purgedate', 'f_deletedate', 'f_retentbase', 'f_retentdisp',
-          'f_retentoffset', 'f_pages', 'f_securityspec', 'f_accessrights', 'f_doctype',
-          'f_status', 'f_docformat', 'f_doclocation', 'f_ce_os_id', 'f_accessrights_rd',
-          'f_accessrights_wr', 'f_accessrights_ax'
+          'f_docnumber', 'f_docclassnumber', 'f_entrydate', 'f_docformat'
         ]
 
-        // Status & Path properties of doctaba
+        // Status & Error Info properties of doctaba
         const specificCols = [
-          'migration_status', 'migrated_date',
-          'error_info', 'filefullpath', 'folderpath', 'retrieval_name', 'p8_doc_id'
+          'migration_status', 'error_info'
         ]
 
         // Filter lists to only include columns that physically exist in the database table
@@ -639,44 +638,49 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         }
 
         // 2. Fetch specific records grid data with status & date filters
-        let recordQuery = `SELECT ${selectClause} FROM doctaba`
-        const recordWhereClauses = []
+        // 2. Fetch specific records grid data (only for filtered status/criteria, not full Summary)
+        if (statusFilter !== 'All' || idList.length > 0 || fromDays !== null || toDays !== null) {
+          let recordQuery = `SELECT ${selectClause} FROM doctaba`
+          const recordWhereClauses = []
 
-        if (statusFilter !== 'All' && statusFilter !== '') {
-          const filterVal = statusFilter.toLowerCase().trim()
-          if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
-          } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
-          } else if (filterVal === 'failed' || filterVal === 'failure') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
-          } else if (filterVal === 'pending') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
-          } else if (filterVal === 'remaining') {
-            recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
-          } else {
-            recordWhereClauses.push(`LOWER(migration_status) = '${filterVal}'`)
+          if (statusFilter !== 'All' && statusFilter !== '') {
+            const filterVal = statusFilter.toLowerCase().trim()
+            if (filterVal === 'migrated' || filterVal === 'success' || filterVal === 'sucsess') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('success', 'migrated', 'sucsess')`)
+            } else if (filterVal === 'in progress' || filterVal === 'inprogress' || filterVal === 'in-progress') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry')`)
+            } else if (filterVal === 'failed' || filterVal === 'failure') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('failed', 'failure', 'error')`)
+            } else if (filterVal === 'pending') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'queued', 'not started', 'not_started')`)
+            } else if (filterVal === 'remaining') {
+              recordWhereClauses.push(`LOWER(migration_status) IN ('pending', 'in progress', 'in-progress', 'inprogress', 'retry')`)
+            } else {
+              recordWhereClauses.push(`LOWER(migration_status) = '${filterVal}'`)
+            }
           }
-        }
 
-        if (fromDays !== null) {
-          recordWhereClauses.push(`f_entrydate::integer >= ${fromDays}`)
-        }
-        if (toDays !== null) {
-          recordWhereClauses.push(`f_entrydate::integer <= ${toDays}`)
-        }
-        if (idList.length > 0) {
-          const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
-          recordWhereClauses.push(`f_docnumber::text IN (${idStrList})`)
-        }
+          if (fromDays !== null) {
+            recordWhereClauses.push(`f_entrydate::integer >= ${fromDays}`)
+          }
+          if (toDays !== null) {
+            recordWhereClauses.push(`f_entrydate::integer <= ${toDays}`)
+          }
+          if (idList.length > 0) {
+            const idStrList = idList.map(id => `'${id.replace(/'/g, "''")}'`).join(', ')
+            recordWhereClauses.push(`f_docnumber::text IN (${idStrList})`)
+          }
 
-        if (recordWhereClauses.length > 0) {
-          recordQuery += ` WHERE ` + recordWhereClauses.join(' AND ')
+          if (recordWhereClauses.length > 0) {
+            recordQuery += ` WHERE ` + recordWhereClauses.join(' AND ')
+          }
+          
+          recordQuery += ` ORDER BY f_docnumber DESC`
+          const res = await apiExecuteQuery(recordQuery)
+          setRecords(res || [])
+        } else {
+          setRecords([])
         }
-        
-        recordQuery += ` ORDER BY f_docnumber DESC`
-        const res = await apiExecuteQuery(recordQuery)
-        setRecords(res || [])
       }
 
     } catch (e) {
@@ -784,8 +788,8 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         'error_info'
       ]
 
-      // Ignore internal sequence / id keys from dynamic list so that S.No is strictly 1, 2, 3...
-      const ignoredKeys = ['sno', 's_no', 'id', 'serial_no', 'serialno']
+      // Ignore internal sequence / id keys and excluded extracted columns from dynamic list
+      const ignoredKeys = ['sno', 's_no', 'id', 'serial_no', 'serialno', 'extracted_status', 'extracted_date', 'extractedstatus', 'extracteddate']
 
       const displayedKeys = preferredOrder.filter(k => 
         recordKeys.some(rk => rk.toLowerCase() === k.toLowerCase())
@@ -827,20 +831,19 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         return colLower.includes('date') || colLower.includes('access')
       }
 
-      // 1. System properties from doctaba (start with f_) - formatted consistently
-      const systemHeaders = recordKeys
-        .filter(key => {
-          const keyLower = key.toLowerCase()
-          if (reconcileTab === 'exception') {
-            return keyLower === 'f_docnumber' || 
-                   keyLower === 'f_docclassnumber' || 
-                   keyLower === 'f_entrydate' || 
-                   keyLower === 'f_docformat'
-          }
-          return keyLower.startsWith('f_')
-        })
-        .map(key => {
-          return { key, label: formatColumnHeader(key), isDate: isDateColumn(key, false) }
+      // 1. System properties from doctaba (ONLY: Document Number, Document Class, Created Date, Document Format)
+      const allowedSystemProps = [
+        { key: 'f_docnumber', label: 'Document Number' },
+        { key: 'f_docclassnumber', label: 'Document Class' },
+        { key: 'f_entrydate', label: 'Created Date', isDate: true },
+        { key: 'f_docformat', label: 'Document Format' }
+      ]
+
+      const systemHeaders = allowedSystemProps
+        .filter(p => recordKeys.some(rk => rk.toLowerCase() === p.key.toLowerCase()))
+        .map(p => {
+          const actualKey = recordKeys.find(rk => rk.toLowerCase() === p.key.toLowerCase()) || p.key
+          return { ...p, key: actualKey }
         })
 
       // 2. Custom metadata fields mapped in doc_class_index for the active f_docclassnumber
@@ -856,21 +859,37 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
             isDate
           }
         })
-        .filter(h => recordKeys.includes(h.key))
+        .filter(h => recordKeys.some(rk => rk.toLowerCase() === h.key.toLowerCase()))
 
-      // 3. Specific status & path properties from doctaba
-      const specificKeys = reconcileTab === 'exception'
-        ? ['migration_status', 'error_info']
-        : ['migration_status', 'migrated_date', 'error_info', 'filefullpath', 'folderpath', 'retrieval_name', 'p8_doc_id']
-      
-      const specificHeaders = specificKeys
-        .filter(key => recordKeys.some(rk => rk.toLowerCase() === key.toLowerCase()))
-        .map(key => {
-          const actualKey = recordKeys.find(rk => rk.toLowerCase() === key.toLowerCase())
-          return { key: actualKey, label: formatColumnHeader(key) }
+      // Any additional unmapped custom metadata fields in the record (e.g. starting with u_)
+      const otherCustomHeaders = recordKeys
+        .filter(key => {
+          const kLower = key.toLowerCase()
+          const isAllowedSys = allowedSystemProps.some(p => p.key.toLowerCase() === kLower)
+          const isMappedCustom = mappedCustomColumns.some(m => m.key.toLowerCase() === kLower)
+          const isSpecific = ['migration_status', 'migrated_date', 'error_info', 'filefullpath', 'folderpath', 'retrieval_name', 'p8_doc_id', 'sno', 'id', 'serial_no'].includes(kLower)
+          const isIgnoredSystem = ['f_lastaccess', 'f_annotationflag', 'f_archivedate', 'f_purgedate', 'f_deletedate', 'f_retentbase', 'f_retentdisp', 'f_retentoffset', 'f_pages', 'f_securityspec', 'f_accessrights', 'f_doctype', 'f_status', 'f_doclocation', 'f_ce_os_id', 'f_accessrights_rd', 'f_accessrights_wr', 'f_accessrights_ax'].includes(kLower)
+          
+          return !isAllowedSys && !isMappedCustom && !isSpecific && !isIgnoredSystem
         })
+        .map(key => ({
+          key,
+          label: formatColumnHeader(key),
+          isDate: isDateColumn(key, true)
+        }))
 
-      activeHeaders = [...systemHeaders, ...mappedCustomColumns, ...specificHeaders]
+      // 3. Status and Error Info (if failed)
+      const specificHeaders = []
+      const statusKey = recordKeys.find(rk => rk.toLowerCase() === 'migration_status')
+      if (statusKey) {
+        specificHeaders.push({ key: statusKey, label: 'Status' })
+      }
+      const errorKey = recordKeys.find(rk => rk.toLowerCase() === 'error_info')
+      if (errorKey && (statusFilter?.toLowerCase() === 'failed' || reconcileTab === 'exception')) {
+        specificHeaders.push({ key: errorKey, label: 'Error Info' })
+      }
+
+      activeHeaders = [...systemHeaders, ...mappedCustomColumns, ...otherCustomHeaders, ...specificHeaders]
     }
   }
 
@@ -1191,7 +1210,7 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                   transition: 'all 0.15s'
                 }}
               >
-                Case Search
+                 Case Reconciliation
               </button>
               <button
                 onClick={() => handleSubTabChange('is')}
@@ -1208,38 +1227,27 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                   transition: 'all 0.15s'
                 }}
               >
-                IS Search
+                IS Reconciliation
               </button>
             </div>
           </div>
           
-<<<<<<< HEAD
           {reconcileTab !== 'exception' && (
             <div style={{ 
-              display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10.5px', color: '#4b5563', 
-              background: '#fff', padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', 
-              fontFamily: 'monospace', fontWeight: 'bold'
+              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
+              background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', 
+              fontFamily: 'monospace', fontWeight: 'bold', marginLeft: 'auto', marginRight: '4px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
             }}>
-              <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 5px #10b981' }}></span>
+              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
               <span>Auto-Refresh: {formatTime(countdown)}</span>
             </div>
           )}
-=======
-          <div style={{ 
-            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#4b5563', 
-            background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', 
-            fontFamily: 'monospace', fontWeight: 'bold', marginLeft: 'auto', marginRight: '4px',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-          }}>
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
-            <span>Auto-Refresh: {formatTime(countdown)}</span>
-          </div>
->>>>>>> a5f38b8b5f4925429b033b03f84278dd692aaaf1
         </div>
 
-        {/* Sub-Tabs: Reconciliation Dashboard, Recon Report, Exception Report, Search, Checksum Report */}
+        {/* Sub-Tabs: Reconciliation Dashboard, Recon Report, Exception Report, Checksum Report */}
         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto' }}>
-          {['summary', 'report', 'exception', 'search', 'checksum'].filter(tab => !(subTab === 'case_metadata' && tab === 'checksum')).map(tab => (
+          {['summary', 'report', 'exception', 'checksum'].filter(tab => !(subTab === 'case_metadata' && tab === 'checksum')).map(tab => (
             <button
               key={tab}
               onClick={() => handleReconcileTabChange(tab)}
@@ -1256,15 +1264,16 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                 whiteSpace: 'nowrap'
               }}
             >
-              {tab === 'summary' ? 'Reconciliation Dashboard' : tab === 'report' ? 'Recon Report' : tab === 'exception' ? 'Exception Report' : tab === 'search' ? 'Search' : 'Checksum Report'}
+              {tab === 'summary' ? 'Reconciliation Dashboard' : tab === 'report' ? 'Recon Report' : tab === 'exception' ? 'Exception Report' : 'Checksum Report'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Main Area ── */}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* ── Main Content Area ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         
+        {/* Loading Overlay */}
         {loading && (
           <div style={{
             position: 'absolute',
@@ -1289,256 +1298,6 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
         )}
 
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-            
-            {/* Filter controls: Shown on Search Tab */}
-            {reconcileTab === 'search' && (
-              <div className="filters-panel" style={{
-                marginBottom: '12px',
-                background: 'white',
-                padding: '12px 18px',
-                borderRadius: '12px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                border: '1px solid #e2e8f0'
-              }}>
-                {(selectedStatus === 'All' || selectedStatus === '') ? (
-                  /* ── Single Compact Inline Row for Summary / Default Status ── */
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>Status</span>
-                      <select
-                        value={selectedStatus}
-                        onChange={e => handleStatusChange(e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#0f172a',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          outline: 'none',
-                          width: '190px',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        <option value="">-- Select Status --</option>
-                        <option value="All">Summary</option>
-                        <option value="Migrated">Migrated</option>
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Failed">Failed</option>
-                      </select>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        onClick={handleSearchClick}
-                        disabled={loading}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '6px 20px',
-                          background: '#4f46e5',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: loading ? 'not-allowed' : 'pointer',
-                          fontWeight: 'bold',
-                          fontSize: '12px',
-                          transition: 'all 0.2s',
-                          boxShadow: '0 3px 8px rgba(79, 70, 229, 0.25)',
-                          opacity: loading ? 0.7 : 1
-                        }}
-                      >
-                        {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Search
-                      </button>
-                      <button
-                        onClick={handleClearClick}
-                        disabled={loading}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '6px 18px',
-                          background: 'white',
-                          color: '#475569',
-                          border: '1.5px solid #cbd5e1',
-                          borderRadius: '8px',
-                          cursor: loading ? 'not-allowed' : 'pointer',
-                          fontWeight: 'bold',
-                          fontSize: '12px',
-                          transition: 'all 0.2s',
-                          opacity: loading ? 0.7 : 1
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  /* ── 2x3 Grid for Specific Statuses (Migrated, Pending, In Progress, Failed) ── */
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto auto auto',
-                    justifyContent: 'start',
-                    columnGap: '32px',
-                    rowGap: '12px',
-                    alignItems: 'center'
-                  }}>
-                    {/* ── 1. Top-Left: STATUS ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>Status</span>
-                      <select
-                        value={selectedStatus}
-                        onChange={e => handleStatusChange(e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#0f172a',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          outline: 'none',
-                          width: '190px',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        <option value="">-- Select Status --</option>
-                        <option value="All">Summary</option>
-                        <option value="Migrated">Migrated</option>
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Failed">Failed</option>
-                      </select>
-                    </div>
-
-                    {/* ── 2. Top-Centre: CASE ID / DOC ID ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
-                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>{subTab === 'case_metadata' ? 'Case ID' : 'Doc ID'}</span>
-                      <input
-                        type="text"
-                        placeholder={subTab === 'case_metadata' ? 'e.g. CASE-2023-000109' : 'e.g. 125152'}
-                        value={selectedIds}
-                        onChange={e => setSelectedIds(e.target.value)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#0f172a',
-                          fontSize: '12px',
-                          fontWeight: '600',
-                          outline: 'none',
-                          width: '190px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                    </div>
-
-                    {/* ── 3. Top-Right: SEARCH BUTTON ── */}
-                    <div>
-                      <button
-                        onClick={handleSearchClick}
-                        disabled={loading}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          width: '110px',
-                          height: '32px',
-                          background: '#4f46e5',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '8px',
-                          cursor: loading ? 'not-allowed' : 'pointer',
-                          fontWeight: 'bold',
-                          fontSize: '12px',
-                          transition: 'all 0.2s',
-                          boxShadow: '0 3px 8px rgba(79, 70, 229, 0.25)',
-                          opacity: loading ? 0.7 : 1
-                        }}
-                      >
-                        {loading ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />} Search
-                      </button>
-                    </div>
-
-                    {/* ── 4. Bottom-Left: FROM DATE ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>From</span>
-                      <input
-                        type="date"
-                        value={selectedFromDate}
-                        onChange={e => setSelectedFromDate(e.target.value)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#0f172a',
-                          fontSize: '11px',
-                          outline: 'none',
-                          width: '190px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                    </div>
-
-                    {/* ── 5. Bottom-Centre: TO DATE ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '254px' }}>
-                      <span style={{ ...labelStyle, width: '56px', flexShrink: 0 }}>To</span>
-                      <input
-                        type="date"
-                        value={selectedToDate}
-                        onChange={e => setSelectedToDate(e.target.value)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: '8px',
-                          border: '1.5px solid #cbd5e1',
-                          background: '#f8fafc',
-                          color: '#0f172a',
-                          fontSize: '11px',
-                          outline: 'none',
-                          width: '190px',
-                          boxSizing: 'border-box'
-                        }}
-                      />
-                    </div>
-
-                    {/* ── 6. Bottom-Right: CLEAR BUTTON (Exactly Under Search!) ── */}
-                    <div>
-                      <button
-                        onClick={handleClearClick}
-                        disabled={loading}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          width: '110px',
-                          height: '32px',
-                          background: 'white',
-                          color: '#475569',
-                          border: '1.5px solid #cbd5e1',
-                          borderRadius: '8px',
-                          cursor: loading ? 'not-allowed' : 'pointer',
-                          fontWeight: 'bold',
-                          fontSize: '12px',
-                          transition: 'all 0.2s',
-                          opacity: loading ? 0.7 : 1
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
           {error ? (
             /* ── Database Error Banner ── */
@@ -1921,8 +1680,8 @@ export default function Reconciliation({ activeTab = 'case_metadata' }) {
                 </div>
               )}
 
-              {/* ── Case/IS Records Grid ── */}
-              {reconcileTab !== 'report' && (
+              {/* ── Case/IS Records Grid (Hidden in Summary mode, shown for specific filtered status queries) ── */}
+              {reconcileTab !== 'report' && (statusFilter !== 'All' || idsFilter.trim() || fromDateFilter || toDateFilter || isChecksumMode || reconcileTab === 'exception') && (
                 <div className="grid-container" style={{ background: 'white', padding: '12px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
                   
                   {/* Grid Toolbar with Action Buttons */}

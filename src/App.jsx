@@ -11,6 +11,7 @@ import JobsConfiguration from './components/JobsConfiguration'
 import Configuration from './components/Configuration'
 import PropertyMapping from './components/PropertyMapping'
 import Reconciliation from './components/Reconciliation'
+import SearchDocs from './components/SearchDocs'
 import DashboardOverview from './components/DashboardOverview'
 import Folders from './components/Folders'
 
@@ -35,7 +36,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<DashboardOverview />} />
             <Route path="dashboard" element={<DashboardOverview />} />
-            <Route path="search" element={<Dashboard />} />
+            <Route path="search" element={<SearchDocs />} />
             <Route path="reconciliation" element={<Navigate to="reconciliation/case" replace />} />
             <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
             <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
