@@ -7,9 +7,11 @@ import Layout from './components/Layout'
 import Monitor from './monitor/Monitor'
 import Discovery from './components/Discovery'
 import Exceptions from './components/Exceptions'
-import Deliverables from './components/Deliverables'
+import JobsConfiguration from './components/JobsConfiguration'
 import Configuration from './components/Configuration'
 import PropertyMapping from './components/PropertyMapping'
+import Reconciliation from './components/Reconciliation'
+import DashboardOverview from './components/DashboardOverview'
 
 function ProtectedRoute({ children }) {
   const { user } = useAuth()
@@ -18,7 +20,7 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { user } = useAuth()
-  return user ? <Navigate to="/discovery" replace /> : children
+  return user ? <Navigate to="/" replace /> : children
 }
 
 export default function App() {
@@ -30,15 +32,25 @@ export default function App() {
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<Navigate to="discovery" replace />} />
+            <Route index element={<DashboardOverview />} />
+            <Route path="dashboard" element={<DashboardOverview />} />
+            <Route path="search" element={<Dashboard />} />
+            <Route path="reconciliation" element={<Navigate to="reconciliation/case" replace />} />
+            <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
+            <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
+            
+            <Route path="jobs-configuration" element={<JobsConfiguration />} />
+            <Route path="configuration" element={<Configuration />} />
+            <Route path="property-mapping" element={<PropertyMapping />} />
+
+            {/* Hidden routes for Demo:
             <Route path="reports" element={<Dashboard />} />
             <Route path="monitor" element={<Monitor />} />
             <Route path="discovery" element={<Discovery />} />
             <Route path="exceptions" element={<Exceptions />} />
-            <Route path="deliverables" element={<Deliverables />} />
-            <Route path="configuration" element={<Configuration />} />
-            <Route path="property-mapping" element={<PropertyMapping />} />
-            <Route path="*" element={<Navigate to="discovery" replace />} />
+            */}
+            
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </BrowserRouter>

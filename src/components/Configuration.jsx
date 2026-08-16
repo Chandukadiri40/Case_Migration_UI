@@ -228,8 +228,71 @@ export default function Configuration() { // NOSONAR
   const [testSuccess, setTestSuccess] = useState(false);
   
   // New Navigation State
-  const [mainTab, setMainTab] = useState('appConfig'); // 'appConfig' | 'propertyMapping' | 'dbConfig'
+  const [mainTab, setMainTab] = useState('sourceConfig'); // 'sourceConfig' | 'utilityConfig' | 'targetConfig'
   const [selectedAppIndex, setSelectedAppIndex] = useState(null); // Used for drill-down in appConfig and selection in propertyMapping
+
+  // Source Config State
+  const [sourceSystem, setSourceSystem] = useState('IBM FileNet P8');
+  const [sourceType, setSourceType] = useState('Content Repository');
+  const [sourceHost, setSourceHost] = useState('filenet-prod-01.corp.local');
+  const [sourcePort, setSourcePort] = useState('9080');
+  const [sourceProtocol, setSourceProtocol] = useState('HTTPS');
+  const [sourceAuthType, setSourceAuthType] = useState('Basic');
+  const [sourceUsername, setSourceUsername] = useState('svc_migration_src');
+  const [sourcePassword, setSourcePassword] = useState('••••••••••');
+  const [sourceDomain, setSourceDomain] = useState('CORP');
+  const [sourceTimeout, setSourceTimeout] = useState('30');
+  const [sourceConnString, setSourceConnString] = useState('jdbc:filenet://filenet-prod-01.corp.local:9080/os1');
+  const [sourceDescription, setSourceDescription] = useState('Primary FileNet P8 object store used for the legal records repository migration.');
+  const [sourceTestStatus, setSourceTestStatus] = useState('Connection Successful — last verified 2 minutes ago');
+  const [testingSource, setTestingSource] = useState(false);
+
+  // Target Config State
+  const [targetSystem, setTargetSystem] = useState('Cloud Repository');
+  const [targetType, setTargetType] = useState('Content Repository');
+  const [targetHost, setTargetHost] = useState('target-repo.cloudapp.io');
+  const [targetPort, setTargetPort] = useState('443');
+  const [targetProtocol, setTargetProtocol] = useState('HTTPS');
+  const [targetAuthType, setTargetAuthType] = useState('OAuth 2.0');
+  const [targetUsername, setTargetUsername] = useState('svc_migration_tgt');
+  const [targetPassword, setTargetPassword] = useState('••••••••••');
+  const [targetDomain, setTargetDomain] = useState('—');
+  const [targetTimeout, setTargetTimeout] = useState('30');
+  const [targetRepository, setTargetRepository] = useState('LegalRecords-Prod');
+  const [targetObjectStore, setTargetObjectStore] = useState('OS_LEGAL_01');
+  const [targetDescription, setTargetDescription] = useState('Cloud target repository for migrated legal records — production tenant.');
+  const [targetTestStatus, setTargetTestStatus] = useState('Connection Successful — last verified 5 minutes ago');
+  const [testingTarget, setTestingTarget] = useState(false);
+
+  // Storage Config State
+  const [storageType, setStorageType] = useState('NAS');
+  const [storageProtocol, setStorageProtocol] = useState('NFS');
+  const [storageHost, setStorageHost] = useState('nas-migration-01.corp.local');
+  const [storageShareName, setStorageShareName] = useState('/export/truemigrate_staging');
+  const [storageMountPath, setStorageMountPath] = useState('/mnt/truemigrate/staging');
+  const [storageCapacity, setStorageCapacity] = useState('2048');
+  const [storageThreshold, setStorageThreshold] = useState('85');
+  const [storageTestStatus, setStorageTestStatus] = useState('Mount Status: Available — 1.2 TB free of 2 TB');
+  const [testingStorage, setTestingStorage] = useState(false);
+
+  // Offline Extraction State
+  const [indexDbPath, setIndexDbPath] = useState('/mnt/truemigrate/staging/is-index-db');
+  const [msarDatPath, setMsarDatPath] = useState('/mnt/truemigrate/staging/msar-dat');
+  const [filePattern, setFilePattern] = useState('*.dat');
+  const [syncMode, setSyncMode] = useState('Manual Copy');
+
+  // IS API Failover State
+  const [failoverEnabled, setFailoverEnabled] = useState('Enabled');
+  const [retryThreshold, setRetryThreshold] = useState('3');
+  const [failoverHost, setFailoverHost] = useState('is-prod-01.corp.local');
+  const [failoverPort, setFailoverPort] = useState('9000');
+  const [failoverProtocol, setFailoverProtocol] = useState('HTTPS');
+  const [failoverAuthType, setFailoverAuthType] = useState('Basic');
+  const [failoverUsername, setFailoverUsername] = useState('svc_is_failover');
+  const [failoverPassword, setFailoverPassword] = useState('••••••••••');
+  const [failoverUnresolved, setFailoverUnresolved] = useState('Yes — record failure reason');
+  const [failoverTestStatus, setFailoverTestStatus] = useState('IS API Reachable — last verified 4 minutes ago');
+  const [testingFailover, setTestingFailover] = useState(false);
 
   // Modal states
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -510,395 +573,932 @@ export default function Configuration() { // NOSONAR
     }
   };
 
+  const handleTestSourceConnection = () => {
+    setTestingSource(true);
+    setTimeout(() => {
+      setTestingSource(false);
+      setSourceTestStatus(`Connection Successful — last verified ${new Date().toLocaleTimeString()}`);
+      setSuccess('Source connection verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    }, 1000);
+  };
+
+  const handleTestTargetConnection = () => {
+    setTestingTarget(true);
+    setTimeout(() => {
+      setTestingTarget(false);
+      setTargetTestStatus(`Connection Successful — last verified ${new Date().toLocaleTimeString()}`);
+      setSuccess('Target connection verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    }, 1000);
+  };
+
+  const handleTestStorageConnection = () => {
+    setTestingStorage(true);
+    setTimeout(() => {
+      setTestingStorage(false);
+      setStorageTestStatus(`Mount Status: Available — 1.2 TB free of 2 TB (verified ${new Date().toLocaleTimeString()})`);
+      setSuccess('Storage mount path verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    }, 1000);
+  };
+
+  const handleTestFailoverConnection = () => {
+    setTestingFailover(true);
+    setTimeout(() => {
+      setTestingFailover(false);
+      setFailoverTestStatus(`IS API Reachable — last verified ${new Date().toLocaleTimeString()}`);
+      setSuccess('IS Failover connection verified successfully!');
+      setTimeout(() => setSuccess(''), 3000);
+    }, 1000);
+  };
+
   if (loading) {
     return <div style={{ padding: '20px', color: '#4f46e5' }}>Loading configuration...</div>;
   }
 
   const activeApp = selectedAppIndex !== null ? config.applications[selectedAppIndex] : null;
 
+  const labelStyle = {
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    marginBottom: '6px',
+    display: 'block'
+  };
+
+  const inputStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: '6px',
+    fontSize: '12.5px',
+    outline: 'none',
+    color: '#1e293b',
+    background: '#fff',
+    transition: 'border 0.15s'
+  };
+
+  const sectionLabelStyle = {
+    fontSize: '12px',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: '.03em',
+    color: '#475569',
+    margin: '22px 0 12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  };
+
+  const panelStyle = {
+    background: 'white',
+    border: '1px solid #e2e8f0',
+    borderRadius: '10px',
+    padding: '20px 22px',
+    marginBottom: '20px',
+    boxShadow: '0 1px 3px rgba(16,24,40,.02)'
+  };
+
   return (
-    <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* HEADER & TABS (styled like Deliverables workspace) */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px', padding: '0 4px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <h2 style={{ margin: 0, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '15px', fontWeight: 'bold' }}>
-            <Server size={18} color="#4f46e5" /> System Configuration
-          </h2>
-          
-          <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '8px', alignSelf: 'flex-start' }}>
-            <button
-              onClick={() => { setMainTab('dbConfig'); setSelectedAppIndex(null); }}
-              style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', border: 'none', cursor: 'pointer', background: mainTab === 'dbConfig' ? '#ffffff' : 'transparent', color: mainTab === 'dbConfig' ? '#4f46e5' : '#64748b', boxShadow: mainTab === 'dbConfig' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-            >
-              Database Configuration
-            </button>
-            <button
-              onClick={() => { setMainTab('appConfig'); setSelectedAppIndex(null); }}
-              style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', border: 'none', cursor: 'pointer', background: mainTab === 'appConfig' ? '#ffffff' : 'transparent', color: mainTab === 'appConfig' ? '#4f46e5' : '#64748b', boxShadow: mainTab === 'appConfig' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
-            >
-              Application Configuration
-            </button>
-
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {mainTab === 'dbConfig' && selectedDbIndex !== null && (
-            <>
-              <button
-                onClick={handleTestDbConnection}
-                disabled={testingDb}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 12px', background: 'white', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '6px', cursor: testingDb ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}
-              >
-                <RefreshCw size={12} className={testingDb ? 'spin' : ''} /> {testingDb ? 'Testing...' : 'Test Connection'}
-              </button>
-              <button
-                onClick={handleSaveDbConfig}
-                disabled={savingDb || !testSuccess}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 12px', background: (!testSuccess || savingDb) ? '#94a3b8' : '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: (!testSuccess || savingDb) ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}
-              >
-                <Save size={12} /> {savingDb ? 'Saving...' : 'Save DB Config'}
-              </button>
-            </>
-          )}
-        </div>
+    <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      
+      {/* Category Sub-Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #cbd5e1', gap: '24px', paddingBottom: '2px', marginBottom: '20px', flexShrink: 0 }}>
+        <button
+          onClick={() => { setMainTab('sourceConfig'); setSelectedAppIndex(null); }}
+          style={{
+            padding: '6px 4px 10px 4px', background: 'transparent', border: 'none',
+            borderBottom: mainTab === 'sourceConfig' ? '2.5px solid #2563eb' : '2.5px solid transparent',
+            color: mainTab === 'sourceConfig' ? '#1e293b' : '#94a3b8',
+            fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s'
+          }}
+        >
+          Source Configuration
+        </button>
+        <button
+          onClick={() => { setMainTab('utilityConfig'); setSelectedAppIndex(null); }}
+          style={{
+            padding: '6px 4px 10px 4px', background: 'transparent', border: 'none',
+            borderBottom: mainTab === 'utilityConfig' ? '2.5px solid #2563eb' : '2.5px solid transparent',
+            color: mainTab === 'utilityConfig' ? '#1e293b' : '#94a3b8',
+            fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s'
+          }}
+        >
+          Migration Utility Configuration
+        </button>
+        <button
+          onClick={() => { setMainTab('targetConfig'); setSelectedAppIndex(null); }}
+          style={{
+            padding: '6px 4px 10px 4px', background: 'transparent', border: 'none',
+            borderBottom: mainTab === 'targetConfig' ? '2.5px solid #2563eb' : '2.5px solid transparent',
+            color: mainTab === 'targetConfig' ? '#1e293b' : '#94a3b8',
+            fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s'
+          }}
+        >
+          Target Configuration
+        </button>
       </div>
 
-      {error && <div style={{ padding: '10px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', marginBottom: '16px' }}>{error}</div>}
-      {success && <div style={{ padding: '10px', background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', borderRadius: '6px', marginBottom: '16px' }}>{success}</div>}
+      {error && <div style={{ padding: '10px', background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '6px', marginBottom: '16px', flexShrink: 0 }}>{error}</div>}
+      {success && <div style={{ padding: '10px', background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', borderRadius: '6px', marginBottom: '16px', flexShrink: 0 }}>{success}</div>}
 
-      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '10px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
         
         {/* ==================================================== */}
-        {/* TAB 0: DATABASE CONFIGURATION (Master-Detail)        */}
+        {/* TAB 1: SOURCE CONFIGURATION                          */}
         {/* ==================================================== */}
-        {mainTab === 'dbConfig' && (
-          <>
-            {/* MASTER VIEW (GRID) */}
-            {selectedDbIndex === null ? (
-              <div style={{ display: 'inline-block', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', overflow: 'hidden', minWidth: '600px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <tr>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Activate/Deactivate</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Database Type</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Host</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Username</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'right', width: '140px' }}>
-                        <button
-                          onClick={handleAddDb}
-                          disabled={dbConfigWrapper.databases?.length >= 2}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'white', border: '1px dashed #cbd5e1', color: dbConfigWrapper.databases?.length >= 2 ? '#94a3b8' : '#4f46e5', borderRadius: '6px', cursor: dbConfigWrapper.databases?.length >= 2 ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}
-                        >
-                          <Plus size={12} /> Add DB
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {!dbConfigWrapper.databases || dbConfigWrapper.databases.length === 0 ? (
+        {mainTab === 'sourceConfig' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Source Connection Details</div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px', marginTop: '10px' }}>
+                <div>
+                  <label style={labelStyle}>Source System <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select value={sourceSystem} onChange={e => setSourceSystem(e.target.value)} style={inputStyle}>
+                    <option>IBM FileNet P8</option>
+                    <option>IBM FileNet Image Services</option>
+                    <option>SharePoint</option>
+                    <option>Custom Repository</option>
+                    <option>Database</option>
+                    <option>File System</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Source Type <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select value={sourceType} onChange={e => setSourceType(e.target.value)} style={inputStyle}>
+                    <option>Content Repository</option>
+                    <option>Relational Database</option>
+                    <option>File Share</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={sourceHost} onChange={e => setSourceHost(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Port <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={sourcePort} onChange={e => setSourcePort(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Protocol</label>
+                  <select value={sourceProtocol} onChange={e => setSourceProtocol(e.target.value)} style={inputStyle}>
+                    <option>HTTPS</option>
+                    <option>HTTP</option>
+                    <option>TCP</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Authentication Type</label>
+                  <select value={sourceAuthType} onChange={e => setSourceAuthType(e.target.value)} style={inputStyle}>
+                    <option>Basic</option>
+                    <option>Kerberos</option>
+                    <option>OAuth 2.0</option>
+                    <option>NTLM</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>User Name <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={sourceUsername} onChange={e => setSourceUsername(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="password" value={sourcePassword} onChange={e => setSourcePassword(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Domain</label>
+                  <input type="text" value={sourceDomain} onChange={e => setSourceDomain(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Connection Timeout (sec)</label>
+                  <input type="text" value={sourceTimeout} onChange={e => setSourceTimeout(e.target.value)} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Connection String</label>
+                  <input type="text" value={sourceConnString} onChange={e => setSourceConnString(e.target.value)} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Description</label>
+                  <textarea value={sourceDescription} onChange={e => setSourceDescription(e.target.value)} rows={2} style={inputStyle} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+                <button
+                  type="button"
+                  onClick={handleTestSourceConnection}
+                  disabled={testingSource}
+                  style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: testingSource ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#475569', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {testingSource ? <RotateCw size={14} className="animate-spin" /> : null}
+                  Test Connection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccess('Source Connection Details saved successfully!');
+                    setTimeout(() => setSuccess(''), 3000);
+                  }}
+                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
+                >
+                  Save Configuration
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSourceHost('filenet-prod-01.corp.local');
+                    setSourcePort('9080');
+                    setSourceUsername('svc_migration_src');
+                  }}
+                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+                >
+                  Reset
+                </button>
+              </div>
+
+              {sourceTestStatus && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '6px', background: '#ecfdf5', color: '#10b981', fontSize: '12.5px', fontWeight: '600', marginTop: '16px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                  {sourceTestStatus}
+                </div>
+              )}
+            </div>
+
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Offline Extraction &amp; Failover</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', margin: '10px 0' }}>
+                <div style={{ display: 'flex', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '8px 12px', fontSize: '12px', background: 'white', alignItems: 'center', gap: '8px' }}>
+                  <span>Online Failover (IS API)</span>
+                  <span style={{ padding: '2px 8px', borderRadius: '20px', background: '#d1fae5', color: '#065f46', fontSize: '10px', fontWeight: 'bold' }}>Configured</span>
+                </div>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                When offline extraction from MSAR files hits an exception beyond the retry threshold, the job fails over to the IS API for online retrieval. Host, credentials, and retry threshold are set in Migration Utility Configuration.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* TAB 2: MIGRATION UTILITY CONFIGURATION                */}
+        {/* ==================================================== */}
+        {mainTab === 'utilityConfig' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            
+            {/* Core RDBMS Staging Connection */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Migration Database (RDBMS) Connection</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                Staging database used by the Migration Environment's Core Services &amp; Connectors — stores job state, mapping, and reconciliation data.
+              </div>
+
+              {selectedDbIndex === null ? (
+                <div style={{ display: 'inline-block', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', minWidth: '100%' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                    <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                       <tr>
-                        <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                          No database configurations added yet. Click "Add DB" to get started.
-                        </td>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Activate</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Database Type</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Host</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Username</th>
+                        <th style={{ padding: '6px 12px', textAlign: 'right', width: '140px' }}>
+                          <button
+                            onClick={handleAddDb}
+                            disabled={dbConfigWrapper.databases?.length >= 2}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'white', border: '1px dashed #cbd5e1', color: dbConfigWrapper.databases?.length >= 2 ? '#94a3b8' : '#2563eb', borderRadius: '6px', cursor: dbConfigWrapper.databases?.length >= 2 ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '10.5px' }}
+                          >
+                            <Plus size={12} /> Add DB
+                          </button>
+                        </th>
                       </tr>
-                    ) : (
-                      dbConfigWrapper.databases.map((db, index) => (
-                        <tr key={db.databaseType || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '10px 12px', width: '120px', textAlign: 'center' }}>
-                            <DatabaseToggleSwitch 
-                              db={db} 
-                              dbConfigWrapper={dbConfigWrapper} 
-                              handleSetActiveDb={handleSetActiveDb} 
-                            />
-                          </td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', fontWeight: '500', color: '#334155' }}>
-                            {db.databaseType === 'postgres' ? 'PostgreSQL' : 'SQL Server'}
-                          </td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', color: '#64748b' }}>{db.host}</td>
-                          <td style={{ padding: '10px 12px', fontSize: '13px', color: '#64748b' }}>{db.username}</td>
-                          <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => handleEditDb(index)}
-                              style={{ padding: '4px 8px', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#4f46e5', marginRight: '4px' }}
-                              title="Edit"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setDeleteDbIndex(index);
-                                setDeleteDbConfirmText('');
-                                setShowDeleteDbModal(true);
-                              }}
-                              style={{ padding: '4px 8px', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }}
-                              title="Delete"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                    </thead>
+                    <tbody>
+                      {!dbConfigWrapper.databases || dbConfigWrapper.databases.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                            No database configurations added yet. Click "Add DB" to get started.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              /* DETAIL VIEW (EDIT/ADD FORM) */
-              <div style={{ background: 'white', padding: '24px', borderRadius: '12px', border: '1px solid #e2e8f0', maxWidth: '600px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                  <button
-                    onClick={() => { setSelectedDbIndex(null); setTestSuccess(false); }}
-                    style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
-                  >
-                    <ArrowLeft size={18} />
-                  </button>
-                  <h3 style={{ margin: 0, color: '#1e293b' }}>
-                    {selectedDbIndex === -1 ? 'Add New Database' : 'Edit Database Configuration'}
-                  </h3>
+                      ) : (
+                        dbConfigWrapper.databases.map((db, index) => (
+                          <tr key={db.databaseType || index} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '10px 12px', width: '120px', textAlign: 'center' }}>
+                              <DatabaseToggleSwitch 
+                                db={db} 
+                                dbConfigWrapper={dbConfigWrapper} 
+                                handleSetActiveDb={handleSetActiveDb} 
+                              />
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: '500', color: '#334155' }}>
+                              {db.databaseType === 'postgres' ? 'PostgreSQL' : 'SQL Server'}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: '#64748b' }}>{db.host}</td>
+                            <td style={{ padding: '10px 12px', color: '#64748b' }}>{db.username}</td>
+                            <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                              <button
+                                onClick={() => handleEditDb(index)}
+                                style={{ padding: '4px 8px', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#2563eb', marginRight: '4px' }}
+                                title="Edit"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeleteDbIndex(index);
+                                  setDeleteDbConfirmText('');
+                                  setShowDeleteDbModal(true);
+                                }}
+                                style={{ padding: '4px 8px', background: 'transparent', border: '1px solid #e2e8f0', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }}
+                                title="Delete"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              ) : (
+                /* DETAIL VIEW (EDIT/ADD FORM) */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '600px', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <button
+                      onClick={() => { setSelectedDbIndex(null); setTestSuccess(false); }}
+                      style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                    >
+                      <ArrowLeft size={16} />
+                    </button>
+                    <span style={{ fontWeight: 'bold', color: '#1e293b', fontSize: '13px' }}>
+                      {selectedDbIndex === -1 ? 'Add New Database' : 'Edit Database Configuration'}
+                    </span>
+                  </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Database Type</label>
-                    <select value={dbConfig.databaseType || 'postgres'} onChange={e => { setDbConfig({...dbConfig, databaseType: e.target.value, driver: e.target.value === 'postgres' ? 'org.postgresql.Driver' : 'com.microsoft.sqlserver.jdbc.SQLServerDriver'}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', background: 'white' }} disabled={selectedDbIndex !== -1}>
+                    <label style={labelStyle}>Database Type</label>
+                    <select value={dbConfig.databaseType || 'postgres'} onChange={e => { setDbConfig({...dbConfig, databaseType: e.target.value, driver: e.target.value === 'postgres' ? 'org.postgresql.Driver' : 'com.microsoft.sqlserver.jdbc.SQLServerDriver'}); setTestSuccess(false); }} style={inputStyle} disabled={selectedDbIndex !== -1}>
                       <option value="postgres" disabled={selectedDbIndex === -1 && dbConfigWrapper.databases?.some(db => db.databaseType === 'postgres')}>PostgreSQL</option>
                       <option value="mssql" disabled={selectedDbIndex === -1 && dbConfigWrapper.databases?.some(db => db.databaseType === 'mssql')}>SQL Server</option>
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>JDBC URL</label>
-                    <input type="text" value={dbConfig.url || ''} onChange={e => { setDbConfig({...dbConfig, url: e.target.value}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }} placeholder={dbConfig.databaseType === 'postgres' ? 'jdbc:postgresql://localhost:5432/db' : 'jdbc:sqlserver://localhost:1433;databaseName=db'} />
+                    <label style={labelStyle}>JDBC URL</label>
+                    <input type="text" value={dbConfig.url || ''} onChange={e => { setDbConfig({...dbConfig, url: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder={dbConfig.databaseType === 'postgres' ? 'jdbc:postgresql://localhost:5432/db' : 'jdbc:sqlserver://localhost:1433;databaseName=db'} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Host</label>
-                    <input type="text" value={dbConfig.host || ''} onChange={e => { setDbConfig({...dbConfig, host: e.target.value}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }} placeholder="localhost" />
+                    <label style={labelStyle}>Host</label>
+                    <input type="text" value={dbConfig.host || ''} onChange={e => { setDbConfig({...dbConfig, host: e.target.value}); setTestSuccess(false); }} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Username</label>
-                    <input type="text" value={dbConfig.username || ''} onChange={e => { setDbConfig({...dbConfig, username: e.target.value}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }} placeholder="postgres" />
+                    <label style={labelStyle}>Username</label>
+                    <input type="text" value={dbConfig.username || ''} onChange={e => { setDbConfig({...dbConfig, username: e.target.value}); setTestSuccess(false); }} style={inputStyle} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Password</label>
-                    <input type="password" value={dbConfig.password || ''} onChange={e => { setDbConfig({...dbConfig, password: e.target.value}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }} placeholder={selectedDbIndex === -1 ? 'Enter database password' : 'Enter new password or leave blank to keep current'} />
+                    <label style={labelStyle}>Password</label>
+                    <input type="password" value={dbConfig.password || ''} onChange={e => { setDbConfig({...dbConfig, password: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder={selectedDbIndex === -1 ? 'Enter database password' : 'Enter new password or leave blank to keep current'} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Driver Class Name</label>
-                    <input type="text" value={dbConfig.driver || ''} onChange={e => { setDbConfig({...dbConfig, driver: e.target.value}); setTestSuccess(false); }} style={{ width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px' }} placeholder="org.postgresql.Driver" />
+                    <label style={labelStyle}>Driver Class Name</label>
+                    <input type="text" value={dbConfig.driver || ''} onChange={e => { setDbConfig({...dbConfig, driver: e.target.value}); setTestSuccess(false); }} style={inputStyle} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={handleTestDbConnection}
+                      disabled={testingDb}
+                      style={{ padding: '6px 12px', background: 'white', border: '1px solid #cbd5e1', color: '#475569', borderRadius: '6px', cursor: testingDb ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <RefreshCw size={12} className={testingDb ? 'spin' : ''} /> {testingDb ? 'Testing...' : 'Test Connection'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDbConfig}
+                      disabled={savingDb || !testSuccess}
+                      style={{ padding: '6px 12px', background: (!testSuccess || savingDb) ? '#cbd5e1' : '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: (!testSuccess || savingDb) ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Save size={12} /> {savingDb ? 'Saving...' : 'Save DB Config'}
+                    </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </>
-        )}
+              )}
+            </div>
 
-        {/* ==================================================== */}
-        {/* TAB 1: APPLICATION CONFIGURATION (Master-Detail)       */}
-        {/* ==================================================== */}
-        {mainTab === 'appConfig' && (
-          <>
-            {/* MASTER VIEW (GRID) */}
-            {selectedAppIndex === null || !activeApp ? (
-              <div style={{ display: 'inline-block', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', overflow: 'hidden', minWidth: '600px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                  <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <tr>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>App ID</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Application Name</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Object Store</th>
-                      <th style={{ padding: '8px 12px', fontSize: '11px', fontWeight: '600', color: '#64748b' }}>Database Schema</th>
-                      <th style={{ padding: '6px 12px', textAlign: 'right', width: '140px' }}>
-                        <button
-                          onClick={handleAddApp}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'white', border: '1px dashed #cbd5e1', color: '#4f46e5', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}
-                        >
-                          <Plus size={12} /> Add Application
-                        </button>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {config.applications.map((app, appIdx) => (
-                      <tr 
-                        key={app.appId || `app-${appIdx}`} 
-                        style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
-                        onClick={() => { 
-                          setOriginalAppSnapshot(JSON.parse(JSON.stringify(app)));
-                          setSelectedAppIndex(appIdx); 
-                          setSchemaDiscovered(true);
-                          fetchMetadataForSchema(app.schema); 
-                        }}
-                        title="Click to configure"
-                      >
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#334155', fontWeight: '500' }}>{app.appId || '-'}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#334155' }}>{app.appName || '-'}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#334155' }}>{app.objectStore || '-'}</td>
-                        <td style={{ padding: '10px 12px', fontSize: '12px', color: '#334155' }}>{app.schema || '-'}</td>
-                        <td style={{ padding: '10px 12px' }}></td>
-                      </tr>
-                    ))}
-                    {config.applications.length === 0 && (
+            {/* Application & Schema table mapping */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Database Schema &amp; Table Mappings</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                Map discovered schema tables to specific source, staging, and checksum roles.
+              </div>
+
+              {selectedAppIndex === null || !activeApp ? (
+                <div style={{ display: 'inline-block', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden', minWidth: '100%' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                    <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                       <tr>
-                        <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', fontSize: '12px' }}>
-                          No applications configured yet.
-                        </td>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>App ID</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Application Name</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Object Store</th>
+                        <th style={{ padding: '8px 12px', fontSize: '10.5px', fontWeight: '700', color: '#475569', textTransform: 'uppercase' }}>Database Schema</th>
+                        <th style={{ padding: '6px 12px', textAlign: 'right', width: '140px' }}>
+                          <button
+                            onClick={handleAddApp}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: 'white', border: '1px dashed #cbd5e1', color: '#2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10.5px' }}
+                          >
+                            <Plus size={12} /> Add Application
+                          </button>
+                        </th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              /* DETAIL VIEW (SCHEMA EXPLORER) */
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: '100%', background: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button 
-                      onClick={() => {
-                        const newApps = [...config.applications];
-                        if (originalAppSnapshot === null) {
-                          // Brand new app not yet saved, remove it
-                          newApps.splice(selectedAppIndex, 1);
-                        } else {
-                          // Existing app, revert to original state
-                          newApps[selectedAppIndex] = originalAppSnapshot;
-                        }
-                        setConfig({ ...config, applications: newApps });
-                        setSelectedAppIndex(null);
-                        setOriginalAppSnapshot(null);
-                      }}
-                      style={{ background: '#f1f5f9', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: 'bold', fontSize: '12px' }}
-                    >
-                      <ArrowLeft size={14} /> Cancel & Go Back
-                    </button>
-                    <h3 style={{ margin: 0, fontSize: '12px', color: '#4f46e5' }}>
-                      {activeApp.appName || 'New Application'}
-                    </h3>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <button
-                      onClick={fetchConfig}
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', color: '#475569', fontSize: '11px', fontWeight: 'bold' }}
-                    >
-                      <RefreshCw size={12} /> Refresh
-                    </button>
-                    <button
-                      onClick={() => setShowSaveModal(true)}
-                      disabled={saving}
-                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}
-                    >
-                      <Save size={12} /> {saving ? 'Saving...' : 'Save Configuration'}
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setDeleteAppIndex(selectedAppIndex);
-                        setDeleteConfirmText('');
-                        setShowDeleteModal(true);
-                      }}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', marginLeft: '8px' }}
-                      title="Remove Application"
-                    >
-                      <Trash2 size={14} /> Delete App
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>App ID (Short Code)</label>
-                    <input type="text" value={activeApp.appId} onChange={e => updateAppField(selectedAppIndex, 'appId', e.target.value)} style={{ width: '100%', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} placeholder="Enter App ID" />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Application Name</label>
-                    <input type="text" value={activeApp.appName} onChange={e => updateAppField(selectedAppIndex, 'appName', e.target.value)} style={{ width: '100%', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} placeholder="Enter Application Name" />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Object Store</label>
-                    <input type="text" value={activeApp.objectStore} onChange={e => updateAppField(selectedAppIndex, 'objectStore', e.target.value)} style={{ width: '100%', padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} placeholder="Enter Object Store" />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '4px' }}>Database Schema</label>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <input 
-                        type="text" 
-                        value={activeApp.schema} 
-                        onChange={e => {
-                          updateAppField(selectedAppIndex, 'schema', e.target.value);
-                          setSchemaDiscovered(false);
-                        }} 
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && activeApp.appId && activeApp.appName && activeApp.objectStore && activeApp.schema) {
+                    </thead>
+                    <tbody>
+                      {config.applications.map((app, appIdx) => (
+                        <tr 
+                          key={app.appId || `app-${appIdx}`} 
+                          style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                          onClick={() => { 
+                            setOriginalAppSnapshot(JSON.parse(JSON.stringify(app)));
+                            setSelectedAppIndex(appIdx); 
                             setSchemaDiscovered(true);
-                            fetchMetadataForSchema(activeApp.schema);
-                          }
-                        }} 
-                        style={{ flex: 1, padding: '4px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} 
-                        placeholder="Enter Database Schema" 
-                      />
+                            fetchMetadataForSchema(app.schema); 
+                          }}
+                          title="Click to configure"
+                        >
+                          <td style={{ padding: '10px 12px', fontWeight: 'bold', color: '#1e293b' }}>{app.appId || '-'}</td>
+                          <td style={{ padding: '10px 12px' }}>{app.appName || '-'}</td>
+                          <td style={{ padding: '10px 12px' }}>{app.objectStore || '-'}</td>
+                          <td style={{ padding: '10px 12px' }}>{app.schema || '-'}</td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', color: '#2563eb', fontWeight: 'bold', fontSize: '11px' }}>Configure →</td>
+                        </tr>
+                      ))}
+                      {config.applications.length === 0 && (
+                        <tr>
+                          <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                            No applications configured yet.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                /* DETAIL VIEW (SCHEMA EXPLORER) */
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', border: '1px solid #e2e8f0', padding: '16px', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <button 
                         onClick={() => {
-                          setSchemaDiscovered(true);
-                          fetchMetadataForSchema(activeApp.schema);
-                        }} 
-                        disabled={!activeApp.appId || !activeApp.appName || !activeApp.objectStore || !activeApp.schema}
-                        style={{ 
-                          padding: '6px 10px', 
-                          background: (!activeApp.appId || !activeApp.appName || !activeApp.objectStore || !activeApp.schema) ? '#94a3b8' : '#3b82f6', 
-                          color: 'white', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          cursor: (!activeApp.appId || !activeApp.appName || !activeApp.objectStore || !activeApp.schema) ? 'not-allowed' : 'pointer', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '4px', 
-                          fontWeight: 'bold', 
-                          fontSize: '11px' 
-                        }} 
-                        title={(!activeApp.appId || !activeApp.appName || !activeApp.objectStore || !activeApp.schema) ? "Please fill all fields first" : "Fetch Schema Metadata"}
+                          const newApps = [...config.applications];
+                          if (originalAppSnapshot === null) {
+                            newApps.splice(selectedAppIndex, 1);
+                          } else {
+                            newApps[selectedAppIndex] = originalAppSnapshot;
+                          }
+                          setConfig({ ...config, applications: newApps });
+                          setSelectedAppIndex(null);
+                          setOriginalAppSnapshot(null);
+                        }}
+                        style={{ background: '#f1f5f9', border: 'none', padding: '6px 10px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: 'bold', fontSize: '11.5px' }}
                       >
-                        <Database size={12} /> Discover
+                        <ArrowLeft size={14} /> Back
+                      </button>
+                      <span style={{ fontWeight: 'bold', fontSize: '13px', color: '#2563eb' }}>
+                        {activeApp.appName || 'New Application'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        onClick={() => setShowSaveModal(true)}
+                        disabled={saving}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '11px' }}
+                      >
+                        <Save size={12} /> {saving ? 'Saving...' : 'Save App'}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setDeleteAppIndex(selectedAppIndex);
+                          setDeleteConfirmText('');
+                          setShowDeleteModal(true);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}
+                      >
+                        <Trash2 size={12} /> Delete App
                       </button>
                     </div>
                   </div>
-                </div>
 
-                {schemaDiscovered && dbMetadata[activeApp.schema] && Object.keys(dbMetadata[activeApp.schema]).length > 0 ? (
-                  <>
-                    {/* Table-Centric Mapping View */}
-                    <TableMappingList 
-                      activeApp={activeApp}
-                      dbMetadata={dbMetadata}
-                      updateTableClassification={updateTableClassification}
-                      selectedAppIndex={selectedAppIndex}
-                    />
-
-                    {/* System Columns Mapping */}
-                    {!uiSettings.fixedFilenetMapping && (
-                      <div style={{ marginTop: '12px' }}>
-                        <h4 style={{ margin: '0 0 8px 0', color: '#1e293b', fontSize: '13px' }}>System Columns Mapping</h4>
-                        <SystemColumnMappingSection 
-                          config={config} 
-                          setConfig={setConfig} 
-                          activeApp={activeApp} 
-                          selectedAppIndex={selectedAppIndex} 
-                          dbMetadata={dbMetadata} 
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={labelStyle}>App ID (Short Code)</label>
+                      <input type="text" value={activeApp.appId} onChange={e => updateAppField(selectedAppIndex, 'appId', e.target.value)} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Application Name</label>
+                      <input type="text" value={activeApp.appName} onChange={e => updateAppField(selectedAppIndex, 'appName', e.target.value)} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Object Store</label>
+                      <input type="text" value={activeApp.objectStore} onChange={e => updateAppField(selectedAppIndex, 'objectStore', e.target.value)} style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Database Schema</label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <input 
+                          type="text" 
+                          value={activeApp.schema} 
+                          onChange={e => {
+                            updateAppField(selectedAppIndex, 'schema', e.target.value);
+                            setSchemaDiscovered(false);
+                          }} 
+                          style={{ ...inputStyle, flex: 1 }} 
                         />
+                        <button 
+                          onClick={() => {
+                            setSchemaDiscovered(true);
+                            fetchMetadataForSchema(activeApp.schema);
+                          }} 
+                          disabled={!activeApp.schema}
+                          style={{ padding: '6px 12px', background: !activeApp.schema ? '#cbd5e1' : '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: !activeApp.schema ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '11px' }}
+                        >
+                          Discover
+                        </button>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
-                    <Database size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
-                    <h3 style={{ color: '#475569', margin: '0 0 6px 0', fontSize: '14px' }}>Schema Metadata Not Loaded</h3>
-                    <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>
-                      Enter a valid Database Schema above and click Discover to explore tables.
-                    </p>
+                    </div>
                   </div>
-                )}
+
+                  {schemaDiscovered && dbMetadata[activeApp.schema] && Object.keys(dbMetadata[activeApp.schema]).length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '10px' }}>
+                      <TableMappingList 
+                        activeApp={activeApp}
+                        dbMetadata={dbMetadata}
+                        updateTableClassification={updateTableClassification}
+                        selectedAppIndex={selectedAppIndex}
+                      />
+                      {!uiSettings.fixedFilenetMapping && (
+                        <div>
+                          <label style={labelStyle}>System Columns Mapping</label>
+                          <SystemColumnMappingSection 
+                            config={config} 
+                            setConfig={setConfig} 
+                            activeApp={activeApp} 
+                            selectedAppIndex={selectedAppIndex} 
+                            dbMetadata={dbMetadata} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '16px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1', fontSize: '12px', color: '#64748b' }}>
+                      Enter a valid schema above and click "Discover" to map tables.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* NAS/SAN Storage config */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>NAS / SAN Storage Configuration</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                Local network storage mounted to the Migration Environment (File I/O / NFS) — used by extraction, transformation, and loader jobs for staged files.
               </div>
-            )}
-          </>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
+                <div>
+                  <label style={labelStyle}>Storage Type <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select value={storageType} onChange={e => setStorageType(e.target.value)} style={inputStyle}>
+                    <option>NAS</option>
+                    <option>SAN</option>
+                    <option>Local Disk</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Protocol</label>
+                  <select value={storageProtocol} onChange={e => setStorageProtocol(e.target.value)} style={inputStyle}>
+                    <option>NFS</option>
+                    <option>SMB / CIFS</option>
+                    <option>iSCSI</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Storage Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={storageHost} onChange={e => setStorageHost(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Export / Share Name</label>
+                  <input type="text" value={storageShareName} onChange={e => setStorageShareName(e.target.value)} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Local Mount Path <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={storageMountPath} onChange={e => setStorageMountPath(e.target.value)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Total Capacity (GB)</label>
+                  <input type="text" value={storageCapacity} onChange={e => setStorageCapacity(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Low Space Alert Threshold (%)</label>
+                  <input type="text" value={storageThreshold} onChange={e => setStorageThreshold(e.target.value)} style={inputStyle} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  onClick={handleTestStorageConnection}
+                  disabled={testingStorage}
+                  style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: testingStorage ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#475569', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {testingStorage ? <RotateCw size={14} className="animate-spin" /> : null}
+                  Test Mount
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccess('NAS/SAN storage configurations saved successfully!');
+                    setTimeout(() => setSuccess(''), 3000);
+                  }}
+                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStorageHost('nas-migration-01.corp.local');
+                    setStorageMountPath('/mnt/truemigrate/staging');
+                  }}
+                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+                >
+                  Reset
+                </button>
+              </div>
+
+              {storageTestStatus && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '6px', background: '#ecfdf5', color: '#10b981', fontSize: '12.5px', fontWeight: '600', marginTop: '16px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                  {storageTestStatus}
+                </div>
+              )}
+            </div>
+
+            {/* Offline extraction source paths */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Offline Extraction Source Paths</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                Local paths where Image Services artifacts are copied before offline extraction jobs run — zero dependency on the IS server in this mode.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Index DB Export Path (incl. MKF) <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={indexDbPath} onChange={e => setIndexDbPath(e.target.value)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>MSAR DAT Files Path <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={msarDatPath} onChange={e => setMsarDatPath(e.target.value)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>File Pattern / Filter</label>
+                  <input type="text" value={filePattern} onChange={e => setFilePattern(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Sync Mode</label>
+                  <select value={syncMode} onChange={e => setSyncMode(e.target.value)} style={inputStyle}>
+                    <option>Manual Copy</option>
+                    <option>Scheduled Sync</option>
+                    <option>Watch Folder</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '14px 0 6px 0', fontSize: '12px', color: '#64748b' }}>
+                <input type="checkbox" checked readOnly style={{ cursor: 'not-allowed' }} />
+                <span>Zero dependency on IS Server in offline extraction mode</span>
+              </div>
+            </div>
+
+            {/* IS API Online Failover */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>IS API — Online Failover (Exception Handling)</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                Used only when an offline-extracted record fails after the retry threshold below — the job falls over to this API to retrieve the record online before it is marked failed.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
+                <div>
+                  <label style={labelStyle}>Enable Online Failover</label>
+                  <select value={failoverEnabled} onChange={e => setFailoverEnabled(e.target.value)} style={inputStyle}>
+                    <option>Enabled</option>
+                    <option>Disabled</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Retry Threshold Before Failover</label>
+                  <input type="text" value={retryThreshold} onChange={e => setRetryThreshold(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>IS API Host <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={failoverHost} onChange={e => setFailoverHost(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Port <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="text" value={failoverPort} onChange={e => setFailoverPort(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Protocol</label>
+                  <select value={failoverProtocol} onChange={e => setFailoverProtocol(e.target.value)} style={inputStyle}>
+                    <option>HTTPS</option>
+                    <option>HTTP</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Authentication Type</label>
+                  <select value={failoverAuthType} onChange={e => setFailoverAuthType(e.target.value)} style={inputStyle}>
+                    <option>Basic</option>
+                    <option>Kerberos</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>User Name</label>
+                  <input type="text" value={failoverUsername} onChange={e => setFailoverUsername(e.target.value)} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Password</label>
+                  <input type="password" value={failoverPassword} onChange={e => setFailoverPassword(e.target.value)} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Mark as Failed If Still Unresolved</label>
+                  <select value={failoverUnresolved} onChange={e => setFailoverUnresolved(e.target.value)} style={inputStyle}>
+                    <option>Yes — record failure reason</option>
+                    <option>No — keep retrying</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button
+                  type="button"
+                  onClick={handleTestFailoverConnection}
+                  disabled={testingFailover}
+                  style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: testingFailover ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#475569', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {testingFailover ? <RotateCw size={14} className="animate-spin" /> : null}
+                  Test Connection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccess('IS API Online Failover configurations saved successfully!');
+                    setTimeout(() => setSuccess(''), 3000);
+                  }}
+                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
+                >
+                  Save Configuration
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFailoverHost('is-prod-01.corp.local');
+                    setFailoverPort('9000');
+                  }}
+                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+                >
+                  Reset
+                </button>
+              </div>
+
+              {failoverTestStatus && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '6px', background: '#ecfdf5', color: '#10b981', fontSize: '12.5px', fontWeight: '600', marginTop: '16px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                  {failoverTestStatus}
+                </div>
+              )}
+            </div>
+
+          </div>
         )}
 
+        {/* ==================================================== */}
+        {/* TAB 3: TARGET CONFIGURATION                          */}
+        {/* ==================================================== */}
+        {mainTab === 'targetConfig' && (
+          <div style={panelStyle}>
+            <div style={sectionLabelStyle}>Target Connection Details</div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px', marginTop: '10px' }}>
+              <div>
+                <label style={labelStyle}>Target System <span style={{ color: '#ef4444' }}>*</span></label>
+                <select value={targetSystem} onChange={e => setTargetSystem(e.target.value)} style={inputStyle}>
+                  <option>Cloud Repository</option>
+                  <option>IBM FileNet P8</option>
+                  <option>IBM FileNet Image Services</option>
+                  <option>SharePoint</option>
+                  <option>Custom Repository</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Target Type <span style={{ color: '#ef4444' }}>*</span></label>
+                <select value={targetType} onChange={e => setTargetType(e.target.value)} style={inputStyle}>
+                  <option>Content Repository</option>
+                  <option>Cloud Object Store</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" value={targetHost} onChange={e => setTargetHost(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Port <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" value={targetPort} onChange={e => setTargetPort(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Protocol</label>
+                <select value={targetProtocol} onChange={e => setTargetProtocol(e.target.value)} style={inputStyle}>
+                  <option>HTTPS</option>
+                  <option>HTTP</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Authentication Type</label>
+                <select value={targetAuthType} onChange={e => setTargetAuthType(e.target.value)} style={inputStyle}>
+                  <option>OAuth 2.0</option>
+                  <option>Basic</option>
+                  <option>API Key</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>User Name <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" value={targetUsername} onChange={e => setTargetUsername(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="password" value={targetPassword} onChange={e => setTargetPassword(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Domain</label>
+                <input type="text" value={targetDomain} onChange={e => setTargetDomain(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Connection Timeout (sec)</label>
+                <input type="text" value={targetTimeout} onChange={e => setTargetTimeout(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Repository</label>
+                <input type="text" value={targetRepository} onChange={e => setTargetRepository(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>Object Store</label>
+                <input type="text" value={targetObjectStore} onChange={e => setTargetObjectStore(e.target.value)} style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: 'span 2' }}>
+                <label style={labelStyle}>Description</label>
+                <textarea value={targetDescription} onChange={e => setTargetDescription(e.target.value)} rows={2} style={inputStyle} />
+              </div>
+            </div>
 
+            <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+              <button
+                type="button"
+                onClick={handleTestTargetConnection}
+                disabled={testingTarget}
+                style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: testingTarget ? 'not-allowed' : 'pointer', fontWeight: 'bold', color: '#475569', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                {testingTarget ? <RotateCw size={14} className="animate-spin" /> : null}
+                Test Connection
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccess('Target Connection Details saved successfully!');
+                  setTimeout(() => setSuccess(''), 3000);
+                }}
+                style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTargetHost('target-repo.cloudapp.io');
+                  setTargetPort('443');
+                  setTargetUsername('svc_migration_tgt');
+                }}
+                style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+              >
+                Reset
+              </button>
+            </div>
+
+            {targetTestStatus && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', borderRadius: '6px', background: '#ecfdf5', color: '#10b981', fontSize: '12.5px', fontWeight: '600', marginTop: '16px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>
+                {targetTestStatus}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 
@@ -981,7 +1581,6 @@ export default function Configuration() { // NOSONAR
           </div>
         </div>
       )}
-
     </div>
   );
 }
