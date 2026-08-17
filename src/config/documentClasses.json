@@ -3,7 +3,7 @@
     {
       "className": "PolicyDoc",
       "displayName": "Policy Document",
-      "tableName": "doctaba",
+      "tableName": "doctaba_staging_table",
       "targetClass": "PolicyDocument",
       "properties": [
         {

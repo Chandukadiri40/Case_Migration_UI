@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, Play, Square, Pause, RotateCw, Terminal, CheckCircle2, 
   XCircle, Clock, AlertCircle, RefreshCw, Trash2, Send, Timer, Layers, Sliders, Calendar, ArrowRight
@@ -20,6 +20,23 @@ export default function JobsConfiguration() {
   const [activeFilterPill, setActiveFilterPill] = useState('all');
   const [selectedJobIds, setSelectedJobIds] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sorting State
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+
+  // Resizable Column Widths State (Compact default base widths in pixels)
+  const [colWidths, setColWidths] = useState({
+    name: 120,
+    type: 100,
+    source: 90,
+    dateRange: 130,
+    records: 65,
+    status: 90,
+    createdBy: 75,
+    createdDate: 85,
+    actions: 95
+  });
 
   // Track previous statuses to detect completion transitions for live toast notifications
   const prevJobsRef = useRef({});
@@ -63,7 +80,7 @@ export default function JobsConfiguration() {
 
   useEffect(() => {
     fetchJobs();
-    const interval = setInterval(fetchJobs, 3000);
+    const interval = setInterval(fetchJobs, 4000);
     return () => clearInterval(interval);
   }, []);
 
@@ -90,6 +107,67 @@ export default function JobsConfiguration() {
   };
 
   const filteredJobs = getFilteredJobs();
+
+  // Sorting Handler & Memoized Sorted Jobs
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      if (sortDir === 'asc') setSortDir('desc');
+      else { setSortKey(null); setSortDir('asc'); }
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const sortedJobs = useMemo(() => {
+    if (!sortKey) return filteredJobs;
+    return [...filteredJobs].sort((a, b) => {
+      let valA = a[sortKey] ?? '';
+      let valB = b[sortKey] ?? '';
+      if (sortKey === 'records') {
+        valA = Number(valA) || 0;
+        valB = Number(valB) || 0;
+        return sortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      valA = String(valA).toLowerCase();
+      valB = String(valB).toLowerCase();
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredJobs, sortKey, sortDir]);
+
+  // Column Resizing Mouse Drag Handler
+  const handleResizeMouseDown = (colKey, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = colWidths[colKey];
+
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, startWidth + delta);
+      setColWidths(prev => ({
+        ...prev,
+        [colKey]: newWidth
+      }));
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Dynamic grid template: Proportional fluid distribution with minimum resize locks
+  const gridTemplate = `36px minmax(${colWidths.name}px, 1.4fr) minmax(${colWidths.type}px, 1.1fr) minmax(${colWidths.source}px, 0.9fr) minmax(${colWidths.dateRange}px, 1.3fr) ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`;
 
   // Dynamic filter pill counts based on current active tab
   const getPillCount = (pillId) => {
@@ -168,6 +246,53 @@ export default function JobsConfiguration() {
       }
       return job;
     }));
+  };
+
+  // Helper to render interactive Sortable & Resizable Header Cell (Clean, without symbols)
+  const renderHeaderCell = (label, colKey, align = 'left') => {
+    const isSorted = sortKey === colKey;
+    return (
+      <div
+        onClick={() => handleSort(colKey)}
+        style={{
+          padding: '0 8px 0 6px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start',
+          gap: '4px',
+          cursor: 'pointer',
+          userSelect: 'none',
+          position: 'relative',
+          height: '100%',
+          color: isSorted ? '#0f172a' : '#64748b',
+          fontWeight: isSorted ? '700' : '600',
+          transition: 'color 0.15s'
+        }}
+        title={`Click to sort by ${label}`}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        {/* Resizer Handle */}
+        <div
+          onMouseDown={(e) => handleResizeMouseDown(colKey, e)}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            right: '-3px',
+            top: '0px',
+            bottom: '0px',
+            width: '8px',
+            cursor: 'col-resize',
+            zIndex: 10,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          title="Drag to resize column"
+        >
+          <div style={{ width: '1.5px', height: '14px', background: '#cbd5e1', borderRadius: '1px' }} />
+        </div>
+      </div>
+    );
   };
 
   const handleCreateJob = async (newJob) => {
@@ -262,20 +387,10 @@ export default function JobsConfiguration() {
   };
 
   return (
-    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflow: 'hidden' }}>
       
-      {/* Top Breadcrumb & Page Title Header */}
-      <div>
-        <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px', fontWeight: '500' }}>
-          TrueMigrate Center &nbsp;›&nbsp; <span style={{ color: '#0f172a', fontWeight: '600' }}>Jobs Configuration</span>
-        </div>
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Jobs Configuration
-        </h2>
-      </div>
-
       {/* TOP PHASE NAVIGATION TABS (Extraction Jobs | Transformation Jobs | Import Jobs | Scheduling) */}
-      <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '0' }}>
+      <div style={{ display: 'flex', gap: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '0', flexShrink: 0 }}>
         {[
           { id: 'extraction', label: 'Extraction Jobs' },
           { id: 'transformation', label: 'Transformation Jobs' },
@@ -295,10 +410,10 @@ export default function JobsConfiguration() {
                 padding: '6px 4px 8px 4px',
                 background: 'transparent',
                 border: 'none',
-                borderBottom: isActive ? '3px solid #2563eb' : '3px solid transparent',
+                borderBottom: isActive ? '2.5px solid #2563eb' : '2.5px solid transparent',
                 color: isActive ? '#2563eb' : '#64748b',
-                fontWeight: isActive ? '800' : '600',
-                fontSize: '12.5px',
+                fontWeight: isActive ? '600' : '500',
+                fontSize: '13px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
@@ -311,39 +426,39 @@ export default function JobsConfiguration() {
 
       {/* CONTENT AREA BASED ON ACTIVE TAB */}
       {activeTab === 'transformation' ? (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '40px 24px', textAlign: 'center' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }}>
-            <Sliders size={24} />
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '36px 24px', textAlign: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>
+            <Sliders size={22} />
           </div>
-          <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>Transformation Jobs Pipeline</h3>
-          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: '14.5px', fontWeight: '600', color: '#1e293b' }}>Transformation Jobs Pipeline</h3>
+          <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
             New transformation jobs pipeline will be added here in the next release.
           </p>
         </div>
       ) : activeTab === 'scheduling' ? (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '40px 24px', textAlign: 'center' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px auto' }}>
-            <Calendar size={24} />
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '36px 24px', textAlign: 'center' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>
+            <Calendar size={22} />
           </div>
-          <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>Automated Job Schedules</h3>
-          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+          <h3 style={{ margin: '0 0 4px 0', fontSize: '14.5px', fontWeight: '600', color: '#1e293b' }}>Automated Job Schedules</h3>
+          <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
             Configure recurring cron schedules and automated job triggers here.
           </p>
         </div>
       ) : (
         /* MAIN CONSOLE FOR IMPORT JOBS & EXTRACTION JOBS */
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', padding: '16px', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 4px 14px rgba(0,0,0,0.02)' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: '12px', background: '#fff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', overflow: 'hidden' }}>
           
           {/* Action Toolbar Row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               
               <button
                 onClick={() => setIsCreateOpen(true)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
                   background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px',
-                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 6px rgba(37,99,235,0.18)'
+                  fontSize: '11.5px', fontWeight: '600', cursor: 'pointer', boxShadow: '0 1px 3px rgba(37,99,235,0.15)'
                 }}
               >
                 <Plus size={13} /> Create New Job
@@ -352,9 +467,9 @@ export default function JobsConfiguration() {
               <button
                 onClick={() => updateSelectedJobsStatus('Running')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
-                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
+                  background: '#fff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11.5px', fontWeight: '600', cursor: 'pointer'
                 }}
               >
                 <Play size={10} style={{ color: '#10b981', fill: '#10b981' }} /> Start
@@ -363,9 +478,9 @@ export default function JobsConfiguration() {
               <button
                 onClick={() => updateSelectedJobsStatus('Failed')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
-                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
+                  background: '#fff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11.5px', fontWeight: '600', cursor: 'pointer'
                 }}
               >
                 <Square size={10} style={{ color: '#ef4444', fill: '#ef4444' }} /> Stop
@@ -374,9 +489,9 @@ export default function JobsConfiguration() {
               <button
                 onClick={() => updateSelectedJobsStatus('Paused')}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 13px',
-                  background: '#fff', color: '#1e293b', border: '1.5px solid #cbd5e1', borderRadius: '6px',
-                  fontSize: '11px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                  display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
+                  background: '#fff', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '6px',
+                  fontSize: '11.5px', fontWeight: '600', cursor: 'pointer'
                 }}
               >
                 <Pause size={10} style={{ color: '#eab308', fill: '#eab308' }} /> Pause
@@ -388,7 +503,7 @@ export default function JobsConfiguration() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px',
                 background: 'white', border: 'none', borderRadius: '6px', color: '#64748b',
-                fontSize: '12px', fontWeight: '600', cursor: 'pointer'
+                fontSize: '12px', fontWeight: '500', cursor: 'pointer'
               }}
             >
               <RefreshCw size={13} className={isLoading ? "animate-spin" : ""} /> Refresh
@@ -396,7 +511,7 @@ export default function JobsConfiguration() {
           </div>
 
           {/* Quick Status Filter Pills */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
             {[
               { id: 'all', label: 'All Jobs' },
               { id: 'bulk', label: 'Bulk Import' },
@@ -416,11 +531,11 @@ export default function JobsConfiguration() {
                     setSelectedJobIds([]);
                   }}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px',
-                    borderRadius: '20px', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 11px',
+                    borderRadius: '16px', fontSize: '11.5px', fontWeight: isActive ? '600' : '500', cursor: 'pointer',
                     background: isActive ? '#eff6ff' : '#ffffff',
                     color: isActive ? '#2563eb' : '#64748b',
-                    border: isActive ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0',
+                    border: isActive ? '1px solid #2563eb' : '1px solid #e2e8f0',
                     transition: 'all 0.15s'
                   }}
                 >
@@ -430,58 +545,106 @@ export default function JobsConfiguration() {
             })}
           </div>
 
-          {/* Jobs Data Table (Matching User Screenshot Headers) */}
-          <div style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ padding: '12px 6px', width: '26px', textAlign: 'center' }}>
+          {/* Jobs Data Table Card (Single Unified Scroll Container with Sticky Header) */}
+          <div className="custom-table-scroll" style={{
+            flex: 1,
+            minHeight: 0,
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            overflow: 'auto',
+            position: 'relative'
+          }}>
+            <div style={{
+              minWidth: 'max-content',
+              width: '100%'
+            }}>
+              
+              {/* 1. Sticky Pinned Header Row */}
+              <div style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 20,
+                background: '#f8fafc',
+                borderBottom: '1px solid #e2e8f0',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: gridTemplate,
+                  alignItems: 'center',
+                  padding: '10px 0',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: '#64748b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em'
+                }}>
+                  <div style={{ textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       onChange={handleSelectAll} 
-                      checked={filteredJobs.length > 0 && selectedJobIds.length === filteredJobs.length}
+                      checked={sortedJobs.length > 0 && selectedJobIds.length === sortedJobs.length}
                       style={{ cursor: 'pointer' }}
                     />
-                  </th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>JOB NAME</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>JOB TYPE</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>TARGET SYSTEM</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>DATE RANGE</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px', textAlign: 'right' }}>RECORDS</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>STATUS</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>CREATED BY</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px' }}>CREATED DATE</th>
-                  <th style={{ padding: '12px 8px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.02em', fontSize: '11px', textAlign: 'center', minWidth: '95px' }}>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredJobs.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
-                      No jobs configured for {activeTab === 'import' ? 'Import Jobs' : 'Extraction Jobs'} yet. Click "+ Create New Job" to configure one!
-                    </td>
-                  </tr>
-                ) : (
-                  filteredJobs.map((job) => (
-                    <tr 
+                  </div>
+                  {renderHeaderCell('JOB NAME', 'name')}
+                  {renderHeaderCell('JOB TYPE', 'type')}
+                  {renderHeaderCell('TARGET SYSTEM', 'source')}
+                  {renderHeaderCell('DATE RANGE', 'dateRange')}
+                  {renderHeaderCell('RECORDS', 'records', 'right')}
+                  {renderHeaderCell('STATUS', 'status')}
+                  {renderHeaderCell('CREATED BY', 'createdBy')}
+                  {renderHeaderCell('CREATED DATE', 'createdDate')}
+                  <div style={{ padding: '0 6px', textAlign: 'center' }}>ACTIONS</div>
+                </div>
+              </div>
+
+              {/* 2. Rows */}
+              {sortedJobs.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: '#64748b', fontSize: '12.5px' }}>
+                  No jobs configured for {activeTab === 'import' ? 'Import Jobs' : 'Extraction Jobs'} yet. Click "+ Create New Job" to configure one!
+                </div>
+              ) : (
+                sortedJobs.map((job) => {
+                  // Format Date Range: Show ONLY clean complete dates, never DocIDs or N/A
+                  const rawDate = job.dateRange || '';
+                  const isCleanDate = (
+                    !rawDate.startsWith('DocIDs') && 
+                    !rawDate.startsWith('N/A') && 
+                    !rawDate.includes('Server Text') && 
+                    !rawDate.includes('Terminal') &&
+                    rawDate !== '-' &&
+                    rawDate !== '—' &&
+                    (/\d{4}-\d{2}-\d{2}/.test(rawDate) || /\d{2}\/\d{2}\/\d{4}/.test(rawDate) || /\d{2}-[A-Za-z]{3}-\d{4}/.test(rawDate))
+                  );
+                  const displayDateRange = isCleanDate ? rawDate : '—';
+
+                  return (
+                    <div 
                       key={job.id} 
                       style={{ 
+                        display: 'grid',
+                        gridTemplateColumns: gridTemplate,
+                        alignItems: 'center',
+                        padding: '10px 0',
                         borderBottom: '1px solid #f1f5f9', 
                         background: selectedJobIds.includes(job.id) ? '#eff6ff' : 'transparent',
-                        transition: 'background 0.15s' 
+                        transition: 'background 0.15s',
+                        fontSize: '12px'
                       }}
                     >
-                      <td style={{ padding: '12px 6px', textAlign: 'center' }}>
+                      <div style={{ textAlign: 'center' }}>
                         <input 
                           type="checkbox" 
                           checked={selectedJobIds.includes(job.id)}
                           onChange={() => handleSelectJob(job.id)}
                           style={{ cursor: 'pointer' }}
                         />
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
+                      </div>
+                      <div style={{ padding: '0 6px', minWidth: 0, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontWeight: '800', color: '#0f172a' }}>{job.name}</span>
+                          <span style={{ fontWeight: '600', color: '#1e293b', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</span>
                           {job.processPid && (
                             <span style={{
                               fontFamily: 'monospace', fontSize: '9.5px', color: '#2563eb',
@@ -492,21 +655,23 @@ export default function JobsConfiguration() {
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td style={{ padding: '12px 8px', fontWeight: '600', color: '#334155', fontSize: '11.5px' }}>
+                      </div>
+                      <div style={{ padding: '0 6px', color: '#475569', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {job.runTypeDisplay || (job.type === 'Ad-hoc' ? 'Standard Ingestion' : job.type === 'Exception' ? 'Failed Recovery' : job.type === 'Bulk' ? 'Pending Date Filter' : job.type)}
-                      </td>
-                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.source || 'FileNet P8'}</td>
-                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.dateRange}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums' }}>
+                      </div>
+                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.source || 'FileNet P8'}</div>
+                      <div style={{ padding: '0 6px', color: isCleanDate ? '#334155' : '#94a3b8', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {displayDateRange}
+                      </div>
+                      <div style={{ padding: '0 6px', textAlign: 'right', fontWeight: '600', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
                         {(job.records || 0).toLocaleString()}
-                      </td>
-                      <td style={{ padding: '12px 8px' }}>
+                      </div>
+                      <div style={{ padding: '0 6px', overflow: 'hidden' }}>
                         {renderStatusBadge(job.status)}
-                      </td>
-                      <td style={{ padding: '12px 8px', color: '#475569' }}>{job.createdBy}</td>
-                      <td style={{ padding: '12px 8px', color: '#64748b', fontSize: '10.5px', whiteSpace: 'nowrap' }}>{job.createdDate}</td>
-                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      </div>
+                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.createdBy}</div>
+                      <div style={{ padding: '0 6px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.createdDate}</div>
+                      <div style={{ padding: '0 6px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           <button
                             onClick={() => {
@@ -516,7 +681,7 @@ export default function JobsConfiguration() {
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px',
                               background: '#0f172a', color: 'white', border: 'none', borderRadius: '5px',
-                              fontSize: '10px', fontWeight: 'bold', cursor: 'pointer'
+                              fontSize: '10.5px', fontWeight: '600', cursor: 'pointer'
                             }}
                             title="View Terminal Logs"
                           >
@@ -534,12 +699,12 @@ export default function JobsConfiguration() {
                             <Trash2 size={11} />
                           </button>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
         </div>

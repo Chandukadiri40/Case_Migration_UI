@@ -7,9 +7,10 @@ import {
 import { useAlert } from '../context/AlertContext'
 import { apiBrowseFolder, apiGetFolderConfig, apiGetDocumentViewUrl, apiGetDocumentDownloadUrl } from '../utils/api'
 import EnterpriseDocumentViewer from './EnterpriseDocumentViewer'
+import { SERVER_HOST, DOCUMENTS_PATH } from '../config/envConfig'
 
-const DEFAULT_LINUX_PATH = '/home/skts/IS Migration/IS Documents'
-const DEFAULT_HOST_IP = '192.168.1.105'
+const DEFAULT_LINUX_PATH = DOCUMENTS_PATH
+const DEFAULT_HOST_IP = SERVER_HOST
 const MOCK_DOC_TYPES = ['pdf', 'xml', 'jpg', 'png', 'json', 'log', 'txt', 'csv']
 const MOCK_CATEGORIES = ['Claims_Form', 'Policy_Schedule', 'KYC_ID_Proof', 'Medical_Report', 'Payment_Receipt', 'Inspection_Audit', 'Vehicle_RC', 'Customer_Consent']
 
@@ -421,19 +422,6 @@ startxref
             <span>Linux Host: {hostIp}</span>
             <span style={{ color: '#6b7280', fontWeight: 'normal', marginLeft: '2px' }}>({lastSyncTime})</span>
           </div>
-
-          <button
-            onClick={handleSimulateUpload}
-            disabled={isUploadingSim}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
-              background: '#2563eb', color: 'white', border: 'none', borderRadius: '7px',
-              fontSize: '12px', fontWeight: '700', cursor: isUploadingSim ? 'not-allowed' : 'pointer',
-              boxShadow: '0 2px 6px rgba(37,99,235,0.25)', transition: 'all 0.15s ease'
-            }}
-          >
-            <Upload size={14} /> {isUploadingSim ? 'Detecting...' : 'Simulate Live Document Drop'}
-          </button>
         </div>
       </div>
 

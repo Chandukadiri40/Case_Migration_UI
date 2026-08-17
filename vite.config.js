@@ -50,7 +50,7 @@ function executeJobOnRemoteServer(jobId, envVars) {
     .then(job => {
       if (!job) return;
 
-  const host = envVars.VITE_SSH_HOST || '192.168.1.243';
+  const host = envVars.VITE_SSH_HOST || '192.168.1.241';
   const username = envVars.VITE_SSH_USER || 'skts';
   const password = envVars.VITE_SSH_PASS || 'Skts@123';
   // Always use the Job ID for the local Windows log cache so the UI log fetcher can find it
@@ -327,7 +327,7 @@ export default defineConfig(({ mode }) => {
                   conn.on('ready', () => {
                     conn.exec(remoteCmd, () => conn.end());
                   }).on('error', () => {}).connect({
-                    host: envVars.VITE_SSH_HOST || '192.168.1.243',
+                    host: envVars.VITE_SSH_HOST || '192.168.1.241',
                     port: 22,
                     username: envVars.VITE_SSH_USER || 'skts',
                     password: envVars.VITE_SSH_PASS || 'Skts@123',
@@ -433,5 +433,31 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('pdfjs-dist') || id.includes('react-pdf')) {
+                return 'vendor-pdf';
+              }
+              if (id.includes('xlsx') || id.includes('@e965/xlsx') || id.includes('x-data-spreadsheet')) {
+                return 'vendor-excel';
+              }
+              if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('react-syntax-highlighter') || id.includes('prismjs') || id.includes('refractor') || id.includes('highlight.js')) {
+                return 'vendor-renderers';
+              }
+              if (id.includes('mammoth') || id.includes('papaparse') || id.includes('utif')) {
+                return 'vendor-docutils';
+              }
+              if (id.includes('lucide-react')) {
+                return 'vendor-icons';
+              }
+            }
+          }
+        }
+      }
+    }
   };
 });

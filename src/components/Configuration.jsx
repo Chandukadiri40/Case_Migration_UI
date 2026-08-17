@@ -1,6 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection, apiGetUISettings } from '../utils/api';
-import { Plus, Trash2, Save, Database, Server, RefreshCw, RotateCw, ArrowLeft, Edit2, ShieldCheck, Zap } from 'lucide-react';
+import { Plus, Trash2, Save, Database, Server, RefreshCw, RotateCw, ArrowLeft, Edit2, ShieldCheck, Zap, Table, Check, X } from 'lucide-react';
+import {
+  SERVER_HOST,
+  STORAGE_MOUNT_PATH,
+  DOCUMENTS_PATH,
+  SOURCE_SYSTEM,
+  SOURCE_HOST,
+  SOURCE_LIBRARY_NAME,
+  SOURCE_USERNAME,
+  SOURCE_PASSWORD,
+  SOURCE_CONN_STRING,
+  SOURCE_DESCRIPTION,
+  OFFLINE_INDEX_DB_TABLE,
+  OFFLINE_MKF_EXPORT_PATH,
+  OFFLINE_MSAR_DAT_PATH,
+  OFFLINE_FILE_PATTERN,
+  CUSTOM_CASE_TABLE,
+  CUSTOM_DOCTABA_TABLE,
+  DB_HOST,
+  DB_PORT,
+  DB_NAME,
+  DB_USER,
+  DB_PASS,
+  DB_TYPE,
+  DB_JDBC_URL,
+  TARGET_SYSTEM,
+  TARGET_HOST,
+  TARGET_PORT,
+  TARGET_PROTOCOL,
+  TARGET_USERNAME,
+  TARGET_PASSWORD,
+  TARGET_OBJECT_STORE,
+  TARGET_TIMEOUT,
+  TARGET_BATCH_IMPORT,
+  TARGET_DESCRIPTION,
+  STORAGE_TYPE,
+  STORAGE_PROTOCOL,
+  STORAGE_HOST,
+  STORAGE_CAPACITY,
+  STORAGE_THRESHOLD
+} from '../config/envConfig';
 const SystemColumnMappingSection = ({ config, setConfig, activeApp, selectedAppIndex, dbMetadata }) => {
   const ct = activeApp.classifiedTables || {};
   const systemColumnsByRole = [
@@ -218,16 +258,18 @@ export default function Configuration() { // NOSONAR
   const [dbMetadata, setDbMetadata] = useState({}); // Cache for schema -> {table: [columns]}
   const [originalAppSnapshot, setOriginalAppSnapshot] = useState(null); // Snapshot to revert app changes
   const [schemaDiscovered, setSchemaDiscovered] = useState(false);
+  const caseInputRef = useRef(null);
+  const doctabaInputRef = useRef(null);
 
   // Database Config State
   const [dbConfigWrapper, setDbConfigWrapper] = useState({ 
-    activeDatabaseType: 'postgres', 
+    activeDatabaseType: DB_TYPE, 
     databases: [
-      { databaseType: 'postgres', host: '192.168.1.145:5432', username: 'postgres', password: 'password', active: true, url: 'jdbc:postgresql://192.168.1.145:5432/migration_db' }
+      { databaseType: DB_TYPE, host: DB_HOST, username: DB_USER, password: DB_PASS, active: true, url: DB_JDBC_URL }
     ] 
   });
   const [selectedDbIndex, setSelectedDbIndex] = useState(null); // null means Master View, -1 means Add New, >=0 means Edit
-  const [dbConfig, setDbConfig] = useState({ url: 'jdbc:postgresql://192.168.1.145:5432/migration_db', username: 'postgres', password: 'password', host: '192.168.1.145:5432', driver: 'org.postgresql.Driver', databaseType: 'postgres' });
+  const [dbConfig, setDbConfig] = useState({ url: DB_JDBC_URL, username: DB_USER, password: DB_PASS, host: DB_HOST, driver: 'org.postgresql.Driver', databaseType: DB_TYPE });
   const [savingDb, setSavingDb] = useState(false);
   const [testingDb, setTestingDb] = useState(false);
   const [testSuccess, setTestSuccess] = useState(false);
@@ -237,49 +279,53 @@ export default function Configuration() { // NOSONAR
   const [selectedAppIndex, setSelectedAppIndex] = useState(null); // Used for drill-down in appConfig and selection in propertyMapping
 
   // Source Config State
-  const [sourceMode, setSourceMode] = useState('online'); // 'online' | 'offline'
-  const [sourceSystem, setSourceSystem] = useState('FileNet Image Services');
-  const [sourceHost, setSourceHost] = useState('192.168.1.205');
-  const [sourceLibraryName, setSourceLibraryName] = useState('fnis');
-  const [sourceUsername, setSourceUsername] = useState('SysAdmin');
-  const [sourcePassword, setSourcePassword] = useState('SysAdmin');
+  const [sourceMode, setSourceMode] = useState('offline'); // 'online' | 'offline'
+  const [sourceSystem, setSourceSystem] = useState(SOURCE_SYSTEM);
+  const [sourceHost, setSourceHost] = useState(SOURCE_HOST);
+  const [sourceLibraryName, setSourceLibraryName] = useState(SOURCE_LIBRARY_NAME);
+  const [sourceUsername, setSourceUsername] = useState(SOURCE_USERNAME);
+  const [sourcePassword, setSourcePassword] = useState(SOURCE_PASSWORD);
   const [sourceDomain, setSourceDomain] = useState('');
-  const [sourceConnString, setSourceConnString] = useState('');
-  const [sourceDescription, setSourceDescription] = useState('');
+  const [sourceConnString, setSourceConnString] = useState(SOURCE_CONN_STRING);
+  const [sourceDescription, setSourceDescription] = useState(SOURCE_DESCRIPTION);
   const [sourceTestStatus, setSourceTestStatus] = useState('');
   const [testingSource, setTestingSource] = useState(false);
 
   // Target Config State
-  const [targetSystem, setTargetSystem] = useState('FileNet P8');
-  const [targetHost, setTargetHost] = useState('192.168.1.104');
-  const [targetPort, setTargetPort] = useState('9443');
-  const [targetProtocol, setTargetProtocol] = useState('https');
-  const [targetUsername, setTargetUsername] = useState('p8admin');
-  const [targetPassword, setTargetPassword] = useState('Skts@123');
+  const [targetSystem, setTargetSystem] = useState(TARGET_SYSTEM);
+  const [targetHost, setTargetHost] = useState(TARGET_HOST);
+  const [targetPort, setTargetPort] = useState(TARGET_PORT);
+  const [targetProtocol, setTargetProtocol] = useState(TARGET_PROTOCOL);
+  const [targetUsername, setTargetUsername] = useState(TARGET_USERNAME);
+  const [targetPassword, setTargetPassword] = useState(TARGET_PASSWORD);
   const [targetDomain, setTargetDomain] = useState('');
-  const [targetTimeout, setTargetTimeout] = useState('30');
-  const [targetObjectStore, setTargetObjectStore] = useState('FNOS');
-  const [targetBatchImport, setTargetBatchImport] = useState('yes');
-  const [targetDescription, setTargetDescription] = useState('');
+  const [targetTimeout, setTargetTimeout] = useState(TARGET_TIMEOUT);
+  const [targetObjectStore, setTargetObjectStore] = useState(TARGET_OBJECT_STORE);
+  const [targetBatchImport, setTargetBatchImport] = useState(TARGET_BATCH_IMPORT);
+  const [targetDescription, setTargetDescription] = useState(TARGET_DESCRIPTION);
   const [targetTestStatus, setTargetTestStatus] = useState('');
   const [testingTarget, setTestingTarget] = useState(false);
 
-  // Storage Config State
-  const [storageType, setStorageType] = useState('NAS');
-  const [storageProtocol, setStorageProtocol] = useState('NFS');
-  const [storageHost, setStorageHost] = useState('192.168.1.105');
-  const [storageShareName, setStorageShareName] = useState('IS Documents');
-  const [storageMountPath, setStorageMountPath] = useState('/home/skts/IS Migration');
-  const [storageCapacity, setStorageCapacity] = useState('2048');
-  const [storageThreshold, setStorageThreshold] = useState('85');
+  // Storage Config State (Loaded dynamically from .env)
+  const [storageType, setStorageType] = useState(STORAGE_TYPE);
+  const [storageProtocol, setStorageProtocol] = useState(STORAGE_PROTOCOL);
+  const [storageHost, setStorageHost] = useState(STORAGE_HOST);
+  const [storageShareName, setStorageShareName] = useState(DOCUMENTS_PATH.split('/').pop() || 'IS Documents');
+  const [storageMountPath, setStorageMountPath] = useState(STORAGE_MOUNT_PATH);
+  const [storageCapacity, setStorageCapacity] = useState(STORAGE_CAPACITY);
+  const [storageThreshold, setStorageThreshold] = useState(STORAGE_THRESHOLD);
   const [storageTestStatus, setStorageTestStatus] = useState('Mount Status: Available — 1.2 TB free of 2 TB');
   const [testingStorage, setTestingStorage] = useState(false);
 
   // Offline Extraction State
-  const [indexDbPath, setIndexDbPath] = useState('/mnt/truemigrate/staging/is-index-db');
-  const [msarDatPath, setMsarDatPath] = useState('/mnt/truemigrate/staging/msar-dat');
-  const [filePattern, setFilePattern] = useState('*.dat');
-  const [syncMode, setSyncMode] = useState('Manual Copy');
+  const [indexDbTableName, setIndexDbTableName] = useState(OFFLINE_INDEX_DB_TABLE);
+  const [indexDbPath, setIndexDbPath] = useState(OFFLINE_MKF_EXPORT_PATH);
+  const [msarDatPath, setMsarDatPath] = useState(OFFLINE_MSAR_DAT_PATH);
+  const [filePattern, setFilePattern] = useState(OFFLINE_FILE_PATTERN);
+
+  // Custom Tables State
+  const [caseTablesList, setCaseTablesList] = useState([CUSTOM_CASE_TABLE]);
+  const [doctabaTablesList, setDoctabaTablesList] = useState([CUSTOM_DOCTABA_TABLE]);
 
   // IS API Failover State
   const [failoverEnabled, setFailoverEnabled] = useState('Enabled');
@@ -590,9 +636,9 @@ export default function Configuration() { // NOSONAR
       const newEntry = {
         ...dbConfig,
         databaseType: dbTypeKey,
-        host: dbConfig.host || '127.0.0.1',
-        username: dbConfig.username || 'postgres',
-        password: dbConfig.password || 'password',
+        host: dbConfig.host || DB_HOST,
+        username: dbConfig.username || DB_USER,
+        password: dbConfig.password || DB_PASS,
         active: existingIdx >= 0 ? existingDbs[existingIdx].active : true
       };
 
@@ -710,7 +756,7 @@ export default function Configuration() { // NOSONAR
             fontWeight: '700', fontSize: '13px', cursor: 'pointer', transition: 'all 0.15s'
           }}
         >
-          Migration Utility Configuration
+          TM Configuration
         </button>
         <button
           onClick={() => { setMainTab('targetConfig'); setSelectedAppIndex(null); }}
@@ -738,20 +784,9 @@ export default function Configuration() { // NOSONAR
             <div style={panelStyle}>
               <div style={sectionLabelStyle}>Source Connection Details</div>
               
-              {/* Online / Offline Radio Switcher */}
+              {/* Extraction Mode Radio Switcher (Offline Default) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px', margin: '14px 0 18px 0', padding: '10px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Extraction Mode:</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', color: sourceMode === 'online' ? '#2563eb' : '#64748b', cursor: 'pointer' }}>
-                  <input 
-                    type="radio" 
-                    name="sourceMode" 
-                    value="online" 
-                    checked={sourceMode === 'online'} 
-                    onChange={() => setSourceMode('online')} 
-                    style={{ accentColor: '#2563eb', cursor: 'pointer', width: '16px', height: '16px' }}
-                  />
-                  Online
-                </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', color: sourceMode === 'offline' ? '#2563eb' : '#64748b', cursor: 'pointer' }}>
                   <input 
                     type="radio" 
@@ -762,6 +797,17 @@ export default function Configuration() { // NOSONAR
                     style={{ accentColor: '#2563eb', cursor: 'pointer', width: '16px', height: '16px' }}
                   />
                   Offline
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', color: sourceMode === 'online' ? '#2563eb' : '#64748b', cursor: 'pointer' }}>
+                  <input 
+                    type="radio" 
+                    name="sourceMode" 
+                    value="online" 
+                    checked={sourceMode === 'online'} 
+                    onChange={() => setSourceMode('online')} 
+                    style={{ accentColor: '#2563eb', cursor: 'pointer', width: '16px', height: '16px' }}
+                  />
+                  Online
                 </label>
               </div>
 
@@ -782,15 +828,15 @@ export default function Configuration() { // NOSONAR
                     </div>
                     <div>
                       <label style={labelStyle}>Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" value={sourceHost} onChange={e => setSourceHost(e.target.value)} placeholder="192.168.1.205" style={inputStyle} />
+                      <input type="text" value={sourceHost} onChange={e => setSourceHost(e.target.value)} placeholder={SOURCE_HOST} style={inputStyle} />
                     </div>
                     <div>
                       <label style={labelStyle}>Library Name</label>
-                      <input type="text" value={sourceLibraryName} onChange={e => setSourceLibraryName(e.target.value)} placeholder="fnis" style={inputStyle} />
+                      <input type="text" value={sourceLibraryName} onChange={e => setSourceLibraryName(e.target.value)} placeholder={SOURCE_LIBRARY_NAME} style={inputStyle} />
                     </div>
                     <div>
                       <label style={labelStyle}>User Name <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" value={sourceUsername} onChange={e => setSourceUsername(e.target.value)} placeholder="SysAdmin" autoComplete="off" style={inputStyle} />
+                      <input type="text" value={sourceUsername} onChange={e => setSourceUsername(e.target.value)} placeholder={SOURCE_USERNAME} autoComplete="off" style={inputStyle} />
                     </div>
                     <div style={{ gridColumn: 'span 2' }}>
                       <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
@@ -798,14 +844,20 @@ export default function Configuration() { // NOSONAR
                         type="password" 
                         value={sourcePassword} 
                         onChange={e => setSourcePassword(e.target.value)} 
-                        placeholder="Enter password" 
+                        placeholder="••••••••" 
                         autoComplete="new-password" 
                         style={inputStyle} 
                       />
                     </div>
                     <div style={{ gridColumn: 'span 2' }}>
                       <label style={labelStyle}>Connection String</label>
-                      <input type="text" value={sourceConnString} onChange={e => setSourceConnString(e.target.value)} placeholder="e.g. corba:iiop:192.168.1.205:2809#fnis" style={inputStyle} />
+                      <input 
+                        type="text" 
+                        value={sourceConnString} 
+                        onChange={e => setSourceConnString(e.target.value)} 
+                        placeholder={sourceHost.trim() ? `e.g. corba:iiop:${sourceHost.trim()}:2809#${sourceLibraryName.trim() || 'fnis'}` : "e.g. corba:iiop:192.168.1.205:2809#fnis"} 
+                        style={inputStyle} 
+                      />
                     </div>
                     <div style={{ gridColumn: 'span 2' }}>
                       <label style={labelStyle}>Description</label>
@@ -836,12 +888,12 @@ export default function Configuration() { // NOSONAR
                     <button
                       type="button"
                       onClick={() => {
-                        setSourceHost('192.168.1.205');
-                        setSourceLibraryName('fnis');
-                        setSourceUsername('SysAdmin');
-                        setSourcePassword('SysAdmin');
-                        setSourceConnString('');
-                        setSourceDescription('');
+                        setSourceHost(SOURCE_HOST);
+                        setSourceLibraryName(SOURCE_LIBRARY_NAME);
+                        setSourceUsername(SOURCE_USERNAME);
+                        setSourcePassword(SOURCE_PASSWORD);
+                        setSourceConnString(SOURCE_CONN_STRING);
+                        setSourceDescription(SOURCE_DESCRIPTION);
                         setSourceTestStatus('');
                       }}
                       style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
@@ -862,35 +914,31 @@ export default function Configuration() { // NOSONAR
               {/* Offline Mode Form */}
               {sourceMode === 'offline' && (
                 <>
-                  <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                  <div style={{ fontSize: '11px', color: '#64748b', margin: '-4px 0 16px 0' }}>
                     Local paths where Image Services artifacts are copied before offline extraction jobs run — zero dependency on the IS server in this mode.
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
                     <div style={{ gridColumn: 'span 2' }}>
-                      <label style={labelStyle}>Index DB Export Path (incl. MKF) <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" value={indexDbPath} onChange={e => setIndexDbPath(e.target.value)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                      <label style={labelStyle}>Index_DB (Table Name) <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input type="text" value={indexDbTableName} onChange={e => setIndexDbTableName(e.target.value)} placeholder={OFFLINE_INDEX_DB_TABLE} style={inputStyle} />
+                    </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={labelStyle}>MKF Export Path <span style={{ color: '#ef4444' }}>*</span></label>
+                      <input type="text" value={indexDbPath} onChange={e => setIndexDbPath(e.target.value)} placeholder={OFFLINE_MKF_EXPORT_PATH} style={{ ...inputStyle, fontFamily: 'monospace' }} />
                     </div>
                     <div style={{ gridColumn: 'span 2' }}>
                       <label style={labelStyle}>MSAR DAT Files Path <span style={{ color: '#ef4444' }}>*</span></label>
-                      <input type="text" value={msarDatPath} onChange={e => setMsarDatPath(e.target.value)} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                      <input type="text" value={msarDatPath} onChange={e => setMsarDatPath(e.target.value)} placeholder={OFFLINE_MSAR_DAT_PATH} style={{ ...inputStyle, fontFamily: 'monospace' }} />
                     </div>
-                    <div>
+                    <div style={{ gridColumn: 'span 2' }}>
                       <label style={labelStyle}>File Pattern / Filter</label>
-                      <input type="text" value={filePattern} onChange={e => setFilePattern(e.target.value)} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Sync Mode</label>
-                      <select value={syncMode} onChange={e => setSyncMode(e.target.value)} style={inputStyle}>
-                        <option>Manual Copy</option>
-                        <option>Scheduled Sync</option>
-                        <option>Watch Folder</option>
-                      </select>
+                      <input type="text" value={filePattern} onChange={e => setFilePattern(e.target.value)} placeholder={OFFLINE_FILE_PATTERN} style={inputStyle} />
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '14px 0 6px 0', fontSize: '12px', color: '#64748b' }}>
-                    <input type="checkbox" checked readOnly style={{ cursor: 'not-allowed' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '14px 0 6px 0', fontSize: '11px', color: '#64748b', fontWeight: '500' }}>
+                    <span style={{ color: '#f59e0b', fontSize: '13px', lineHeight: 1 }}>★</span>
                     <span>Zero dependency on IS Server in offline extraction mode</span>
                   </div>
 
@@ -908,10 +956,10 @@ export default function Configuration() { // NOSONAR
                     <button
                       type="button"
                       onClick={() => {
-                        setIndexDbPath('/mnt/truemigrate/staging/is-index-db');
-                        setMsarDatPath('/mnt/truemigrate/staging/msar-dat');
-                        setFilePattern('*.dat');
-                        setSyncMode('Manual Copy');
+                        setIndexDbTableName(OFFLINE_INDEX_DB_TABLE);
+                        setIndexDbPath(OFFLINE_MKF_EXPORT_PATH);
+                        setMsarDatPath(OFFLINE_MSAR_DAT_PATH);
+                        setFilePattern(OFFLINE_FILE_PATTERN);
                       }}
                       style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
                     >
@@ -925,7 +973,7 @@ export default function Configuration() { // NOSONAR
         )}
 
         {/* ==================================================== */}
-        {/* TAB 2: MIGRATION UTILITY CONFIGURATION                */}
+        {/* TAB 2: TM CONFIGURATION                              */}
         {/* ==================================================== */}
         {mainTab === 'utilityConfig' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -978,7 +1026,7 @@ export default function Configuration() { // NOSONAR
                     </thead>
                     <tbody>
                       {[
-                        { id: 'postgres', databaseType: 'postgres', name: 'PostgreSQL', defaultHost: '192.168.1.145:5432', defaultUsername: 'postgres', defaultPassword: '••••••••', defaultUrl: 'jdbc:postgresql://192.168.1.145:5432/migration_db', defaultDriver: 'org.postgresql.Driver', enabled: true },
+                        { id: 'postgres', databaseType: 'postgres', name: 'PostgreSQL', defaultHost: DB_HOST, defaultUsername: DB_USER, defaultPassword: '••••••••', defaultUrl: DB_JDBC_URL, defaultDriver: 'org.postgresql.Driver', enabled: true },
                         { id: 'oracle', databaseType: 'oracle', name: 'Oracle Database', defaultHost: '—', defaultUsername: '—', defaultPassword: '—', defaultUrl: '', defaultDriver: 'oracle.jdbc.OracleDriver', enabled: false },
                         { id: 'db2', databaseType: 'db2', name: 'IBM DB2', defaultHost: '—', defaultUsername: '—', defaultPassword: '—', defaultUrl: '', defaultDriver: 'com.ibm.db2.jcc.DB2Driver', enabled: false },
                         { id: 'mssql', databaseType: 'mssql', name: 'SQL Server', defaultHost: '—', defaultUsername: '—', defaultPassword: '—', defaultUrl: '', defaultDriver: 'com.microsoft.sqlserver.jdbc.SQLServerDriver', enabled: false }
@@ -1041,9 +1089,9 @@ export default function Configuration() { // NOSONAR
                                   border: '1px solid #cbd5e1',
                                   borderRadius: '5px',
                                   cursor: 'pointer',
-                                  color: '#2563eb',
                                   fontSize: '11.5px',
                                   fontWeight: '600',
+                                  color: '#2563eb',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: '4px'
@@ -1105,11 +1153,11 @@ export default function Configuration() { // NOSONAR
                   </div>
                   <div>
                     <label style={labelStyle}>JDBC URL <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input type="text" value={dbConfig.url || ''} onChange={e => { setDbConfig({...dbConfig, url: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder="e.g. jdbc:postgresql://192.168.1.145:5432/migration_db" />
+                    <input type="text" value={dbConfig.url || ''} onChange={e => { setDbConfig({...dbConfig, url: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder="e.g. jdbc:postgresql://localhost:5432/migration_db" />
                   </div>
                   <div>
-                    <label style={labelStyle}>Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input type="text" value={dbConfig.host || ''} onChange={e => { setDbConfig({...dbConfig, host: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder="e.g. 192.168.1.145:5432" />
+                    <label style={labelStyle}>Host / Server</label>
+                    <input type="text" value={dbConfig.host || ''} onChange={e => { setDbConfig({...dbConfig, host: e.target.value}); setTestSuccess(false); }} style={inputStyle} placeholder="e.g. localhost:5432" />
                   </div>
                   <div>
                     <label style={labelStyle}>Username <span style={{ color: '#ef4444' }}>*</span></label>
@@ -1152,9 +1200,97 @@ export default function Configuration() { // NOSONAR
               )}
             </div>
 
-            {/* NAS/SAN Storage config */}
+            {/* Custom Table */}
             <div style={panelStyle}>
-              <div style={sectionLabelStyle}>NAS / SAN Storage Configuration</div>
+              <div style={{ ...sectionLabelStyle, margin: '0 0 14px 0' }}>Custom Table</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 340px))', gap: '14px 24px' }}>
+                
+                {/* Case Tables Field */}
+                <div style={{ maxWidth: '340px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '24px', marginBottom: '6px' }}>
+                    <label style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', lineHeight: 1 }}>Case Tables</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCaseTablesList(['']);
+                        setTimeout(() => caseInputRef.current?.focus(), 50);
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', lineHeight: 1 }}
+                      title="Add new table name (replaces current)"
+                    >
+                      <Plus size={12} /> Add
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      ref={caseInputRef}
+                      type="text"
+                      value={caseTablesList[0] ?? ''}
+                      onChange={e => setCaseTablesList([e.target.value])}
+                      placeholder="Enter case table name..."
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+                {/* IS DocTaba Tables Field */}
+                <div style={{ maxWidth: '340px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '24px', marginBottom: '6px' }}>
+                    <label style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', lineHeight: 1 }}>IS DocTaba Tables</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDoctabaTablesList(['']);
+                        setTimeout(() => doctabaInputRef.current?.focus(), 50);
+                      }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', lineHeight: 1 }}
+                      title="Add new table name (replaces current)"
+                    >
+                      <Plus size={12} /> Add
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      ref={doctabaInputRef}
+                      type="text"
+                      value={doctabaTablesList[0] ?? ''}
+                      onChange={e => setDoctabaTablesList([e.target.value])}
+                      placeholder="Enter DocTaba table name..."
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccess('Custom Table configuration saved successfully!');
+                    setTimeout(() => setSuccess(''), 3000);
+                  }}
+                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
+                >
+                  Save Configuration
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaseTablesList([CUSTOM_CASE_TABLE]);
+                    setDoctabaTablesList([CUSTOM_DOCTABA_TABLE]);
+                  }}
+                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Staging Storage config */}
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>Staging Storage Configuration</div>
               <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
                 Local network storage mounted to the Migration Environment (File I/O / NFS) — used by extraction, transformation and loader jobs for staged files.
               </div>
@@ -1172,13 +1308,11 @@ export default function Configuration() { // NOSONAR
                   <label style={labelStyle}>Protocol</label>
                   <select value={storageProtocol} onChange={e => setStorageProtocol(e.target.value)} style={inputStyle}>
                     <option>NFS</option>
-                    <option>SMB / CIFS</option>
-                    <option>iSCSI</option>
                   </select>
                 </div>
                 <div>
                   <label style={labelStyle}>Storage Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" value={storageHost} onChange={e => setStorageHost(e.target.value)} placeholder="192.168.1.105" style={inputStyle} />
+                  <input type="text" value={storageHost} onChange={e => setStorageHost(e.target.value)} placeholder="ubuntu-server" style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Export / Share Name</label>
@@ -1186,15 +1320,15 @@ export default function Configuration() { // NOSONAR
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <label style={labelStyle}>Local Mount Path <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" value={storageMountPath} onChange={e => setStorageMountPath(e.target.value)} placeholder="/home/skts/IS Migration" style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                  <input type="text" value={storageMountPath} onChange={e => setStorageMountPath(e.target.value)} placeholder={STORAGE_MOUNT_PATH} style={{ ...inputStyle, fontFamily: 'monospace' }} />
                 </div>
                 <div>
                   <label style={labelStyle}>Total Capacity (GB)</label>
-                  <input type="text" value={storageCapacity} onChange={e => setStorageCapacity(e.target.value)} placeholder="2048" style={inputStyle} />
+                  <input type="text" value={storageCapacity} onChange={e => setStorageCapacity(e.target.value)} placeholder={STORAGE_CAPACITY} style={inputStyle} />
                 </div>
                 <div>
                   <label style={labelStyle}>Low Space Alert Threshold (%)</label>
-                  <input type="text" value={storageThreshold} onChange={e => setStorageThreshold(e.target.value)} placeholder="85" style={inputStyle} />
+                  <input type="text" value={storageThreshold} onChange={e => setStorageThreshold(e.target.value)} placeholder={STORAGE_THRESHOLD} style={inputStyle} />
                 </div>
               </div>
 
@@ -1211,7 +1345,7 @@ export default function Configuration() { // NOSONAR
                 <button
                   type="button"
                   onClick={() => {
-                    setSuccess('NAS/SAN storage configurations saved successfully!');
+                    setSuccess('Staging storage configurations saved successfully!');
                     setTimeout(() => setSuccess(''), 3000);
                   }}
                   style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
@@ -1221,9 +1355,9 @@ export default function Configuration() { // NOSONAR
                 <button
                   type="button"
                   onClick={() => {
-                    setStorageHost('192.168.1.105');
-                    setStorageMountPath('/home/skts/IS Migration');
-                    setStorageShareName('IS Documents');
+                    setStorageHost(STORAGE_HOST);
+                    setStorageMountPath(STORAGE_MOUNT_PATH);
+                    setStorageShareName(DOCUMENTS_PATH.split('/').pop() || 'IS Documents');
                   }}
                   style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
                 >
@@ -1254,7 +1388,6 @@ export default function Configuration() { // NOSONAR
                 <label style={labelStyle}>Target System <span style={{ color: '#ef4444' }}>*</span></label>
                 <select value={targetSystem} onChange={e => setTargetSystem(e.target.value)} style={inputStyle}>
                   <option>FileNet P8</option>
-                  <option>IBM FileNet Image Services</option>
                   <option>Cloud Repository</option>
                   <option>SharePoint</option>
                   <option>Custom Repository</option>
@@ -1262,11 +1395,11 @@ export default function Configuration() { // NOSONAR
               </div>
               <div>
                 <label style={labelStyle}>Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" value={targetHost} onChange={e => setTargetHost(e.target.value)} placeholder="192.168.1.104" style={inputStyle} />
+                <input type="text" value={targetHost} onChange={e => setTargetHost(e.target.value)} placeholder={TARGET_HOST} style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Port <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" value={targetPort} onChange={e => setTargetPort(e.target.value)} placeholder="9443" style={inputStyle} />
+                <input type="text" value={targetPort} onChange={e => setTargetPort(e.target.value)} placeholder={TARGET_PORT} style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Protocol</label>
@@ -1277,7 +1410,7 @@ export default function Configuration() { // NOSONAR
               </div>
               <div>
                 <label style={labelStyle}>User Name <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="text" value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="p8admin" autoComplete="off" style={inputStyle} />
+                <input type="text" value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder={TARGET_USERNAME} autoComplete="off" style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Password <span style={{ color: '#ef4444' }}>*</span></label>
@@ -1285,18 +1418,18 @@ export default function Configuration() { // NOSONAR
                   type="password" 
                   value={targetPassword} 
                   onChange={e => setTargetPassword(e.target.value)} 
-                  placeholder="Enter password" 
+                  placeholder="••••••••" 
                   autoComplete="new-password" 
                   style={inputStyle} 
                 />
               </div>
               <div>
                 <label style={labelStyle}>Connection Timeout (sec)</label>
-                <input type="text" value={targetTimeout} onChange={e => setTargetTimeout(e.target.value)} placeholder="30" style={inputStyle} />
+                <input type="text" value={targetTimeout} onChange={e => setTargetTimeout(e.target.value)} placeholder={TARGET_TIMEOUT} style={inputStyle} />
               </div>
               <div>
                 <label style={labelStyle}>Object Store</label>
-                <input type="text" value={targetObjectStore} onChange={e => setTargetObjectStore(e.target.value)} placeholder="FNOS" style={inputStyle} />
+                <input type="text" value={targetObjectStore} onChange={e => setTargetObjectStore(e.target.value)} placeholder={TARGET_OBJECT_STORE} style={inputStyle} />
               </div>
               <div style={{ gridColumn: 'span 2' }}>
                 <label style={labelStyle}>Batch Import</label>
@@ -1351,23 +1484,24 @@ export default function Configuration() { // NOSONAR
               >
                 Save Configuration
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTargetHost('192.168.1.104');
-                  setTargetPort('9443');
-                  setTargetProtocol('https');
-                  setTargetUsername('p8admin');
-                  setTargetPassword('Skts@123');
-                  setTargetTimeout('30');
-                  setTargetObjectStore('FNOS');
-                  setTargetDescription('');
-                  setTargetTestStatus('');
-                }}
-                style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
-              >
-                Reset
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTargetHost(TARGET_HOST);
+                    setTargetPort(TARGET_PORT);
+                    setTargetProtocol(TARGET_PROTOCOL);
+                    setTargetUsername(TARGET_USERNAME);
+                    setTargetPassword(TARGET_PASSWORD);
+                    setTargetTimeout(TARGET_TIMEOUT);
+                    setTargetObjectStore(TARGET_OBJECT_STORE);
+                    setTargetBatchImport(TARGET_BATCH_IMPORT);
+                    setTargetDescription(TARGET_DESCRIPTION);
+                    setTargetTestStatus('');
+                  }}
+                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
+                >
+                  Reset
+                </button>
             </div>
 
             {targetTestStatus && (

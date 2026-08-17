@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAlert } from '../context/AlertContext';
 import defaultDocClassesData from '../config/documentClasses.json';
+import { CUSTOM_CASE_TABLE } from '../config/envConfig';
 
 // Helper to convert source column names (e.g. F_docnumber, a77, a95) to clean friendly display names without technical codes
 export const getSourceFieldDisplayName = (propName) => {
@@ -164,8 +165,8 @@ export const getTypeColor = (typeStr) => {
   return '#64748b';
 };
 
-// Available 2 document classes
-const AVAILABLE_SOURCE_CLASSES = ['PolicyDoc', 'Claim'];
+// Available source classes / tables and target classes
+const AVAILABLE_SOURCE_CLASSES = [CUSTOM_CASE_TABLE, 'policydocs'];
 const AVAILABLE_TARGET_CLASSES = ['PolicyDocument', 'Claim'];
 
 export default function PropertyMapping() {
@@ -248,11 +249,15 @@ export default function PropertyMapping() {
       return;
     }
 
-    const localClass = defaultDocClassesData.documentClasses.find(
-      c => c.className.toLowerCase() === docClass.toLowerCase() || 
-           (c.targetClass && c.targetClass.toLowerCase() === docClass.toLowerCase()) ||
-           (c.displayName && c.displayName.toLowerCase() === docClass.toLowerCase())
-    );
+    const docLower = docClass.toLowerCase();
+    const localClass = defaultDocClassesData.documentClasses.find(c => {
+      const cName = c.className.toLowerCase();
+      if (docLower.includes('claim') && cName.includes('claim')) return true;
+      if ((docLower.includes('policy') || docLower.includes('doctaba')) && (cName.includes('policy') || cName.includes('doctaba'))) return true;
+      return cName === docLower || 
+             (c.targetClass && c.targetClass.toLowerCase() === docLower) ||
+             (c.displayName && c.displayName.toLowerCase() === docLower);
+    });
 
     let rawProps = localClass?.properties || [];
 
@@ -398,11 +403,15 @@ export default function PropertyMapping() {
     }
     setError('');
 
-    const localSource = defaultDocClassesData.documentClasses.find(
-      c => c.className.toLowerCase() === selectedSourceClass?.toLowerCase() || 
-           (c.targetClass && c.targetClass.toLowerCase() === selectedSourceClass?.toLowerCase()) ||
-           (c.displayName && c.displayName.toLowerCase() === selectedSourceClass?.toLowerCase())
-    );
+    const docLower = selectedSourceClass?.toLowerCase() || '';
+    const localSource = defaultDocClassesData.documentClasses.find(c => {
+      const cName = c.className.toLowerCase();
+      if (docLower.includes('claim') && cName.includes('claim')) return true;
+      if ((docLower.includes('policy') || docLower.includes('doctaba')) && (cName.includes('policy') || cName.includes('doctaba'))) return true;
+      return cName === docLower || 
+             (c.targetClass && c.targetClass.toLowerCase() === docLower) ||
+             (c.displayName && c.displayName.toLowerCase() === docLower);
+    });
 
     const normalize = (str) => {
       if (!str) return '';
@@ -594,7 +603,7 @@ export default function PropertyMapping() {
       setLoading(true);
       setError('');
 
-      const resolvedTable = selectedSourceClass.toLowerCase().includes('policy') ? 'doctaba' : 'case_metadata';
+      const resolvedTable = selectedSourceClass.toLowerCase().includes('policy') ? 'doctaba_staging_table' : 'case_metadata';
 
       const payload = {
         templateId: editingTemplateId || undefined,
@@ -844,8 +853,8 @@ export default function PropertyMapping() {
               <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Template Name</th>
-                  <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Class</th>
-                  <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Class</th>
+                  <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Source Class/Table</th>
+                  <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Target Class/Table</th>
                   <th style={{ padding: '9px 16px', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -933,19 +942,19 @@ export default function PropertyMapping() {
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px', flexShrink: 0 }}>
               <div style={{ background: 'white', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Source Object Store</div>
+                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Source Repository</div>
                 <div style={{ fontSize: '13px', color: '#334155', fontWeight: '700' }}>{viewingTemplate.sourceObjectStore || 'FNIS'}</div>
               </div>
               <div style={{ background: 'white', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Source Class</div>
+                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Source Class/Table</div>
                 <div style={{ fontSize: '13px', color: '#8b5cf6', fontWeight: '700' }}>{viewingTemplate.sourceDocumentClass}</div>
               </div>
               <div style={{ background: 'white', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Target Object Store</div>
+                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Target Repository</div>
                 <div style={{ fontSize: '13px', color: '#334155', fontWeight: '700' }}>{viewingTemplate.targetObjectStore || 'FNOS'}</div>
               </div>
               <div style={{ background: 'white', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Target Class</div>
+                <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: '700', marginBottom: '2px' }}>Target Class/Table</div>
                 <div style={{ fontSize: '13px', color: '#10b981', fontWeight: '700' }}>{viewingTemplate.targetDocumentClass}</div>
               </div>
             </div>
@@ -1002,7 +1011,7 @@ export default function PropertyMapping() {
         {activeTab === 'create' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0, overflow: 'hidden' }}>
             
-            {/* Header Configuration Panel (Template Name, Source Object Store, Source Class, Target Object Store, Target Class) */}
+            {/* Header Configuration Panel (Template Name, Source Repository, Source Class/Table, Target Repository, Target Class/Table) */}
             <div style={{ background: 'white', padding: '14px 18px', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.1fr 1fr 1.1fr', gap: '12px' }}>
@@ -1023,7 +1032,7 @@ export default function PropertyMapping() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Source Object Store <span style={{ color: '#ef4444' }}>*</span>
+                    Source Repository <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input 
                     type="text"
@@ -1038,7 +1047,7 @@ export default function PropertyMapping() {
                 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Source Document Class <span style={{ color: '#ef4444' }}>*</span>
+                    Source Class/Table <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select 
                     value={selectedSourceClass}
@@ -1052,14 +1061,14 @@ export default function PropertyMapping() {
                       boxSizing: 'border-box' 
                     }}
                   >
-                    <option value="">{sourceObjectStore.trim() ? '-- Select Source Class --' : '-- Enter Source Object Store --'}</option>
+                    <option value="">{sourceObjectStore.trim() ? '-- Select Source Class/Table --' : '-- Enter Source Repository --'}</option>
                     {sourceClasses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Target Object Store <span style={{ color: '#ef4444' }}>*</span>
+                    Target Repository <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input 
                     type="text"
@@ -1074,7 +1083,7 @@ export default function PropertyMapping() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Target Document Class <span style={{ color: '#ef4444' }}>*</span>
+                    Target Class/Table <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select 
                     value={selectedTargetClass}
@@ -1088,7 +1097,7 @@ export default function PropertyMapping() {
                       boxSizing: 'border-box' 
                     }}
                   >
-                    <option value="">{targetObjectStore.trim() ? '-- Select Target Class --' : '-- Enter Target Object Store --'}</option>
+                    <option value="">{targetObjectStore.trim() ? '-- Select Target Class/Table --' : '-- Enter Target Repository --'}</option>
                     {targetClasses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -1100,48 +1109,22 @@ export default function PropertyMapping() {
                   {mappings.length > 0 ? (
                     <span>Found <b>{mappings.length}</b> source properties • <b>{mappings.filter(m => m.targetProperty).length}</b> mapped</span>
                   ) : (
-                    <span>Enter Source Object Store and select a Source Class to load properties</span>
+                    <span>Enter Source Repository and select a Source Class/Table to load properties</span>
                   )}
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <button
-                    onClick={handleAutoMap}
-                    disabled={mappings.length === 0}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
-                      background: 'white', color: '#334155', border: '1px solid #cbd5e1',
-                      borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: mappings.length === 0 ? 'not-allowed' : 'pointer',
-                      opacity: mappings.length === 0 ? 0.6 : 1, transition: 'all 0.15s'
-                    }}
-                  >
-                    <Sparkles size={13} color="#2563eb" /> Auto Map
-                  </button>
-
-                  <button
                     onClick={handleClearMapping}
                     disabled={mappings.length === 0}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
+                      display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 14px',
                       background: 'white', color: '#64748b', border: '1px solid #cbd5e1',
                       borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: mappings.length === 0 ? 'not-allowed' : 'pointer',
                       opacity: mappings.length === 0 ? 0.6 : 1, transition: 'all 0.15s'
                     }}
                   >
                     <RefreshCw size={13} /> Clear Mapping
-                  </button>
-
-                  <button
-                    onClick={handleValidateMapping}
-                    disabled={mappings.length === 0}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px',
-                      background: 'white', color: '#334155', border: '1px solid #cbd5e1',
-                      borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: mappings.length === 0 ? 'not-allowed' : 'pointer',
-                      opacity: mappings.length === 0 ? 0.6 : 1, transition: 'all 0.15s'
-                    }}
-                  >
-                    <ShieldCheck size={13} color="#10b981" /> Validate Mapping
                   </button>
 
                   <button 
@@ -1188,8 +1171,8 @@ export default function PropertyMapping() {
                     {mappings.length === 0 ? (
                       <div style={{ padding: '40px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
                         {!sourceObjectStore.trim() 
-                          ? 'Enter Source Object Store above to load source document classes.'
-                          : 'Select a Source Document Class above to load source metadata.'}
+                          ? 'Enter Source Repository above to load source classes/tables.'
+                          : 'Select a Source Class/Table above to load source metadata.'}
                       </div>
                     ) : filteredMappings.length === 0 ? (
                       <div style={{ padding: '20px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
@@ -1220,19 +1203,19 @@ export default function PropertyMapping() {
                 </div>
 
                 {/* ── Middle Column: MAPPING ── */}
-                <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #bfdbfe', boxShadow: '0 2px 4px rgba(37,99,235,0.04)', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid #bfdbfe', background: '#eff6ff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '11px', fontWeight: '800', color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                       MAPPING
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                    <div style={{ fontSize: '11px', color: '#2563eb', fontWeight: '700', background: '#ffffff', padding: '2px 8px', borderRadius: '12px', border: '1px solid #bfdbfe' }}>
                       {mappings.filter(m => m.targetProperty).length} / {mappings.length} Mapped
                     </div>
                   </div>
 
                   <div style={{ flex: 1, overflow: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {mappings.length === 0 ? (
-                      <div style={{ padding: '40px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '180px', color: '#94a3b8', fontSize: '12.5px', fontWeight: '500', textAlign: 'center' }}>
                         No fields available to map.
                       </div>
                     ) : filteredMappings.length === 0 ? (
@@ -1330,8 +1313,8 @@ export default function PropertyMapping() {
                     {targetProperties.length === 0 ? (
                       <div style={{ padding: '40px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
                         {!targetObjectStore.trim()
-                          ? 'Enter Target Object Store above to load target document classes.'
-                          : 'Select a Target Document Class above to load target metadata.'}
+                          ? 'Enter Target Repository above to load target classes/tables.'
+                          : 'Select a Target Class/Table above to load target metadata.'}
                       </div>
                     ) : filteredTargetProperties.length === 0 ? (
                       <div style={{ padding: '20px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
@@ -1352,8 +1335,8 @@ export default function PropertyMapping() {
                           </div>
                           
                           <span style={{ fontSize: '10.5px', color: '#059669', background: '#f0fdf4', padding: '2px 8px', borderRadius: '10px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: '500' }}>
-                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: getTypeColor(tp.dataType) }} />
-                            {formatTypeName(tp.dataType)}
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: getTypeColor(tp.dataType || tp.datatype) }} />
+                            {formatTypeName(tp.dataType || tp.datatype)}
                           </span>
                         </div>
                       ))

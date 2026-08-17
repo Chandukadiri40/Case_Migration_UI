@@ -298,7 +298,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                 END as yr,
                 s.extracted_status,
                 s.migration_status
-              FROM doctaba s${isWhereSql}
+              FROM doctaba_staging_table s${isWhereSql}
             ) sub
             GROUP BY class_num, yr
             ORDER BY class_num, yr
@@ -414,7 +414,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
             COALESCE(s.migrated_date::text, (CASE WHEN s.f_entrydate::text ~ '^[0-9]+$' THEN TO_CHAR(DATE '1970-01-01' + s.f_entrydate::integer, 'DD/MM/YYYY') ELSE s.f_entrydate::text END)) as migrated_date, 
             c.checksum_status 
           FROM ischecksumtable c 
-          LEFT JOIN doctaba s ON c.documentid = s.f_docnumber::text 
+          LEFT JOIN doctaba_staging_table s ON c.documentid = s.f_docnumber::text 
           LEFT JOIN public.document_class dc ON s.f_docclassnumber = dc.f_docclassnumber
         `
         if (idList.length > 0) {
@@ -524,19 +524,19 @@ export default function Reconciliation({ activeTab = 'is' }) {
         }
 
       } else {
-        // ── IS Reconciliation normal mode (Queries doctaba dynamically with specific columns and date conversion) ──
-        // 1. Query the physical column names of doctaba table dynamically
+        // ── IS Reconciliation normal mode (Queries doctaba_staging_table dynamically with specific columns and date conversion) ──
+        // 1. Query the physical column names of doctaba_staging_table dynamically
         const columnsRes = await apiExecuteQuery(`
           SELECT column_name 
           FROM information_schema.columns 
-          WHERE table_name = 'doctaba'
+          WHERE table_name = 'doctaba_staging_table'
         `)
         const doctabaColumns = (columnsRes || []).map(c => c.column_name.toLowerCase())
 
         // 2. Query the active doc class number dynamically
         let docClassNum = 19
         try {
-          const classRes = await apiExecuteQuery("SELECT f_docclassnumber FROM doctaba LIMIT 1")
+          const classRes = await apiExecuteQuery("SELECT f_docclassnumber FROM doctaba_staging_table LIMIT 1")
           if (classRes && classRes.length > 0) {
             docClassNum = Number(classRes[0].f_docclassnumber)
           }
@@ -608,7 +608,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
             SUM(CASE WHEN LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry') THEN 1 ELSE 0 END) as in_progress,
             SUM(CASE WHEN LOWER(migration_status) IN ('failed') THEN 1 ELSE 0 END) as failed,
             SUM(CASE WHEN LOWER(migration_status) IN ('pending') THEN 1 ELSE 0 END) as pending
-          FROM doctaba
+          FROM doctaba_staging_table
         `
         const countWhereClauses = []
         if (fromDays !== null) {
@@ -640,7 +640,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
         // 2. Fetch specific records grid data with status & date filters
         // 2. Fetch specific records grid data (only for filtered status/criteria, not full Summary)
         if (statusFilter !== 'All' || idList.length > 0 || fromDays !== null || toDays !== null) {
-          let recordQuery = `SELECT ${selectClause} FROM doctaba`
+          let recordQuery = `SELECT ${selectClause} FROM doctaba_staging_table`
           const recordWhereClauses = []
 
           if (statusFilter !== 'All' && statusFilter !== '') {
@@ -772,11 +772,12 @@ export default function Reconciliation({ activeTab = 'is' }) {
         return kLower.includes('date') || kLower.includes('access')
       }
       
-      // Preferred column order requested by user: Case Id, Document Number, Case Type...
+      // Preferred column order requested by user: Case Id, Document Number, Case Type, Migration Status...
       const preferredOrder = [
         'case_id',
         'doc_no',
         'case_type',
+        'migration_status',
         'customer_id',
         'customer_name',
         'policy_number',
@@ -784,7 +785,6 @@ export default function Reconciliation({ activeTab = 'is' }) {
         'case_description',
         'department',
         'priority',
-        'migration_status',
         'error_info'
       ]
 
@@ -879,17 +879,19 @@ export default function Reconciliation({ activeTab = 'is' }) {
         }))
 
       // 3. Status and Error Info (if failed)
-      const specificHeaders = []
       const statusKey = recordKeys.find(rk => rk.toLowerCase() === 'migration_status')
-      if (statusKey) {
-        specificHeaders.push({ key: statusKey, label: 'Status' })
-      }
+      const statusHeader = statusKey ? [{ key: statusKey, label: 'Status' }] : []
       const errorKey = recordKeys.find(rk => rk.toLowerCase() === 'error_info')
-      if (errorKey && (statusFilter?.toLowerCase() === 'failed' || reconcileTab === 'exception')) {
-        specificHeaders.push({ key: errorKey, label: 'Error Info' })
-      }
+      const errorHeader = (errorKey && (statusFilter?.toLowerCase() === 'failed' || reconcileTab === 'exception')) ? [{ key: errorKey, label: 'Error Info' }] : []
 
-      activeHeaders = [...systemHeaders, ...mappedCustomColumns, ...otherCustomHeaders, ...specificHeaders]
+      activeHeaders = [
+        ...systemHeaders.slice(0, 3), // 1. Document Number, 2. Document Class, 3. Created Date
+        ...statusHeader, // 4. Status (4th column position)
+        ...systemHeaders.slice(3), // 5. Document Format
+        ...mappedCustomColumns,
+        ...otherCustomHeaders,
+        ...errorHeader
+      ]
     }
   }
 
@@ -962,7 +964,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
   // Recon Report CSV Exporter
   function handleExportReconReportCSV() {
     if (customReportData.length === 0) return
-    const headers = ['Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
+    const headers = [subTab === 'case_metadata' ? 'Case Type' : 'Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
     const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`
     const lines = [
       headers.map(escape).join(','),
@@ -991,7 +993,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
   // Recon Report Excel Exporter
   function handleExportReconReportExcel() {
     if (customReportData.length === 0) return
-    const headers = ['Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
+    const headers = [subTab === 'case_metadata' ? 'Case Type' : 'Document Class', 'Year', 'Total Documents', 'No. Extracted', 'No. Migrated', 'No of Failed', 'No. Remaining', '% Completion', '% Failed', 'Status']
     const rows = customReportData.map(r => [
       r.class,
       r.year,
@@ -1206,7 +1208,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                   transition: 'all 0.15s'
                 }}
               >
-                IS Migration
+                Document Migration
               </button>
               <button
                 onClick={() => handleSubTabChange('case_metadata')}
@@ -1436,7 +1438,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                       <h4 style={{ margin: '0 0 14px 0', fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>Reconciliation Summary</h4>
                       
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-                        {/* Total Extracted */}
+                        {/* Total Count */}
                         <div 
                           role={reconcileTab === 'summary' ? 'button' : undefined}
                           onClick={reconcileTab === 'summary' ? () => handleSummaryCardClick('All') : undefined}
@@ -1449,7 +1451,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                             boxShadow: reconcileTab === 'summary' && (statusFilter === 'All' || statusFilter === '') ? '0 3px 8px rgba(99,102,241,0.12)' : 'none'
                           }}
                         >
-                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em', marginBottom: '6px' }}>Total Extracted</div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em', marginBottom: '6px' }}>Total Count</div>
                           <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>{summaryData.total.toLocaleString()}</div>
                         </div>
 
@@ -1483,7 +1485,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                             boxShadow: reconcileTab === 'summary' && statusFilter === 'Remaining' ? '0 3px 8px rgba(245,158,11,0.12)' : 'none'
                           }}
                         >
-                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em', marginBottom: '6px' }}>Remaining</div>
+                          <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.02em', marginBottom: '6px', whiteSpace: 'nowrap' }}>Pending for Migration</div>
                           <div style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a' }}>
                             {(summaryData.pending + summaryData.inProgress).toLocaleString()}
                           </div>
@@ -1555,7 +1557,7 @@ export default function Reconciliation({ activeTab = 'is' }) {
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
                         <thead>
                           <tr style={{ background: '#F8FAFC', borderBottom: '2px solid #e2e8f0' }}>
-                            <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Document Class</th>
+                            <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>{subTab === 'case_metadata' ? 'Case Type' : 'Document Class'}</th>
                             <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Year</th>
                             <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>Total Documents</th>
                             <th style={{ textAlign: 'right', padding: '10px 12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', fontSize: '9px', letterSpacing: '0.05em' }}>No. Extracted</th>
@@ -1686,10 +1688,10 @@ export default function Reconciliation({ activeTab = 'is' }) {
                       {isChecksumMode 
                         ? 'Checksum Report' 
                         : reconcileTab === 'exception'
-                          ? (subTab === 'case_metadata' ? 'Case Exception Report' : 'IS Exception Report')
+                          ? (subTab === 'case_metadata' ? 'Case Exception Report' : 'Document Exception Report')
                           : reconcileTab === 'search'
-                            ? (subTab === 'case_metadata' ? 'Case Search Results' : 'IS Search Results')
-                            : (subTab === 'case_metadata' ? 'Case Details Reconciliation' : 'IS Document Reconciliation')
+                            ? (subTab === 'case_metadata' ? 'Case Search Results' : 'Document Search Results')
+                            : (subTab === 'case_metadata' ? 'Case Details Reconciliation' : 'Document Reconciliation')
                       } ({records.length} {records.length === 1 ? 'record' : 'records'})
                     </h3>
                     {records.length > 0 && (

@@ -5,6 +5,7 @@ import { useAlert } from '../context/AlertContext'
 import { FileSpreadsheet, Download, Database, Loader2, Search, Plus, X, ChevronDown, Check, Eye, FileText, Copy, RefreshCw } from 'lucide-react'
 import Folders from './Folders'
 import EnterpriseDocumentViewer from './EnterpriseDocumentViewer'
+import { SERVER_HOST } from '../config/envConfig'
 
 const labelStyle = {
   fontSize: '11px',
@@ -162,7 +163,7 @@ export default function SearchDocs() {
         setIsPreviewLoading(false)
       })
       .catch(err => {
-        setPreviewContent(`Document Content Stream Verified (Doc ID: ${activeDocId})\nStatus: Active on Linux Host 192.168.1.105`)
+        setPreviewContent(`Document Content Stream Verified (Doc ID: ${activeDocId})\nStatus: Active on Linux Host ${SERVER_HOST}`)
         setIsPreviewLoading(false)
       })
   }, [activeDocId])
@@ -299,7 +300,7 @@ export default function SearchDocs() {
         console.error("Failed to load document_class mapping:", e)
       }
       try {
-        const classRes = await apiExecuteQuery("SELECT f_docclassnumber FROM doctaba LIMIT 1")
+        const classRes = await apiExecuteQuery("SELECT f_docclassnumber FROM doctaba_staging_table LIMIT 1")
         if (classRes && classRes.length > 0) {
           setActiveDocClassNum(Number(classRes[0].f_docclassnumber))
         }
@@ -509,11 +510,11 @@ export default function SearchDocs() {
           setRecords(res || [])
 
         } else {
-          // ── IS Search (doctaba) Query ──
+          // ── IS Search (doctaba_staging_table) Query ──
           const columnsRes = await apiExecuteQuery(`
             SELECT column_name 
             FROM information_schema.columns 
-            WHERE table_name = 'doctaba'
+            WHERE table_name = 'doctaba_staging_table'
           `)
           const doctabaColumns = (columnsRes || []).map(c => c.column_name.toLowerCase())
 
@@ -559,7 +560,7 @@ export default function SearchDocs() {
 
           const selectClause = selectParts.join(', ')
 
-          let recordQuery = `SELECT ${selectClause} FROM doctaba`
+          let recordQuery = `SELECT ${selectClause} FROM doctaba_staging_table`
           const recordWhereClauses = []
 
           if (status && status !== '') {
@@ -632,6 +633,7 @@ export default function SearchDocs() {
         'case_id',
         'doc_no',
         'case_type',
+        'migration_status',
         'customer_id',
         'customer_name',
         'policy_number',
@@ -639,7 +641,6 @@ export default function SearchDocs() {
         'case_description',
         'department',
         'priority',
-        'migration_status',
         'error_info'
       ]
       const ignoredKeys = ['sno', 's_no', 'id', 'serial_no', 'serialno', 'extracted_status', 'extracted_date', 'extractedstatus', 'extracteddate']
@@ -704,17 +705,19 @@ export default function SearchDocs() {
           isDate: isDateCol(key)
         }))
 
-      const specificHeaders = []
       const statusKey = recordKeys.find(rk => rk.toLowerCase() === 'migration_status')
-      if (statusKey) {
-        specificHeaders.push({ key: statusKey, label: 'Status' })
-      }
+      const statusHeader = statusKey ? [{ key: statusKey, label: 'Status' }] : []
       const errorKey = recordKeys.find(rk => rk.toLowerCase() === 'error_info')
-      if (errorKey && appliedFilters?.status?.toLowerCase() === 'failed') {
-        specificHeaders.push({ key: errorKey, label: 'Error Info' })
-      }
+      const errorHeader = (errorKey && appliedFilters?.status?.toLowerCase() === 'failed') ? [{ key: errorKey, label: 'Error Info' }] : []
 
-      activeHeaders = [...systemHeaders, ...mappedCustomColumns, ...otherCustomHeaders, ...specificHeaders]
+      activeHeaders = [
+        ...systemHeaders.slice(0, 3), // 1. Document Number, 2. Document Class, 3. Created Date
+        ...statusHeader, // 4. Status (4th column position)
+        ...systemHeaders.slice(3), // 5. Document Format
+        ...mappedCustomColumns,
+        ...otherCustomHeaders,
+        ...errorHeader
+      ]
     }
   }
 
@@ -740,7 +743,7 @@ export default function SearchDocs() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = subTab === 'case_metadata' ? 'case_search_results.csv' : 'is_search_results.csv'
+    a.download = subTab === 'case_metadata' ? 'case_search_results.csv' : 'document_search_results.csv'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -761,13 +764,13 @@ export default function SearchDocs() {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Search Results')
-    XLSX.writeFile(wb, subTab === 'is' ? 'is_migration_results.xlsx' : 'case_migration_results.xlsx')
+    XLSX.writeFile(wb, subTab === 'is' ? 'document_search_results.xlsx' : 'case_migration_results.xlsx')
   }
 
   return (
     <div className="deliverables-container" style={{ padding: '10px 14px', background: '#f8f9fa', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
-      {/* ── Top-Level Row: Mode Switcher (IS Migration vs Case Migration vs View Source Documents) ── */}
+      {/* ── Top-Level Row: Mode Switcher (Document Migration vs Case Migration vs Browse Documents) ── */}
       <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '10px', padding: '0 2px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{ display: 'flex', background: '#f1f5f9', padding: '3px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -786,7 +789,7 @@ export default function SearchDocs() {
                 transition: 'all 0.15s'
               }}
             >
-              IS Migration
+              Document Migration
             </button>
             <button
               onClick={() => handleSubTabChange('case_metadata')}
@@ -820,7 +823,7 @@ export default function SearchDocs() {
                 transition: 'all 0.15s'
               }}
             >
-              View Source Documents
+              Browse Documents
             </button>
           </div>
         </div>
@@ -1263,7 +1266,7 @@ export default function SearchDocs() {
             <div className="grid-container" style={{ background: 'white', padding: '12px', borderRadius: '12px', flex: 1, minHeight: 0, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', padding: '0 4px' }}>
                 <h3 style={{ margin: 0, color: '#1e293b', fontSize: '13px', fontWeight: 'bold' }}>
-                  {subTab === 'is' ? 'IS Migration Results' : 'Case Migration Results'} ({records.length} {records.length === 1 ? 'record' : 'records'})
+                  {subTab === 'is' ? 'Document Migration Results' : 'Case Migration Results'} ({records.length} {records.length === 1 ? 'record' : 'records'})
                 </h3>
                 {records.length > 0 && (
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -1473,7 +1476,7 @@ export default function SearchDocs() {
                                             <td style={{ padding: '6px 10px', color: '#64748b' }}>{subIdx + 1}</td>
                                             <td style={{ padding: '6px 10px', fontWeight: 'bold', color: '#1e293b' }}>Doc #{subDocId}</td>
                                             <td style={{ padding: '6px 10px', color: '#64748b' }}>PDF Document</td>
-                                            <td style={{ padding: '6px 10px', color: '#64748b' }}>192.168.1.105 (Linux Host)</td>
+                                            <td style={{ padding: '6px 10px', color: '#64748b' }}>{SERVER_HOST} (Linux Host)</td>
                                             <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                               <div style={{ display: 'inline-flex', gap: '5px', justifyContent: 'center' }}>
                                                 <button

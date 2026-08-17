@@ -58,7 +58,8 @@ export default function Login() {
           </div>
         </div>
 
-        <div className="auth-title">Migration Report Dashboard</div>
+        <div className="auth-title">TrueMigrator</div>
+        <div style={{ fontSize: '13px', color: '#64748b', fontWeight: '500', marginTop: '-2px', marginBottom: '4px' }}>Monitoring &amp; Search</div>
         <div className="auth-subtitle">{isLoginMode ? 'Log in to continue' : 'Create a new account'}</div>
 
         {error && (

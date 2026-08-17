@@ -1,155 +1,143 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { apiExecuteQuery } from '../utils/api'
-import { Loader2 } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 
 export default function DashboardOverview() {
-  const navigate = useNavigate()
   const [countdown, setCountdown] = useState(30)
-  const [data, setData] = useState({
-    total: 0,
-    extracted: 0,
-    inProgress: 0,
+  const [loading, setLoading] = useState(true)
+
+  // ── Source Discovery: Static Configuration as Specified ──
+  // Document Migration: Total 978 documents count, metadata fields: 18, image formats: 17, document class: 1 (Policy doc)
+  const docDiscovery = {
+    total: 978,
+    breakdown: [
+      { name: 'Policy doc', count: 978, color: '#2563EB' }
+    ],
+    classCount: 1,
+    fieldCount: 18,
+    imageFormatCount: 17
+  }
+
+  // Case Migration: Total 1000 documents count, metadata fields: 9, case class: 1 (CLAIM only), image formats: 17
+  const caseDiscovery = {
+    total: 1000,
+    breakdown: [
+      { name: 'CLAIM', count: 1000, color: '#2563EB' }
+    ],
+    classCount: 1,
+    fieldCount: 9,
+    imageFormatCount: 17
+  }
+
+  // ── Migration Status: Dynamic Live Data from Database ──
+  const [docStatus, setDocStatus] = useState({
+    total: 1000,
+    extracted: 1000,
     success: 0,
-    failed: 0,
     pending: 0,
-    trendExtracted: [0, 0, 0, 0, 0, 0, 0],
-    trendSuccess: [0, 0, 0, 0, 0, 0, 0],
-    trendFailed: [0, 0, 0, 0, 0, 0, 0],
-    trendLabels: ['', '', '', '', '', '', ''],
-    loading: true
+    inProgress: 0,
+    failed: 0
   })
 
-  const loadData = async (isAutoRefresh = false) => {
+  const [caseStatus, setCaseStatus] = useState({
+    total: 1000,
+    extracted: 1000,
+    success: 0,
+    pending: 0,
+    inProgress: 0,
+    failed: 0
+  })
+
+  const loadData = async () => {
     try {
-      // 1. Fetch Overall Counts
-      const queryOverall = `
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN LOWER(migration_status) IN ('success', 'migrated') THEN 1 ELSE 0 END) as success,
-          SUM(CASE WHEN LOWER(migration_status) IN ('in progress', 'in-progress', 'inprogress', 'retry') THEN 1 ELSE 0 END) as in_progress,
-          SUM(CASE WHEN LOWER(migration_status) IN ('failed') THEN 1 ELSE 0 END) as failed,
-          SUM(CASE WHEN LOWER(migration_status) IN ('pending') THEN 1 ELSE 0 END) as pending
-        FROM doctaba
-      `
-      const resOverall = await apiExecuteQuery(queryOverall)
-      let total = 0, success = 0, inProgress = 0, failed = 0, pending = 0, extracted = 0
+      // ── 1. REAL LIVE DATA: DOCTABA (IS / Document Migration) ──
+      try {
+        const queryDocCounts = `
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('success', 'migrated') THEN 1 ELSE 0 END) as success,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('in progress', 'in-progress', 'inprogress', 'retry') THEN 1 ELSE 0 END) as in_progress,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'pending' THEN 1 ELSE 0 END) as pending
+          FROM doctaba_staging_table
+        `
+        const resDoc = await apiExecuteQuery(queryDocCounts)
+        if (resDoc && resDoc.length > 0 && Number(resDoc[0].total) > 0) {
+          const c = resDoc[0]
+          const total = Number(c.total) || 0
+          const success = Number(c.success) || 0
+          const inProgress = Number(c.in_progress) || 0
+          const failed = Number(c.failed) || 0
+          const pending = Number(c.pending) || 0
+          let extracted = total - pending
+          if (extracted <= 0 && (success > 0 || inProgress > 0 || failed > 0)) {
+            extracted = success + inProgress + failed
+          }
 
-      if (resOverall && resOverall.length > 0) {
-        const counts = resOverall[0]
-        total = Number(counts.total) || 0
-        success = Number(counts.success) || 0
-        inProgress = Number(counts.in_progress) || 0
-        failed = Number(counts.failed) || 0
-        pending = Number(counts.pending) || 0
-        extracted = total - pending
-      }
-
-      // 2. Fetch Trend Details for Cumulative 7 Days
-      const todayEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24))
-      const startEpoch = todayEpoch - 6
-
-      // Baseline counts (prior to startEpoch)
-      const queryBaseline = `
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN LOWER(migration_status) IN ('success', 'migrated') THEN 1 ELSE 0 END) as success,
-          SUM(CASE WHEN LOWER(migration_status) IN ('failed') THEN 1 ELSE 0 END) as failed,
-          SUM(CASE WHEN LOWER(migration_status) IN ('pending') THEN 1 ELSE 0 END) as pending
-        FROM doctaba
-        WHERE f_entrydate IS NOT NULL AND f_entrydate::integer < ${startEpoch}
-      `
-      const resBaseline = await apiExecuteQuery(queryBaseline)
-      let baseTotal = 0, baseSuccess = 0, baseFailed = 0, basePending = 0
-      if (resBaseline && resBaseline.length > 0) {
-        const base = resBaseline[0]
-        baseTotal = Number(base.total) || 0
-        baseSuccess = Number(base.success) || 0
-        baseFailed = Number(base.failed) || 0
-        basePending = Number(base.pending) || 0
-      }
-      let baseExtracted = baseTotal - basePending
-
-      // Daily changes inside the 7 days window
-      const queryDaily = `
-        SELECT 
-          f_entrydate::integer as day,
-          COUNT(*) as total,
-          SUM(CASE WHEN LOWER(migration_status) IN ('success', 'migrated') THEN 1 ELSE 0 END) as success,
-          SUM(CASE WHEN LOWER(migration_status) IN ('failed') THEN 1 ELSE 0 END) as failed,
-          SUM(CASE WHEN LOWER(migration_status) IN ('pending') THEN 1 ELSE 0 END) as pending
-        FROM doctaba
-        WHERE f_entrydate IS NOT NULL 
-          AND f_entrydate::integer >= ${startEpoch} 
-          AND f_entrydate::integer <= ${todayEpoch}
-        GROUP BY f_entrydate::integer
-        ORDER BY f_entrydate::integer ASC
-      `
-      const resDaily = await apiExecuteQuery(queryDaily) || []
-      const dailyMap = {}
-      resDaily.forEach(row => {
-        dailyMap[row.day] = {
-          extracted: (Number(row.total) || 0) - (Number(row.pending) || 0),
-          success: Number(row.success) || 0,
-          failed: Number(row.failed) || 0
+          setDocStatus({
+            total,
+            extracted,
+            success,
+            pending,
+            inProgress,
+            failed
+          })
         }
-      })
-
-      // Build the cumulative points for 7 days
-      const trendExtracted = []
-      const trendSuccess = []
-      const trendFailed = []
-      const trendLabels = []
-
-      let currExtracted = baseExtracted
-      let currSuccess = baseSuccess
-      let currFailed = baseFailed
-
-      for (let i = 0; i < 7; i++) {
-        const targetDay = startEpoch + i
-        const dayChange = dailyMap[targetDay] || { extracted: 0, success: 0, failed: 0 }
-
-        currExtracted += dayChange.extracted
-        currSuccess += dayChange.success
-        currFailed += dayChange.failed
-
-        trendExtracted.push(currExtracted)
-        trendSuccess.push(currSuccess)
-        trendFailed.push(currFailed)
-
-        // Format date to e.g. "Aug 9"
-        const dateObj = new Date(targetDay * 24 * 60 * 60 * 1000)
-        trendLabels.push(dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }))
+      } catch (err) {
+        console.warn('Live doctaba status query error:', err)
       }
 
-      setData(prev => ({
-        ...prev,
-        total,
-        extracted,
-        inProgress,
-        success,
-        failed,
-        pending,
-        trendExtracted,
-        trendSuccess,
-        trendFailed,
-        trendLabels,
-        loading: false
-      }))
+      // ── 2. REAL LIVE DATA: CASE_METADATA (Case Migration) ──
+      try {
+        const queryCaseCounts = `
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('success', 'migrated') THEN 1 ELSE 0 END) as success,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) IN ('in progress', 'in-progress', 'inprogress', 'retry') THEN 1 ELSE 0 END) as in_progress,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'failed' THEN 1 ELSE 0 END) as failed,
+            SUM(CASE WHEN LOWER(COALESCE(migration_status, '')) = 'pending' THEN 1 ELSE 0 END) as pending
+          FROM case_metadata
+        `
+        const resCase = await apiExecuteQuery(queryCaseCounts)
+        if (resCase && resCase.length > 0 && Number(resCase[0].total) > 0) {
+          const c = resCase[0]
+          const total = Number(c.total) || 0
+          const success = Number(c.success) || 0
+          const inProgress = Number(c.in_progress) || 0
+          const failed = Number(c.failed) || 0
+          const pending = Number(c.pending) || 0
+          let extracted = total - pending
+          if (extracted <= 0 && (success > 0 || inProgress > 0 || failed > 0)) {
+            extracted = success + inProgress + failed
+          }
 
+          setCaseStatus({
+            total,
+            extracted,
+            success,
+            pending,
+            inProgress,
+            failed
+          })
+        }
+      } catch (err) {
+        console.warn('Live case_metadata status query error:', err)
+      }
+
+      setLoading(false)
     } catch (err) {
-      console.error('Error fetching dashboard data:', err)
-      setData(prev => ({ ...prev, loading: false }))
+      console.error('Error loading dashboard data:', err)
+      setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData(false)
+    loadData()
   }, [])
 
   useEffect(() => {
     if (countdown === 0) {
-      loadData(true)
+      loadData()
       setCountdown(30)
     }
   }, [countdown])
@@ -167,169 +155,354 @@ export default function DashboardOverview() {
     return `${m}:${s}`
   }
 
-  const total = data.total || 1
-  const extractedPct = ((data.extracted / total) * 100).toFixed(1)
-  const migratedPct = ((data.success / total) * 100).toFixed(1)
-  const failedPct = ((data.failed / total) * 100).toFixed(1)
-
-  // Donut chart segments calculations (circumference is 283)
-  const successCirc = (data.success / total) * 283
-  const ipCirc = (data.inProgress / total) * 283
-  const failedCirc = (data.failed / total) * 283
-  const pendingCirc = (data.pending / total) * 283
-
-  // Line chart coordinates calculator helper
-  const getSvgPoints = (dataset) => {
-    return dataset.map((val, idx) => {
-      const x = 60 + idx * 70
-      // 170 is baseline y, Y range is 140px, scaled to maximum total records
-      const y = 170 - (val / total) * 140
-      return `${x},${y}`
-    }).join(' ')
+  // Calculate SVG Donut slice segments
+  const getDonutSlices = (items, total) => {
+    const circum = 282.74
+    let accumulated = 0
+    return items.map((item) => {
+      const pct = total > 0 ? item.count / total : 0
+      const strokeLength = Math.max(pct * circum, 0)
+      const strokeOffset = -accumulated
+      accumulated += strokeLength
+      return {
+        ...item,
+        strokeDasharray: `${strokeLength} ${circum}`,
+        strokeDashoffset: strokeOffset
+      }
+    })
   }
 
-  if (data.loading) {
+  if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', background: '#f8f9fa' }}>
-        <Loader2 size={40} className="animate-spin" style={{ color: '#2563EB' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px', background: '#f8fafc' }}>
+        <Loader2 size={36} className="animate-spin" style={{ color: '#2563EB' }} />
         <span style={{ fontSize: '13px', fontWeight: '700', color: '#1e293b' }}>Loading Live Migration Metrics...</span>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: '14px', background: '#f8f9fa', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '14px 20px', background: '#f8fafc', height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       
-      {/* Auto-refresh indicator */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '10px', paddingRight: '4px' }}>
-        <div style={{ 
-          display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#6B7280', 
-          background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', 
-          fontWeight: '600', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
-        }}>
-          <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
-          <span>Auto-Refresh: {formatTime(countdown)}</span>
-        </div>
-      </div>
-
-      {/* KPI Row */}
-      <div className="kpi-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '14px', marginBottom: '20px' }}>
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#6B7280' }}></span>Total Records
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 1: SOURCE DISCOVERY (Header & Auto-Refresh inline)       */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+          <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            SOURCE DISCOVERY
           </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.total.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>All source repositories</div>
-        </div>
-
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#2563EB' }}></span>Extracted
-          </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.extracted.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>{extractedPct}% of total</div>
-        </div>
-
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#B45309' }}></span>In Progress
-          </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.inProgress.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>Active database operations</div>
-        </div>
-
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#0F9D58' }}></span>Migrated
-          </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.success.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>{migratedPct}% of total</div>
-        </div>
-
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D92D20' }}></span>Failed
-          </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.failed.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>{failedPct}% failure rate</div>
-        </div>
-
-        <div className="card kpi-card" style={{ padding: '14px 16px', background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px' }}>
-          <div className="kpi-label" style={{ fontSize: '11.5px', color: '#6B7280', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span className="kpi-dot" style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#98A2B3' }}></span>Pending
-          </div>
-          <div className="kpi-value" style={{ fontSize: '22px', fontWeight: '700', marginTop: '6px', color: '#1F2937' }}>{data.pending.toLocaleString()}</div>
-          <div className="kpi-sub" style={{ fontSize: '10.5px', color: '#98A2B3', marginTop: '2px' }}>Queued for extraction</div>
-        </div>
-      </div>
-
-      {/* Grid: Charts */}
-      <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '16px', marginBottom: '20px' }}>
-        
-        {/* Progress Chart */}
-        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px' }}>
-          <div className="panel-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
-              Migration Progress <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Extracted vs. Imported vs. Failed — last 7 days</small>
-            </div>
-          </div>
-          <svg viewBox="0 0 560 200" width="100%" height="200">
-            <line x1="40" y1="20" x2="40" y2="170" stroke="#E3E7EE"/>
-            <line x1="40" y1="170" x2="540" y2="170" stroke="#E3E7EE"/>
-            <g stroke="#F4F6F9">
-              <line x1="40" y1="60" x2="540" y2="60"/>
-              <line x1="40" y1="100" x2="540" y2="100"/>
-              <line x1="40" y1="135" x2="540" y2="135"/>
-            </g>
-            
-            {/* Real dynamic cumulative trend points */}
-            <polyline fill="none" stroke="#2563EB" strokeWidth="2.5" points={getSvgPoints(data.trendExtracted)}/>
-            <polyline fill="none" stroke="#0F9D58" strokeWidth="2.5" points={getSvgPoints(data.trendSuccess)}/>
-            <polyline fill="none" stroke="#D92D20" strokeWidth="2" strokeDasharray="3 3" points={getSvgPoints(data.trendFailed)}/>
-            
-            <g fontSize="9.5" fill="#98A2B3">
-              {data.trendLabels.map((label, idx) => (
-                <text key={idx} x={55 + idx * 70} y="185">{label}</text>
-              ))}
-            </g>
-          </svg>
-          <div style={{ display: 'flex', gap: '18px', marginTop: '8px', fontSize: '11.5px', color: '#6B7280' }}>
-            <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '5px' }}></span>Extracted</span>
-            <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '5px' }}></span>Imported</span>
-            <span><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '5px' }}></span>Failed</span>
+          
+          <div style={{ 
+            display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: '#64748b', 
+            background: '#ffffff', padding: '3px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', 
+            fontWeight: '600', boxShadow: '0 1px 2px rgba(0,0,0,0.02)'
+          }}>
+            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
+            <span>Auto-Refresh: {formatTime(countdown)}</span>
+            <button 
+              type="button"
+              onClick={() => loadData()}
+              style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}
+              title="Refresh now"
+            >
+              <RefreshCw size={12} />
+            </button>
           </div>
         </div>
 
-        {/* Donut Chart panel */}
-        <div className="card panel" style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div>
-            <div className="panel-head" style={{ marginBottom: '14px' }}>
-              <div className="panel-title" style={{ fontSize: '14px', fontWeight: '700', color: '#1F2937' }}>
-                Migration Status <small style={{ display: 'block', fontSize: '11px', color: '#98A2B3', fontWeight: '400', marginTop: '2px' }}>Current record distribution</small>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          
+          {/* Card 1: Document Migration (Static Data) */}
+          <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>Document Migration</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#94a3b8' }}>Breakdown by document class, scanned from source</p>
+                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 9px', background: '#eff6ff', color: '#2563eb', borderRadius: '12px', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#2563eb' }}></span>
+                  {docDiscovery.total.toLocaleString()} documents
+                </span>
+              </div>
+
+              {/* Donut Chart & Legend */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '20px', padding: '6px 0 14px 0' }}>
+                {/* Donut SVG */}
+                <div style={{ position: 'relative', width: '130px', height: '130px', flexShrink: 0 }}>
+                  <svg viewBox="0 0 120 120" width="130" height="130">
+                    <circle cx="60" cy="60" r="45" fill="none" stroke="#f1f5f9" strokeWidth="13" />
+                    {getDonutSlices(docDiscovery.breakdown, docDiscovery.total).map((slice, idx) => (
+                      <circle
+                        key={idx}
+                        cx="60"
+                        cy="60"
+                        r="45"
+                        fill="none"
+                        stroke={slice.color}
+                        strokeWidth="13"
+                        strokeDasharray={slice.strokeDasharray}
+                        strokeDashoffset={slice.strokeDashoffset}
+                        transform="rotate(-90 60 60)"
+                        style={{ transition: 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease' }}
+                      />
+                    ))}
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>{docDiscovery.total.toLocaleString()}</span>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>Documents</span>
+                  </div>
+                </div>
+
+                {/* Legend List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+                  {docDiscovery.breakdown.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color, flexShrink: 0 }}></span>
+                        {item.name}
+                      </span>
+                      <span style={{ fontWeight: '700', color: '#1e293b', marginLeft: '12px' }}>{item.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <svg viewBox="0 0 120 120" width="130" height="130">
-                <circle cx="60" cy="60" r="45" fill="none" stroke="#F4F6F9" strokeWidth="16"/>
-                {/* Dynamic segmented slices */}
-                <circle cx="60" cy="60" r="45" fill="none" stroke="#0F9D58" strokeWidth="16" strokeDasharray={`${successCirc} 283`} strokeDashoffset="0" transform="rotate(-90 60 60)"/>
-                <circle cx="60" cy="60" r="45" fill="none" stroke="#2563EB" strokeWidth="16" strokeDasharray={`${ipCirc} 283`} strokeDashoffset={`-${successCirc}`} transform="rotate(-90 60 60)"/>
-                <circle cx="60" cy="60" r="45" fill="none" stroke="#D92D20" strokeWidth="16" strokeDasharray={`${failedCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc}`} transform="rotate(-90 60 60)"/>
-                <circle cx="60" cy="60" r="45" fill="none" stroke="#98A2B3" strokeWidth="16" strokeDasharray={`${pendingCirc} 283`} strokeDashoffset={`-${successCirc + ipCirc + failedCirc}`} transform="rotate(-90 60 60)"/>
-                
-                <text x="60" y="56" textAnchor="middle" fontSize="17" fontWeight="700" fill="#1F2937">{migratedPct}%</text>
-                <text x="60" y="72" textAnchor="middle" fontSize="9" fill="#98A2B3">Migrated</text>
-              </svg>
-              <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '9px', color: '#1F2937' }}>
-                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#0F9D58', borderRadius: '2px', marginRight: '6px' }}></span>Migrated — {data.success.toLocaleString()}</div>
-                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#2563EB', borderRadius: '2px', marginRight: '6px' }}></span>In Progress — {data.inProgress.toLocaleString()}</div>
-                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#D92D20', borderRadius: '2px', marginRight: '6px' }}></span>Failed — {data.failed.toLocaleString()}</div>
-                <div><span style={{ display: 'inline-block', width: '9px', height: '9px', background: '#98A2B3', borderRadius: '2px', marginRight: '6px' }}></span>Pending — {data.pending.toLocaleString()}</div>
+
+            {/* Footer Row (Document Class: 1, Metadata Fields: 18, Image Formats: 17) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderTop: '1px solid #f1f5f9', paddingTop: '10px', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Document Classes</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{docDiscovery.classCount}</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Metadata Fields</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{docDiscovery.fieldCount}</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Image Formats</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{docDiscovery.imageFormatCount}</div>
               </div>
             </div>
           </div>
+
+          {/* Card 2: Case Migration (Static Data) */}
+          <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>Case Migration</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#94a3b8' }}>Breakdown by case type, scanned from source</p>
+                </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 9px', background: '#eff6ff', color: '#2563eb', borderRadius: '12px', fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#2563eb' }}></span>
+                  {caseDiscovery.total.toLocaleString()} cases
+                </span>
+              </div>
+
+              {/* Donut Chart & Legend */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '20px', padding: '6px 0 14px 0' }}>
+                {/* Donut SVG */}
+                <div style={{ position: 'relative', width: '130px', height: '130px', flexShrink: 0 }}>
+                  <svg viewBox="0 0 120 120" width="130" height="130">
+                    <circle cx="60" cy="60" r="45" fill="none" stroke="#f1f5f9" strokeWidth="13" />
+                    {getDonutSlices(caseDiscovery.breakdown, caseDiscovery.total).map((slice, idx) => (
+                      <circle
+                        key={idx}
+                        cx="60"
+                        cy="60"
+                        r="45"
+                        fill="none"
+                        stroke={slice.color}
+                        strokeWidth="13"
+                        strokeDasharray={slice.strokeDasharray}
+                        strokeDashoffset={slice.strokeDashoffset}
+                        transform="rotate(-90 60 60)"
+                        style={{ transition: 'stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease' }}
+                      />
+                    ))}
+                  </svg>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>{caseDiscovery.total.toLocaleString()}</span>
+                    <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>Cases</span>
+                  </div>
+                </div>
+
+                {/* Legend List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '180px' }}>
+                  {caseDiscovery.breakdown.map((item, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11.5px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '2px', background: item.color, flexShrink: 0 }}></span>
+                        {item.name}
+                      </span>
+                      <span style={{ fontWeight: '700', color: '#1e293b', marginLeft: '12px' }}>{item.count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Row (Case Classes: 1, Metadata Fields: 9, Image Formats: 17) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: '1px solid #f1f5f9', paddingTop: '10px', textAlign: 'center' }}>
+              <div>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Case Classes</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{caseDiscovery.classCount}</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Metadata Fields</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{caseDiscovery.fieldCount}</div>
+              </div>
+              <div style={{ borderLeft: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap' }}>Image Formats</div>
+                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1e293b', marginTop: '2px' }}>{caseDiscovery.imageFormatCount}</div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 2: MIGRATION STATUS (Live Migration Real Data)          */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+      <div>
+        <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+          MIGRATION STATUS
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          
+          {/* Card 1: Document Migration (DocTaba Real Live Data) */}
+          <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>Document Migration</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#94a3b8' }}>Document migration status</p>
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 9px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#64748b' }}></span>
+                {docStatus.extracted.toLocaleString()} total extracted scope
+              </span>
+            </div>
+
+            {/* 4 KPI Grid Cards (Non-wrapping clean layout) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+              {/* Total Extracted */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Total Extracted</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {docStatus.extracted.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Total Migrated */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Total Migrated</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {docStatus.success.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Pending */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Pending</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {docStatus.pending.toLocaleString()}
+                </div>
+              </div>
+
+              {/* In Progress */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>In Progress</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {docStatus.inProgress.toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Case Migration (Case Metadata Real Live Data) */}
+          <div style={{ background: '#ffffff', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '700', color: '#1e293b' }}>Case Migration</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11.5px', color: '#94a3b8' }}>Case data migration status</p>
+              </div>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '2px 9px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#64748b' }}></span>
+                {caseStatus.extracted.toLocaleString()} total extracted scope
+              </span>
+            </div>
+
+            {/* 4 KPI Grid Cards (Non-wrapping clean layout) */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+              {/* Total Extracted */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563eb', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Total Extracted</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {caseStatus.extracted.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Total Migrated */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Total Migrated</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {caseStatus.success.toLocaleString()}
+                </div>
+              </div>
+
+              {/* Pending */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>Pending</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {caseStatus.pending.toLocaleString()}
+                </div>
+              </div>
+
+              {/* In Progress */}
+              <div style={{ padding: '10px 8px', background: '#ffffff', border: '1.5px solid #e2e8f0', borderRadius: '8px', minWidth: 0 }}>
+                <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#d97706', flexShrink: 0 }}></span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>In Progress</span>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                  {caseStatus.inProgress.toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   )
 }

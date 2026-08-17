@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save } from 'lucide-react';
 import { JOB_CATEGORIES } from '../config/jobsConfig';
+import { 
+  SERVER_ENV_NAME, 
+  CASE_INGESTION_JAR_PATH, 
+  FILENET_MIGRATOR_CMD, 
+  IS_EXTRACTION_SCRIPT, 
+  LOG_DIRECTORY_PATH 
+} from '../config/envConfig';
 
 export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCategory = 'import', existingJobs = [] }) {
   if (!isOpen) return null;
@@ -18,12 +25,12 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [endDate, setEndDate] = useState('');
   const [docIds, setDocIds] = useState(''); // Default empty for Ad-hoc text file pick on server
   const [filterCriteria, setFilterCriteria] = useState('Standard Run');
-  // Load server environment paths & settings from .env file
-  const serverEnvName = import.meta.env.VITE_SERVER_ENV_NAME || 'Ubuntu Server 24.04 LTS (192.168.1.105)';
-  const caseJarPath = import.meta.env.VITE_CASE_INGESTION_JAR_PATH || '"/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar"';
-  const filenetCmd = import.meta.env.VITE_FILENET_MIGRATOR_CMD || 'dotnet TrueMigrator.dll';
-  const isExtractScript = import.meta.env.VITE_IS_EXTRACTION_SCRIPT || 'python3 /opt/truemigrate/scripts/extract_is_docs.py';
-  const logDir = import.meta.env.VITE_LOG_DIRECTORY_PATH || '/var/log/truemigrate';
+  // Load server environment paths & settings dynamically from .env / envConfig
+  const serverEnvName = SERVER_ENV_NAME;
+  const caseJarPath = CASE_INGESTION_JAR_PATH;
+  const filenetCmd = FILENET_MIGRATOR_CMD;
+  const isExtractScript = IS_EXTRACTION_SCRIPT;
+  const logDir = LOG_DIRECTORY_PATH;
 
   const [env, setEnv] = useState(serverEnvName);
 
@@ -240,7 +247,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
         {/* Header */}
         <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ margin: '0 0 2px 0', fontSize: '16px', fontWeight: '800', color: '#0f172a' }}>Create Import Job</h3>
+            <h3 style={{ margin: '0 0 2px 0', fontSize: '15px', fontWeight: '600', color: '#1e293b' }}>Create Import Job</h3>
             <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>Configure a new target data import job</p>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
@@ -258,7 +265,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
               background: 'transparent', border: 'none',
               borderBottom: creationMode === 'form' ? '2.5px solid #2563eb' : '2.5px solid transparent',
               color: creationMode === 'form' ? '#2563eb' : '#64748b',
-              fontWeight: '700', fontSize: '12px', cursor: 'pointer'
+              fontWeight: '600', fontSize: '12px', cursor: 'pointer'
             }}
           >
             <Sliders size={14} /> Guided Form Builder
@@ -271,7 +278,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
               background: 'transparent', border: 'none',
               borderBottom: creationMode === 'terminal' ? '2.5px solid #2563eb' : '2.5px solid transparent',
               color: creationMode === 'terminal' ? '#2563eb' : '#64748b',
-              fontWeight: '700', fontSize: '12px', cursor: 'pointer'
+              fontWeight: '600', fontSize: '12px', cursor: 'pointer'
             }}
           >
             <Terminal size={14} /> CLI Terminal Prompt
@@ -300,7 +307,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                       style={inputStyle}
                     >
                       <option value="case">Case Migration</option>
-                      <option value="is">IS Migration</option>
+                      <option value="is">Document Migration</option>
                     </select>
                   </div>
                 )}
