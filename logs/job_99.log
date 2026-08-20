@@ -1,0 +1,11 @@
+[18/8/2026, 3:26:24 pm] [INFO] Initiating SSH connection to skts@192.168.1.241...
+[INFO] Target Command: dotnet TrueMigrator.dll status=Adhoc docids=121882,121845,43232432434,3434343434,3434334,343334343,3434343,34,3434,4345345345,45,345345
+[INFO] Target System: FileNet P8
+--------------------------------------------------------------------------------
+[18/8/2026, 3:26:34 pm] [ERROR] SSH Connection Error to 192.168.1.241: Timed out while waiting for handshake
+[INFO] Falling back to host execution mode...
+Could not execute because the specified command or file was not found.
+Possible reasons for this include:
+  * You misspelled a built-in dotnet command.
+  * You intended to execute a .NET program, but dotnet-TrueMigrator.dll does not exist.
+  * You intended to run a global tool, but a dotnet-prefixed executable with this name could not be found on the PATH.

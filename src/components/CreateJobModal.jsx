@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save } from 'lucide-react';
+import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save, Upload } from 'lucide-react';
 import { JOB_CATEGORIES } from '../config/jobsConfig';
 import { 
   SERVER_ENV_NAME, 
-  CASE_INGESTION_JAR_PATH, 
+  CASE_IMPORT_JAR_PATH, 
+  CASE_EXTRACTION_JAR_PATH,
+  CASE_TRANSFORMATION_JAR_PATH,
   FILENET_MIGRATOR_CMD, 
   IS_EXTRACTION_SCRIPT, 
   LOG_DIRECTORY_PATH 
 } from '../config/envConfig';
 
-export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCategory = 'import', existingJobs = [] }) {
-  if (!isOpen) return null;
+export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCategory = 'import', existingJobs = [], jobToEdit = null }) {
 
   const [creationMode, setCreationMode] = useState('form'); // 'form' or 'terminal'
   const [name, setName] = useState('');
@@ -27,7 +28,9 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [filterCriteria, setFilterCriteria] = useState('Standard Run');
   // Load server environment paths & settings dynamically from .env / envConfig
   const serverEnvName = SERVER_ENV_NAME;
-  const caseJarPath = CASE_INGESTION_JAR_PATH;
+  const caseJarPath = CASE_IMPORT_JAR_PATH;
+  const caseExtractJarPath = CASE_EXTRACTION_JAR_PATH;
+  const caseTransformJarPath = CASE_TRANSFORMATION_JAR_PATH;
   const filenetCmd = FILENET_MIGRATOR_CMD;
   const isExtractScript = IS_EXTRACTION_SCRIPT;
   const logDir = LOG_DIRECTORY_PATH;
@@ -51,28 +54,95 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   // Command state
   const [command, setCommand] = useState('');
   const [isManuallyEdited, setIsManuallyEdited] = useState(false);
+  
+  const [modificationReason, setModificationReason] = useState('');
 
   // Real-time unique name check
-  const isDuplicateName = name.trim() !== '' && existingJobs.some(
+  const isDuplicateName = name.trim() !== '' && (!jobToEdit || jobToEdit.name?.trim().toUpperCase() !== name.trim().toUpperCase()) && existingJobs.some(
     j => j.name && j.name.trim().toUpperCase() === name.trim().toUpperCase()
   );
 
+  const isCompleted = jobToEdit?.status === 'Completed';
+  
+  const hasChanges = isCompleted ? (
+    name !== jobToEdit.name || 
+    category !== jobToEdit.category || 
+    importTarget !== jobToEdit.importTarget || 
+    type !== jobToEdit.type || 
+    startDate !== (jobToEdit.startDate || '') || 
+    endDate !== (jobToEdit.endDate || '') || 
+    docIds !== (jobToEdit.docIds || '') || 
+    filterCriteria !== jobToEdit.filterCriteria || 
+    command !== jobToEdit.command
+  ) : true;
+  
+  const isSaveDisabled = isDuplicateName || (isCompleted && (!hasChanges || !modificationReason.trim()));
+
   useEffect(() => {
-    if (initialCategory) {
+    if (jobToEdit) {
+      setName(jobToEdit.name || '');
+      setCategory(jobToEdit.category || initialCategory || 'import');
+      setType(jobToEdit.type || 'Ad-hoc');
+      
+      const jobSource = jobToEdit.source || 'FileNet P8';
+      setSource(jobSource);
+      
+      // Use the explicitly saved importTarget if available, otherwise guess from source
+      const defaultImportTarget = jobToEdit.importTarget || (jobSource.includes('IBM Image Services') ? 'is' : 'case');
+      setImportTarget(defaultImportTarget);
+      
+      let parsedStart = '';
+      let parsedEnd = '';
+      let parsedDocIds = '';
+      
+      if (jobToEdit.dateRange) {
+        if (jobToEdit.dateRange.includes(' – ')) {
+          const parts = jobToEdit.dateRange.split(' – ');
+          parsedStart = parts[0];
+          parsedEnd = parts[1];
+        } else if (jobToEdit.dateRange.startsWith('DocIDs: ')) {
+          parsedDocIds = jobToEdit.dateRange.substring(8);
+        }
+      }
+      
+      setStartDate(parsedStart);
+      setEndDate(parsedEnd);
+      setDocIds(parsedDocIds);
+      
+      setWorkerThreads(jobToEdit.workerThreads || '');
+      setBatchSize(jobToEdit.batchSize || '');
+      setRetryCount(jobToEdit.retryCount || '');
+      setRetryInterval(jobToEdit.retryInterval || '');
+      
+      setPreserveMetadata(jobToEdit.preserveMetadata ?? true);
+      setPreserveCreatedDate(jobToEdit.preserveCreatedDate ?? true);
+      setPreserveModifiedDate(jobToEdit.preserveModifiedDate ?? true);
+      setValidateChecksum(jobToEdit.validateChecksum ?? true);
+      setContinueOnError(jobToEdit.continueOnError ?? false);
+      setGenerateAudit(jobToEdit.generateAudit ?? true);
+
+      setCommand(jobToEdit.command || '');
+      setIsManuallyEdited(true); // Prevent auto-generation from overriding saved command
+    } else if (initialCategory) {
+      setName('');
       setCategory(initialCategory);
+      setIsManuallyEdited(false);
       if (initialCategory === 'import') {
         setImportTarget('case');
         setType('Ad-hoc');
         setStartDate('');
         setEndDate('');
+        setDocIds('');
       } else if (initialCategory === 'extraction') {
         setType('Bulk');
       }
     }
-  }, [initialCategory, isOpen]);
+  }, [initialCategory, isOpen, jobToEdit]);
 
   // Handle importTarget reset defaults (Target System, Dates)
+  // Skip reset when loading from jobToEdit to preserve saved values
   useEffect(() => {
+    if (jobToEdit) return; // Don't reset when editing
     if (category === 'import') {
       if (importTarget === 'case') {
         setStartDate('');
@@ -90,7 +160,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
       if (importTarget === 'case') {
         if (type === 'Bulk') setFilterCriteria('Status = Pending');
         else if (type === 'Exception') setFilterCriteria('Status = Failed');
-        else setFilterCriteria('Standard Ingestion');
+        else setFilterCriteria('Standard');
       } else { // IS Migration
         if (type === 'Ad-hoc') setFilterCriteria(docIds.trim() ? 'docids=' + docIds.trim() : 'Ad-hoc Text File');
         else setFilterCriteria(type === 'Exception' ? 'Status = Failed' : 'Status = Pending');
@@ -117,7 +187,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
           setCommand(`java -jar ${safeJarPath} --status=Pending${startParam}${endParam}`);
         } else if (type === 'Exception') {
           setCommand(`java -jar ${safeJarPath} --status=Failed`);
-        } else { // Standard Ingestion
+        } else { // Standard
           setCommand(`java -jar ${safeJarPath}`);
         }
       } else {
@@ -135,19 +205,30 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
         }
       }
     } else if (category === 'extraction') {
-      setCommand(isExtractScript);
+      if (importTarget === 'case') {
+        const safeExtractJarPath = caseExtractJarPath.startsWith('"') && caseExtractJarPath.endsWith('"') ? caseExtractJarPath : `"${caseExtractJarPath.replace(/^"|"$/g, '')}"`;
+        setCommand(`java -jar ${safeExtractJarPath}`);
+      } else {
+        setCommand(isExtractScript);
+      }
+    } else if (category === 'transformation') {
+      const safeTransformJarPath = caseTransformJarPath.startsWith('"') && caseTransformJarPath.endsWith('"') ? caseTransformJarPath : `"${caseTransformJarPath.replace(/^"|"$/g, '')}"`;
+      setCommand(`java -jar ${safeTransformJarPath}`);
     }
   }, [name, category, importTarget, type, startDate, endDate, docIds, creationMode, isManuallyEdited, caseJarPath, filenetCmd, isExtractScript]);
+
+  // Early return AFTER all hooks - hooks must always run in the same order
+  if (!isOpen) return null;
 
   const handleSubmit = (e, autoStart = false) => {
     if (e && e.preventDefault) e.preventDefault();
 
     if (isDuplicateName) {
-      alert(`Job name "${name.toUpperCase()}" already exists! Job names must be unique.`);
+      alert(`Job name "${name}" already exists! Job names must be unique.`);
       return;
     }
 
-    const finalName = name.trim() ? name.toUpperCase() : ('JOB_' + Date.now().toString().slice(-4));
+    const finalName = name.trim() || ('JOB_' + Date.now().toString().slice(-4));
 
     let dateRangeStr = `${startDate} – ${endDate}`;
     let runTypeDisplay = type;
@@ -155,19 +236,26 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
     if (category === 'import') {
       if (importTarget === 'case') {
         if (type === 'Ad-hoc') {
-          runTypeDisplay = 'Standard Ingestion';
+          runTypeDisplay = 'Standard';
           dateRangeStr = 'N/A (Standard Run)';
         } else if (type === 'Bulk') {
-          runTypeDisplay = 'Pending Date Filter';
+          runTypeDisplay = 'Ad-hoc';
           dateRangeStr = `${startDate} – ${endDate}`;
         } else if (type === 'Exception') {
-          runTypeDisplay = 'Failed Recovery';
-          dateRangeStr = 'N/A (Failed Recovery)';
+          runTypeDisplay = 'Exception';
+          dateRangeStr = 'N/A (Exception)';
         }
       } else { // IS Migration
-        if (type === 'Ad-hoc') {
+        if (type === 'Bulk') {
+          runTypeDisplay = 'Standard';
+          dateRangeStr = `${startDate} – ${endDate}`;
+        } else if (type === 'Ad-hoc') {
           runTypeDisplay = 'Ad-hoc';
-          dateRangeStr = docIds.trim() ? `DocIDs: ${docIds.trim()}` : 'Server Text File';
+          const count = docIds.trim() ? docIds.split(',').length : 0;
+          dateRangeStr = count > 0 ? `${count} Document(s) Selected` : 'Server Text File';
+        } else if (type === 'Exception') {
+          runTypeDisplay = 'Exception';
+          dateRangeStr = 'N/A (Exception)';
         }
       }
     }
@@ -178,6 +266,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
 
     onCreateJob({
       name: finalName,
+      modificationReason,
       category: category || 'import',
       importTarget,
       type,
@@ -192,7 +281,22 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
       createdDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
       env,
       command: command || 'java -jar target/caseingestion-0.0.1.jar',
-      processPid: null
+      processPid: null,
+      
+      // Detailed Config payload
+      startDate,
+      endDate,
+      docIds,
+      workerThreads: workerThreads ? parseInt(workerThreads) : null,
+      batchSize: batchSize ? parseInt(batchSize) : null,
+      retryCount: retryCount ? parseInt(retryCount) : null,
+      retryInterval: retryInterval ? parseInt(retryInterval) : null,
+      preserveMetadata,
+      preserveCreatedDate,
+      preserveModifiedDate,
+      validateChecksum,
+      continueOnError,
+      generateAudit
     });
 
     onClose();
@@ -290,47 +394,53 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
 
           {creationMode === 'form' ? (
             <>
-              {/* Row 1: Target & Run Type */}
-              <div style={{ display: 'grid', gridTemplateColumns: category === 'import' ? '1fr 1fr' : '1fr', gap: '14px' }}>
-                {category === 'import' && (
+              {/* Row 1: Target & Run Type (Hidden for Transformation) */}
+              {category !== 'transformation' && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div>
+                      <label style={labelStyle}>Migration Type</label>
+                      <select
+                        value={importTarget}
+                        onChange={(e) => {
+                          const targetVal = e.target.value;
+                          setImportTarget(targetVal);
+                          if (category === 'import') {
+                            if (targetVal === 'case') setType('Ad-hoc');
+                            else setType('Bulk');
+                          }
+                          setIsManuallyEdited(false);
+                        }}
+                        style={inputStyle}
+                      >
+                        <option value="case">Case Migration</option>
+                        <option value="is">Document Migration</option>
+                      </select>
+                    </div>
+
                   <div>
-                    <label style={labelStyle}>Import Migration Suite / Target</label>
-                    <select
-                      value={importTarget}
-                      onChange={(e) => {
-                        const targetVal = e.target.value;
-                        setImportTarget(targetVal);
-                        if (targetVal === 'case') setType('Ad-hoc');
-                        else setType('Bulk');
-                        setIsManuallyEdited(false);
-                      }}
+                    <label style={labelStyle}>Migration Mode</label>
+                    <select 
+                      value={type} 
+                      onChange={(e) => { setType(e.target.value); setIsManuallyEdited(false); }} 
                       style={inputStyle}
                     >
-                      <option value="case">Case Migration</option>
-                      <option value="is">Document Migration</option>
+                      {category === 'import' && importTarget === 'case' ? (
+                        <>
+                          <option value="Ad-hoc">Standard</option>
+                          <option value="Bulk">Ad-hoc</option>
+                          <option value="Exception">Exception</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="Bulk">Standard</option>
+                          <option value="Ad-hoc">Ad-hoc</option>
+                          <option value="Exception">Exception</option>
+                        </>
+                      )}
                     </select>
                   </div>
-                )}
-
-                <div>
-                  <label style={labelStyle}>Run Type</label>
-                  <select value={type} onChange={(e) => { setType(e.target.value); setIsManuallyEdited(false); }} style={inputStyle}>
-                    {category === 'import' && importTarget === 'case' ? (
-                      <>
-                        <option value="Ad-hoc">Standard Ingestion</option>
-                        <option value="Bulk">Pending Date Filter</option>
-                        <option value="Exception">Failed Recovery</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="Bulk">Bulk</option>
-                        <option value="Ad-hoc">Ad-hoc</option>
-                        <option value="Exception">Exception</option>
-                      </>
-                    )}
-                  </select>
                 </div>
-              </div>
+              )}
 
               {/* Row 2: Job Name & Target System */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -343,14 +453,16 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                     placeholder={
                       category === 'import'
                         ? (importTarget === 'case' ? 'e.g. Case_IMP_JOB_001' : 'e.g. IS_IMP_JOB_001')
-                        : 'e.g. IS_EXT_JOB_001'
+                        : category === 'transformation'
+                        ? 'e.g. Case_TRF_JOB_001'
+                        : (importTarget === 'case' ? 'e.g. Case_EXT_JOB_001' : 'e.g. IS_EXT_JOB_001')
                     }
                     style={inputStyle}
                     required
                   />
                   {isDuplicateName && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontSize: '10.5px', fontWeight: 'bold', marginTop: '4px' }}>
-                      <AlertTriangle size={12} /> A job named "{name.toUpperCase()}" already exists. Job names must be unique!
+                      <AlertTriangle size={12} /> A job named "{name}" already exists. Job names must be unique!
                     </div>
                   )}
                 </div>
@@ -371,12 +483,40 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
               {/* Dynamic Inputs based on Job Mode & Target */}
               {category === 'import' && importTarget === 'is' && type === 'Ad-hoc' ? (
                 <div>
-                  <label style={labelStyle}>Document IDs (Comma-separated)</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <label style={{ ...labelStyle, marginBottom: 0 }}>Document IDs (Comma-separated)</label>
+                    <label style={{ fontSize: '11px', color: '#2563eb', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input 
+                        type="file" 
+                        accept=".txt,.csv" 
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            const content = evt.target.result;
+                            const ids = content.split(/[\n\r,]+/).map(id => id.trim()).filter(id => id);
+                            if (ids.length > 0) {
+                              const currentIds = docIds.trim() ? docIds.split(',').map(i => i.trim()).filter(i => i) : [];
+                              const newIds = Array.from(new Set([...currentIds, ...ids])).join(',');
+                              setDocIds(newIds);
+                              setIsManuallyEdited(false);
+                            }
+                          };
+                          reader.readAsText(file);
+                          e.target.value = '';
+                        }}
+                      />
+                      <Upload size={12} /> Load from File
+                    </label>
+                  </div>
                   <input
                     type="text"
                     value={docIds}
                     onChange={(e) => { setDocIds(e.target.value); setIsManuallyEdited(false); }}
                     style={inputStyle}
+                    placeholder="e.g. 1111,2222,3333 or upload a text file"
                   />
                 </div>
               ) : category === 'import' && importTarget === 'case' && (type === 'Ad-hoc' || type === 'Exception') ? null : (
@@ -476,7 +616,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                 />
                 {isDuplicateName && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontSize: '10.5px', fontWeight: 'bold', marginTop: '4px' }}>
-                    <AlertTriangle size={12} /> A job named "{name.toUpperCase()}" already exists. Job names must be unique!
+                    <AlertTriangle size={12} /> A job named "{name}" already exists. Job names must be unique!
                   </div>
                 )}
               </div>
@@ -518,6 +658,19 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
             </div>
           )}
 
+          {isCompleted && hasChanges && (
+            <div style={{marginTop:'15px'}}>
+              <label style={{display:'block', fontSize:'12px', fontWeight:'bold', color:'#475569', marginBottom:'5px'}}>Reason for Modification *</label>
+              <textarea 
+                required 
+                value={modificationReason} 
+                onChange={(e) => setModificationReason(e.target.value)} 
+                style={{width:'100%', padding:'8px', border:'1.5px solid #cbd5e1', borderRadius:'6px', fontSize:'12px', minHeight:'60px'}} 
+                placeholder='Explain why you are modifying this completed job...' 
+              />
+            </div>
+          )}
+
           {/* Action Buttons (Matching Screenshot) */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
             <button
@@ -531,14 +684,14 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
             <div style={{ display: 'flex', gap: '10px' }}>
               <button
                 type="submit"
-                disabled={isDuplicateName}
+                disabled={isSaveDisabled}
                 style={{
                   padding: '7px 18px',
                   background: 'white',
-                  color: isDuplicateName ? '#cbd5e1' : '#1e293b',
+                  color: isSaveDisabled ? '#cbd5e1' : '#1e293b',
                   border: '1.5px solid #cbd5e1',
                   borderRadius: '6px',
-                  cursor: isDuplicateName ? 'not-allowed' : 'pointer',
+                  cursor: isSaveDisabled ? 'not-allowed' : 'pointer',
                   fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px'
                 }}
               >
@@ -547,13 +700,13 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
 
               <button
                 type="button"
-                disabled={isDuplicateName}
+                disabled={isSaveDisabled}
                 onClick={(e) => handleSubmit(e, true)}
                 style={{
                   padding: '7px 20px',
-                  background: isDuplicateName ? '#94a3b8' : '#2563eb',
+                  background: isSaveDisabled ? '#94a3b8' : '#2563eb',
                   color: 'white', border: 'none', borderRadius: '6px',
-                  cursor: isDuplicateName ? 'not-allowed' : 'pointer',
+                  cursor: isSaveDisabled ? 'not-allowed' : 'pointer',
                   fontWeight: 'bold', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px',
                   boxShadow: '0 2px 6px rgba(37,99,235,0.2)'
                 }}

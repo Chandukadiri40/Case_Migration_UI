@@ -263,6 +263,54 @@
           "targetDataType": "DATE"
         }
       ]
+    },
+    {
+      "className": "AO_DOC",
+      "displayName": "AO DOC",
+      "tableName": "AO_DOC",
+      "targetClass": "AO_DOC",
+      "properties": [
+        {
+          "sourceProperty": "F_docnumber",
+          "sourceSymbolicName": "F_docnumber",
+          "sourceDataType": "STRING",
+          "targetProperty": "DocumentNumber",
+          "targetSymbolicName": "DocumentNumber",
+          "targetDataType": "STRING"
+        },
+        {
+          "sourceProperty": "F_docclassnumber",
+          "sourceSymbolicName": "F_docclassnumber",
+          "sourceDataType": "STRING",
+          "targetProperty": "DocclassNumber",
+          "targetSymbolicName": "DocclassNumber",
+          "targetDataType": "STRING"
+        },
+        {
+          "sourceProperty": "f_entrydate",
+          "sourceSymbolicName": "f_entrydate",
+          "sourceDataType": "DATE",
+          "targetProperty": "ISEntryDate",
+          "targetSymbolicName": "ISEntryDate",
+          "targetDataType": "DATE"
+        },
+        {
+          "sourceProperty": "a103",
+          "sourceSymbolicName": "a103",
+          "sourceDataType": "STRING",
+          "targetProperty": "BranchCode",
+          "targetSymbolicName": "BranchCode",
+          "targetDataType": "STRING"
+        },
+        {
+          "sourceProperty": "a77",
+          "sourceSymbolicName": "a77",
+          "sourceDataType": "STRING",
+          "targetProperty": "Account",
+          "targetSymbolicName": "Account",
+          "targetDataType": "STRING"
+        }
+      ]
     }
   ]
 }

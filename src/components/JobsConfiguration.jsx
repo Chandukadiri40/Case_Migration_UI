@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Plus, Play, Square, Pause, RotateCw, Terminal, CheckCircle2, 
-  XCircle, Clock, AlertCircle, RefreshCw, Trash2, Send, Timer, Layers, Sliders, Calendar, ArrowRight
+  XCircle, Clock, AlertCircle, RefreshCw, Trash2, Send, Timer, Layers, Sliders, Calendar, ArrowRight, Edit2
 } from 'lucide-react';
 import axios from 'axios';
 import { JOB_CATEGORIES, INITIAL_JOBS } from '../config/jobsConfig';
 import CreateJobModal from './CreateJobModal';
-import JobLogViewerModal from './JobLogViewerModal';
 import { useAlert } from '../context/AlertContext';
 
 export default function JobsConfiguration() {
@@ -43,8 +42,7 @@ export default function JobsConfiguration() {
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [isLogViewerOpen, setIsLogViewerOpen] = useState(false);
-  const [selectedJobForLogs, setSelectedJobForLogs] = useState(null);
+  const [jobToEdit, setJobToEdit] = useState(null);
 
   // Fetch jobs from backend API
   const fetchJobs = async () => {
@@ -93,11 +91,26 @@ export default function JobsConfiguration() {
     return j.category === activeTab;
   });
   
+  // Helper to get the display type for a job (matches JOB TYPE column)
+  const getJobDisplayType = (j) => {
+    if (j.runTypeDisplay) return j.runTypeDisplay;
+    
+    // Fallbacks for older records
+    if (j.importTarget === 'is' || j.source === 'IBM Image Services') {
+        if (j.type === 'Bulk') return 'Standard';
+        if (j.type === 'Ad-hoc') return 'Ad-hoc';
+    } else {
+        if (j.type === 'Ad-hoc') return 'Standard';
+        if (j.type === 'Bulk') return 'Ad-hoc';
+    }
+    return j.type;
+  };
+
   const getFilteredJobs = () => {
     switch (activeFilterPill) {
-      case 'bulk': return tabJobs.filter(j => j.type === 'Bulk');
-      case 'adhoc': return tabJobs.filter(j => j.type === 'Ad-hoc');
-      case 'exception': return tabJobs.filter(j => j.type === 'Exception');
+      case 'adhoc': return tabJobs.filter(j => getJobDisplayType(j) === 'Standard');
+      case 'bulk': return tabJobs.filter(j => getJobDisplayType(j) === 'Ad-hoc');
+      case 'exception': return tabJobs.filter(j => getJobDisplayType(j) === 'Exception');
       case 'running': return tabJobs.filter(j => j.status === 'Running');
       case 'completed': return tabJobs.filter(j => j.status === 'Completed');
       case 'failed': return tabJobs.filter(j => j.status === 'Failed');
@@ -173,9 +186,9 @@ export default function JobsConfiguration() {
   const getPillCount = (pillId) => {
     switch (pillId) {
       case 'all': return tabJobs.length;
-      case 'bulk': return tabJobs.filter(j => j.type === 'Bulk').length;
-      case 'adhoc': return tabJobs.filter(j => j.type === 'Ad-hoc').length;
-      case 'exception': return tabJobs.filter(j => j.type === 'Exception').length;
+      case 'bulk': return tabJobs.filter(j => getJobDisplayType(j) === 'Ad-hoc').length;
+      case 'adhoc': return tabJobs.filter(j => getJobDisplayType(j) === 'Standard').length;
+      case 'exception': return tabJobs.filter(j => getJobDisplayType(j) === 'Exception').length;
       case 'running': return tabJobs.filter(j => j.status === 'Running').length;
       case 'completed': return tabJobs.filter(j => j.status === 'Completed').length;
       case 'failed': return tabJobs.filter(j => j.status === 'Failed').length;
@@ -295,32 +308,46 @@ export default function JobsConfiguration() {
     );
   };
 
-  const handleCreateJob = async (newJob) => {
-    let createdJob = null;
-    try {
-      const res = await axios.post('/api/jobs', newJob);
-      createdJob = res.data;
-      setJobs(prev => [createdJob, ...prev]);
-    } catch (e) {
-      const nextId = (Math.max(...jobs.map(j => Number(j.id) || 0)) + 1);
-      createdJob = { ...newJob, id: nextId };
-      setJobs([ createdJob, ...jobs]);
+  const handleCreateJob = async (newJob, isEdit = false, editId = null) => {
+    // Optimistically update the UI immediately (no waiting for API)
+    const tempId = Date.now();
+    const optimisticJob = { ...newJob, id: isEdit ? editId : tempId };
+    
+    if (isEdit && editId) {
+      setJobs(prev => prev.map(j => j.id === editId ? optimisticJob : j));
+    } else {
+      setJobs(prev => [optimisticJob, ...prev]);
     }
     
     if (showAlert) {
-      showAlert(`New job "${newJob.name}" created successfully.`, 'Job Configured', 'info');
+      showAlert(`Job "${newJob.name}" ${isEdit ? 'updated' : 'created'} successfully.`, 'Job Configured', 'info');
     }
 
-    // If auto-start is enabled, trigger the SSH execution immediately
-    if (createdJob && createdJob.status === 'Running' && createdJob.id) {
-      try {
-        await axios.post(`/api/jobs/${createdJob.id}/start`);
-      } catch (e) {
-        console.error('Failed to auto-start job:', e);
+    // Background: persist to backend and start if needed
+    const payload = { ...newJob };
+    try {
+      let savedJob;
+      if (isEdit && editId) {
+        const res = await axios.put(`/api/jobs/${editId}`, payload);
+        savedJob = res.data;
+        setJobs(prev => prev.map(j => j.id === editId ? savedJob : j));
+      } else {
+        const res = await axios.post('/api/jobs', payload);
+        savedJob = res.data;
+        // Replace temp ID with real ID from DB
+        setJobs(prev => prev.map(j => j.id === tempId ? savedJob : j));
       }
-      // Auto-open the log viewer so user can see the terminal
-      setSelectedJobForLogs(createdJob);
-      setIsLogViewerOpen(true);
+
+      // If auto-start, trigger execution
+      if (savedJob && savedJob.status === 'Running' && savedJob.id) {
+        try {
+          await axios.post(`/api/jobs/${savedJob.id}/start`);
+        } catch (e) {
+          console.error('Failed to auto-start job:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to save job to backend:', e);
     }
   };
 
@@ -425,17 +452,7 @@ export default function JobsConfiguration() {
       </div>
 
       {/* CONTENT AREA BASED ON ACTIVE TAB */}
-      {activeTab === 'transformation' ? (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '36px 24px', textAlign: 'center' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>
-            <Sliders size={22} />
-          </div>
-          <h3 style={{ margin: '0 0 4px 0', fontSize: '14.5px', fontWeight: '600', color: '#1e293b' }}>Transformation Jobs Pipeline</h3>
-          <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
-            New transformation jobs pipeline will be added here in the next release.
-          </p>
-        </div>
-      ) : activeTab === 'scheduling' ? (
+      {activeTab === 'scheduling' ? (
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '36px 24px', textAlign: 'center' }}>
           <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px auto' }}>
             <Calendar size={22} />
@@ -514,12 +531,13 @@ export default function JobsConfiguration() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', flexShrink: 0 }}>
             {[
               { id: 'all', label: 'All Jobs' },
-              { id: 'bulk', label: 'Bulk Import' },
-              { id: 'adhoc', label: 'Ad-hoc Import' },
-              { id: 'exception', label: 'Exception Import' },
+              { id: 'adhoc', label: 'Standard' },
+              { id: 'bulk', label: 'Ad-hoc' },
+              { id: 'exception', label: 'Exception' },
               { id: 'running', label: 'Running' },
               { id: 'completed', label: 'Completed' },
-              { id: 'failed', label: 'Failed' }
+              { id: 'failed', label: 'Failed' },
+              { id: 'paused', label: 'Paused' }
             ].map(pill => {
               const count = getPillCount(pill.id);
               const isActive = activeFilterPill === pill.id;
@@ -588,14 +606,14 @@ export default function JobsConfiguration() {
                       style={{ cursor: 'pointer' }}
                     />
                   </div>
-                  {renderHeaderCell('JOB NAME', 'name')}
-                  {renderHeaderCell('JOB TYPE', 'type')}
-                  {renderHeaderCell('TARGET SYSTEM', 'source')}
-                  {renderHeaderCell('DATE RANGE', 'dateRange')}
-                  {renderHeaderCell('RECORDS', 'records', 'right')}
-                  {renderHeaderCell('STATUS', 'status')}
-                  {renderHeaderCell('CREATED BY', 'createdBy')}
-                  {renderHeaderCell('CREATED DATE', 'createdDate')}
+                  {renderHeaderCell('JOB NAME', 'name', 'center')}
+                  {renderHeaderCell('JOB TYPE', 'type', 'center')}
+                  {renderHeaderCell('TARGET SYSTEM', 'source', 'center')}
+                  {renderHeaderCell('CRITERIA', 'dateRange', 'center')}
+                  {renderHeaderCell('RECORDS', 'records', 'center')}
+                  {renderHeaderCell('STATUS', 'status', 'center')}
+                  {renderHeaderCell('CREATED BY', 'createdBy', 'center')}
+                  {renderHeaderCell('CREATED DATE', 'createdDate', 'center')}
                   <div style={{ padding: '0 6px', textAlign: 'center' }}>ACTIONS</div>
                 </div>
               </div>
@@ -607,18 +625,9 @@ export default function JobsConfiguration() {
                 </div>
               ) : (
                 sortedJobs.map((job) => {
-                  // Format Date Range: Show ONLY clean complete dates, never DocIDs or N/A
+                  // Format Criteria: Show raw date range or DocIDs. Hide 'N/A' defaults.
                   const rawDate = job.dateRange || '';
-                  const isCleanDate = (
-                    !rawDate.startsWith('DocIDs') && 
-                    !rawDate.startsWith('N/A') && 
-                    !rawDate.includes('Server Text') && 
-                    !rawDate.includes('Terminal') &&
-                    rawDate !== '-' &&
-                    rawDate !== '—' &&
-                    (/\d{4}-\d{2}-\d{2}/.test(rawDate) || /\d{2}\/\d{2}\/\d{4}/.test(rawDate) || /\d{2}-[A-Za-z]{3}-\d{4}/.test(rawDate))
-                  );
-                  const displayDateRange = isCleanDate ? rawDate : '—';
+                  const displayCriteria = rawDate.startsWith('N/A') || rawDate === '-' || rawDate === '—' ? '—' : rawDate;
 
                   return (
                     <div 
@@ -642,9 +651,9 @@ export default function JobsConfiguration() {
                           style={{ cursor: 'pointer' }}
                         />
                       </div>
-                      <div style={{ padding: '0 6px', minWidth: 0, overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <span style={{ fontWeight: '600', color: '#1e293b', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</span>
+                      <div style={{ padding: '0 6px', minWidth: 0, overflow: 'hidden', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                          <span style={{ fontWeight: '400', color: '#1e293b', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</span>
                           {job.processPid && (
                             <span style={{
                               fontFamily: 'monospace', fontSize: '9.5px', color: '#2563eb',
@@ -656,36 +665,36 @@ export default function JobsConfiguration() {
                           )}
                         </div>
                       </div>
-                      <div style={{ padding: '0 6px', color: '#475569', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {job.runTypeDisplay || (job.type === 'Ad-hoc' ? 'Standard Ingestion' : job.type === 'Exception' ? 'Failed Recovery' : job.type === 'Bulk' ? 'Pending Date Filter' : job.type)}
+                      <div style={{ padding: '0 6px', color: '#475569', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                        {getJobDisplayType(job)}
                       </div>
-                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.source || 'FileNet P8'}</div>
-                      <div style={{ padding: '0 6px', color: isCleanDate ? '#334155' : '#94a3b8', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {displayDateRange}
+                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.source || 'FileNet P8'}</div>
+                      <div style={{ padding: '0 6px', color: displayCriteria !== '—' ? '#334155' : '#94a3b8', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }} title={displayCriteria}>
+                        {displayCriteria}
                       </div>
-                      <div style={{ padding: '0 6px', textAlign: 'right', fontWeight: '600', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                      <div style={{ padding: '0 6px', textAlign: 'center', fontWeight: '600', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
                         {(job.records || 0).toLocaleString()}
                       </div>
-                      <div style={{ padding: '0 6px', overflow: 'hidden' }}>
+                      <div style={{ padding: '0 6px', overflow: 'hidden', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
                         {renderStatusBadge(job.status)}
                       </div>
-                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.createdBy}</div>
-                      <div style={{ padding: '0 6px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.createdDate}</div>
+                      <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.createdBy}</div>
+                      <div style={{ padding: '0 6px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>{job.createdDate}</div>
                       <div style={{ padding: '0 6px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           <button
                             onClick={() => {
-                              setSelectedJobForLogs(job);
-                              setIsLogViewerOpen(true);
+                              setJobToEdit(job);
+                              setIsCreateOpen(true);
                             }}
                             style={{
                               display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px',
-                              background: '#0f172a', color: 'white', border: 'none', borderRadius: '5px',
+                              background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '5px',
                               fontSize: '10.5px', fontWeight: '600', cursor: 'pointer'
                             }}
-                            title="View Terminal Logs"
+                            title="Edit Job Configuration"
                           >
-                            <Terminal size={11} /> Logs
+                            <Edit2 size={11} /> Edit
                           </button>
                           <button
                             onClick={(e) => handleDeleteJob(job.id, e)}
@@ -711,23 +720,22 @@ export default function JobsConfiguration() {
       )}
 
       {/* Modals Integration */}
-      <CreateJobModal
+      <CreateJobModal 
         isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onCreateJob={handleCreateJob}
         initialCategory={activeTab}
         existingJobs={jobs}
+        jobToEdit={jobToEdit}
+        onClose={() => {
+          setIsCreateOpen(false);
+          setJobToEdit(null);
+        }}
+        onCreateJob={(newJob) => {
+          handleCreateJob(newJob, !!jobToEdit, jobToEdit?.id);
+          setIsCreateOpen(false);
+          setJobToEdit(null);
+        }}
       />
 
-      <JobLogViewerModal
-        job={selectedJobForLogs}
-        isOpen={isLogViewerOpen}
-        onClose={() => {
-          setIsLogViewerOpen(false);
-          setSelectedJobForLogs(null);
-        }}
-        onUpdateJobStatus={handleSingleJobStatusUpdate}
-      />
 
     </div>
   );

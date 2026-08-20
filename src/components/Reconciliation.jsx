@@ -1239,6 +1239,20 @@ export default function Reconciliation({ activeTab = 'is' }) {
             }}>
               <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
               <span>Auto-Refresh: {formatTime(countdown)}</span>
+              <button
+                onClick={() => {
+                  fetchReportData(false);
+                  setCountdown(10);
+                }}
+                title="Refresh Now"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', display: 'flex', alignItems: 'center', padding: '2px', marginLeft: '2px', borderRadius: '4px', transition: 'background 0.15s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
+              </button>
             </div>
           )}
         </div>

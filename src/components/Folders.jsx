@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { 
-  Folder, FileText, ArrowLeft, RefreshCw, Download, Eye, X, 
+  Folder, FileText, ArrowLeft, RefreshCw, RotateCw, Download, Eye, X, 
   Search, HardDrive, Upload, Copy, Check,
   FileCode, Image as ImageIcon, FileSpreadsheet, FileArchive, Globe
 } from 'lucide-react'
 import { useAlert } from '../context/AlertContext'
 import { apiBrowseFolder, apiGetFolderConfig, apiGetDocumentViewUrl, apiGetDocumentDownloadUrl } from '../utils/api'
 import EnterpriseDocumentViewer from './EnterpriseDocumentViewer'
-import { SERVER_HOST, DOCUMENTS_PATH } from '../config/envConfig'
+import { DOCUMENTS_PATH, TARGET_HOST } from '../config/envConfig'
 
 const DEFAULT_LINUX_PATH = DOCUMENTS_PATH
-const DEFAULT_HOST_IP = SERVER_HOST
+const DEFAULT_HOST_IP = TARGET_HOST
 const MOCK_DOC_TYPES = ['pdf', 'xml', 'jpg', 'png', 'json', 'log', 'txt', 'csv']
 const MOCK_CATEGORIES = ['Claims_Form', 'Policy_Schedule', 'KYC_ID_Proof', 'Medical_Report', 'Payment_Receipt', 'Inspection_Audit', 'Vehicle_RC', 'Customer_Consent']
 
@@ -378,168 +378,119 @@ startxref
     : fileList
 
   const pathParts = currentPath.split('/').filter(Boolean)
+  const hideModifiedDate = currentPath.startsWith(DOCUMENTS_PATH)
 
   return (
     <div style={{ padding: '20px 24px', height: '100%', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'hidden', background: '#f8fafc' }}>
       
-      {/* Header Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <div>
-          <h2 style={{ margin: 0, color: '#1F2937', fontSize: '15px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(37,99,235,0.25)' }}>
-              <Folder color="#ffffff" size={15} />
-            </div>
-            Real-Time Linux Document Explorer
-          </h2>
-          <span style={{ fontSize: '12px', color: '#64748b', marginTop: '3px', display: 'block', fontWeight: '500' }}>
-            Live reflection of Linux host <b style={{ color: '#2563eb', fontWeight: '700' }}>{hostIp}</b> document directories
-          </span>
-        </div>
-
-        {/* Live Status & Bulk Download Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {selectedFilePaths.length > 0 && (
-            <button
-              onClick={handleBulkDownload}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
-                background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '7px',
-                fontSize: '12px', fontWeight: '700', cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(16,185,129,0.25)', transition: 'all 0.15s ease'
-              }}
-            >
-              <Download size={14} /> Download Selected ({selectedFilePaths.length})
-            </button>
-          )}
-
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '7px', background: '#ecfdf5',
-            color: '#047857', border: '1px solid #a7f3d0', padding: '6px 12px',
-            borderRadius: '20px', fontSize: '11.5px', fontWeight: '700', boxShadow: '0 1px 2px rgba(16,185,129,0.05)'
-          }}>
-            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }}></span>
-            <Globe size={14} color="#047857" />
-            <span>Linux Host: {hostIp}</span>
-            <span style={{ color: '#6b7280', fontWeight: 'normal', marginLeft: '2px' }}>({lastSyncTime})</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Path Input Toolbar */}
-      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.03)' }}>
-        <form onSubmit={handleNavigatePath} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+      {/* Bulk Download Bar (Header content removed per request) */}
+      {selectedFilePaths.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
           <button
-            type="button"
-            onClick={() => {
-              const parent = currentPath.substring(0, currentPath.lastIndexOf('/')) || '/'
-              setCurrentPath(parent)
-            }}
-            disabled={currentPath === '/'}
+            onClick={handleBulkDownload}
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px',
-              background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: currentPath === '/' ? 'not-allowed' : 'pointer', color: '#475569',
-              transition: 'all 0.15s ease'
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px',
+              background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', border: 'none', borderRadius: '7px',
+              fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(16,185,129,0.25)', transition: 'all 0.15s ease'
             }}
-            title="Go to parent directory"
           >
-            <ArrowLeft size={16} />
+            <Download size={14} /> Download Selected ({selectedFilePaths.length})
           </button>
+        </div>
+      )}
 
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: '8px', padding: '0 12px' }}>
-            <HardDrive size={16} color="#64748b" style={{ marginRight: '10px' }} />
-            <input
-              type="text"
-              value={inputPath}
-              onChange={e => setInputPath(e.target.value)}
-              placeholder="Enter Linux path (e.g., /home/skts/IS Migration/IS Documents)..."
-              style={{ width: '100%', border: 'none', background: 'transparent', padding: '8px 0', fontSize: '12.5px', fontFamily: 'monospace', color: '#0f172a', outline: 'none', fontWeight: 'bold' }}
-            />
+      {/* Directory Navigation & Auto-Refresh Bar */}
+      <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
+        
+        {/* Breadcrumbs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#64748b', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', background: '#eff6ff', borderRadius: '4px' }}>
+            <Folder size={13} color="#2563eb" />
           </div>
+          {pathParts.map((part, idx) => {
+            const isMigIdx = pathParts.findIndex(p => p.toLowerCase() === 'is migration')
+            if (isMigIdx !== -1 && idx < isMigIdx) return null
+            
+            const fullSubPath = '/' + pathParts.slice(0, idx + 1).join('/')
+            const isLast = idx === pathParts.length - 1
+            const isFirstVisible = isMigIdx !== -1 ? idx === isMigIdx : idx === 0
 
-          <button
-            type="submit"
-            style={{ padding: '8px 20px', background: '#0f172a', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: '0 2px 6px rgba(15,23,42,0.15)' }}
-          >
-            Browse Path
-          </button>
+            return (
+              <React.Fragment key={idx}>
+                {!isFirstVisible && <span style={{ color: '#cbd5e1', margin: '0 2px' }}>/</span>}
+                <span
+                  onClick={() => setCurrentPath(fullSubPath)}
+                  style={{
+                    cursor: 'pointer', fontWeight: isLast ? '700' : '500',
+                    color: isLast ? '#0f172a' : '#2563eb',
+                    padding: '2px 6px', borderRadius: '4px', 
+                    background: isLast ? '#f1f5f9' : 'transparent',
+                    transition: 'all 0.1s ease'
+                  }}
+                >
+                  {part}
+                </span>
+              </React.Fragment>
+            )
+          })}
+        </div>
 
+        {/* Actions: Sync, Auto-Refresh, Pause */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#6B7280' }}>
           <button
             type="button"
             onClick={handleSyncNow}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#ffffff', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '12px', fontWeight: '700', color: '#334155', cursor: 'pointer', transition: 'all 0.15s ease' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '11px', fontWeight: '700', color: '#334155', cursor: 'pointer', transition: 'all 0.1s ease' }}
           >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} /> Sync Now
+            <RotateCw size={12} className={isLoading ? 'animate-spin' : ''} /> Sync Now
           </button>
-        </form>
 
-        {/* Breadcrumbs & Auto-Refresh Bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', flexWrap: 'wrap' }}>
-            <span onClick={() => setCurrentPath('/')} style={{ cursor: 'pointer', fontWeight: 'bold', color: '#2563eb', padding: '2px 8px', background: '#eff6ff', borderRadius: '4px' }}>root</span>
-            {pathParts.map((part, idx) => {
-              const fullSubPath = '/' + pathParts.slice(0, idx + 1).join('/')
-              return (
-                <React.Fragment key={idx}>
-                  <span style={{ color: '#cbd5e1' }}>/</span>
-                  <span
-                    onClick={() => setCurrentPath(fullSubPath)}
-                    style={{
-                      cursor: 'pointer', fontWeight: idx === pathParts.length - 1 ? '700' : '500',
-                      color: idx === pathParts.length - 1 ? '#0f172a' : '#2563eb',
-                      padding: '2px 8px', borderRadius: '4px', background: idx === pathParts.length - 1 ? '#f1f5f9' : 'transparent'
-                    }}
-                  >
-                    {part}
-                  </span>
-                </React.Fragment>
-              )
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', fontWeight: '600', fontSize: '11px', color: '#6B7280', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+            <span style={{ display: 'inline-block', width: '5px', height: '5px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 4px #10b981' }}></span>
+            <span>Auto-Refresh: 00:0{countdown}s</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px', color: '#6B7280' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #E3E7EE', fontWeight: '600', fontSize: '11.5px', color: '#6B7280', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }}></span>
-              <span>Auto-Refresh: 00:0{countdown}s</span>
-            </div>
-
-            <button
-              onClick={() => setIsAutoRefreshEnabled(!isAutoRefreshEnabled)}
-              style={{ background: 'transparent', border: 'none', color: isAutoRefreshEnabled ? '#059669' : '#94a3b8', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {isAutoRefreshEnabled ? 'Pause Refresh' : 'Resume Refresh'}
-            </button>
-          </div>
+          <button
+            onClick={() => setIsAutoRefreshEnabled(!isAutoRefreshEnabled)}
+            style={{
+              padding: '4px 8px', border: 'none', background: 'transparent',
+              color: isAutoRefreshEnabled ? '#059669' : '#dc2626', fontWeight: 'bold', fontSize: '11px',
+              cursor: 'pointer', textDecoration: 'underline'
+            }}
+          >
+            {isAutoRefreshEnabled ? 'Pause Refresh' : 'Resume Refresh'}
+          </button>
         </div>
       </div>
 
       {/* Dynamic Directory Counters & Search */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-        <div style={{ fontSize: '13px', color: '#475569', fontWeight: '600' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, marginTop: '-6px' }}>
+        <div style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>
           Directory Contents: <span style={{ color: '#0f172a', fontWeight: '800' }}>{documentCount} documents</span>, <span style={{ color: '#2563eb', fontWeight: '800' }}>{folderCount} folders</span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', background: '#ffffff', border: '1.5px solid #cbd5e1', borderRadius: '8px', padding: '4px 12px', width: '240px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-          <Search size={14} color="#94a3b8" style={{ marginRight: '8px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px', padding: '3px 10px', width: '220px', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+          <Search size={13} color="#94a3b8" style={{ marginRight: '6px' }} />
           <input
             type="text"
             placeholder="Search documents..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '12px', outline: 'none', color: '#0f172a', fontWeight: '500' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', fontSize: '11px', outline: 'none', color: '#0f172a', fontWeight: '500' }}
           />
         </div>
       </div>
 
       {/* Scrollable File & Folder Table View */}
       <div style={{ 
-        background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', 
-        overflowY: 'auto', flex: 1, boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
-        maxHeight: 'calc(100vh - 270px)'
+        background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', 
+        overflowY: 'auto', flex: 1, boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
       }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', textAlign: 'left' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px', textAlign: 'left' }}>
           <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc' }}>
-            <tr style={{ borderBottom: '1.5px solid #e2e8f0' }}>
-              <th style={{ padding: '11px 14px', width: '36px', textAlign: 'center' }}>
+            <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+              <th style={{ padding: '6px 10px', width: '30px', textAlign: 'center' }}>
                 <input
                   type="checkbox"
                   checked={isAllSelected}
@@ -547,19 +498,19 @@ startxref
                   style={{ cursor: 'pointer' }}
                 />
               </th>
-              <th style={{ padding: '11px 14px', fontWeight: '800', color: '#4f46e5', textAlign: 'center', width: '90px' }}>Actions</th>
-              <th style={{ padding: '11px 8px', width: '36px', textAlign: 'center' }}></th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Document Name</th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#2563eb' }}>Doc_No</th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Document Type</th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155', textAlign: 'right' }}>Document Size</th>
-              <th style={{ padding: '11px 14px', fontWeight: '700', color: '#334155' }}>Last Modified</th>
+              <th style={{ padding: '6px 10px', fontWeight: '700', color: '#4f46e5', textAlign: 'center', width: '70px' }}>Actions</th>
+              <th style={{ padding: '6px 6px', width: '26px', textAlign: 'center' }}></th>
+              <th style={{ padding: '6px 10px', fontWeight: '700', color: '#334155' }}>Document Name</th>
+              <th style={{ padding: '6px 10px', fontWeight: '700', color: '#2563eb' }}>Doc_No</th>
+              <th style={{ padding: '6px 10px', fontWeight: '700', color: '#334155' }}>Document Type</th>
+              <th style={{ padding: '6px 10px', fontWeight: '700', color: '#334155', textAlign: 'right' }}>Size</th>
+              {!hideModifiedDate && <th style={{ padding: '6px 10px', fontWeight: '700', color: '#334155' }}>Modified</th>}
             </tr>
           </thead>
           <tbody>
             {filteredFiles.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: '500' }}>
+                <td colSpan={8} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
                   {isLoading ? 'Syncing directory contents from backend...' : 'No files or documents found in this directory.'}
                 </td>
               </tr>
@@ -591,7 +542,7 @@ startxref
                     onMouseOver={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc' }}
                     onMouseOut={e => { if (!isSelected) e.currentTarget.style.background = 'transparent' }}
                   >
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ padding: '6px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       {!isDir ? (
                         <input
                           type="checkbox"
@@ -603,7 +554,7 @@ startxref
                     </td>
 
                     {/* ── Polished Actions Column ── */}
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ padding: '6px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       {!isDir ? (
                         <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'center', alignItems: 'center' }}>
                           <button
@@ -640,13 +591,13 @@ startxref
                       )}
                     </td>
 
-                    <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                       {renderFileIcon(item)}
                     </td>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: isDir ? '#2563eb' : '#0f172a' }}>
+                    <td style={{ padding: '6px 10px', fontWeight: '700', color: isDir ? '#2563eb' : '#0f172a' }}>
                       {displayName}
                     </td>
-                    <td style={{ padding: '10px 14px', fontWeight: '700', color: '#2563eb' }}>
+                    <td style={{ padding: '6px 10px', fontWeight: '700', color: '#2563eb' }}>
                       {docNo}
                     </td>
                     <td style={{ padding: '10px 14px', color: '#64748b', textTransform: 'capitalize', fontWeight: '500' }}>
@@ -655,9 +606,11 @@ startxref
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '600', fontVariantNumeric: 'tabular-nums', color: '#475569' }}>
                       {sizeDisplay}
                     </td>
-                    <td style={{ padding: '10px 14px', color: '#64748b', fontWeight: '500' }}>
-                      {modDisplay}
-                    </td>
+                    {!hideModifiedDate && (
+                      <td style={{ padding: '10px 14px', color: '#64748b', fontWeight: '500' }}>
+                        {modDisplay}
+                      </td>
+                    )}
                   </tr>
                 )
               })

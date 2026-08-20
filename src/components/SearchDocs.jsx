@@ -258,7 +258,14 @@ export default function SearchDocs() {
       const disp = res.headers.get('content-disposition')
       if (disp && disp.includes('filename=')) {
         const match = disp.match(/filename=["']?([^"';]+)["']?/)
-        if (match && match[1]) suggestedName = match[1]
+        if (match && match[1]) {
+          const backendName = match[1]
+          // Trust the DB metadata (suggestedName) over the physical file name on disk.
+          // Only fallback to backendName if suggestedName is purely generic.
+          if (!suggestedName || suggestedName === `Doc_${docId}.pdf` || suggestedName === 'Document.pdf') {
+            suggestedName = backendName
+          }
+        }
       }
 
       const blob = await res.blob()

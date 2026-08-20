@@ -1312,7 +1312,13 @@ export default function Configuration() { // NOSONAR
                 </div>
                 <div>
                   <label style={labelStyle}>Storage Host / Server <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" value={storageHost} onChange={e => setStorageHost(e.target.value)} placeholder="ubuntu-server" style={inputStyle} />
+                  <input 
+                    type="text" 
+                    value={storageHost} 
+                    disabled 
+                    title="Configured in .env file (VITE_STORAGE_HOST)"
+                    style={{ ...inputStyle, background: '#f8fafc', color: '#94a3b8', cursor: 'not-allowed' }} 
+                  />
                 </div>
                 <div>
                   <label style={labelStyle}>Export / Share Name</label>

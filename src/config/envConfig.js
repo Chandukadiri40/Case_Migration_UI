@@ -4,21 +4,23 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Remote Linux Server
-export const SERVER_HOST = import.meta.env.VITE_SSH_HOST || '192.168.1.241';
+export const SERVER_HOST = import.meta.env.VITE_SSH_HOST;
 export const SERVER_PORT = import.meta.env.VITE_SSH_PORT || '22';
-export const SERVER_USER = import.meta.env.VITE_SSH_USER || 'skts';
-export const SERVER_PASS = import.meta.env.VITE_SSH_PASS || 'Skts@123';
-export const SERVER_ENV_NAME = import.meta.env.VITE_SERVER_ENV_NAME || `Ubuntu Server 24.04 LTS (${SERVER_HOST})`;
+export const SERVER_USER = import.meta.env.VITE_SSH_USER;
+export const SERVER_PASS = import.meta.env.VITE_SSH_PASS;
+export const SERVER_ENV_NAME = import.meta.env.VITE_SERVER_ENV_NAME || `Linux Server (${SERVER_HOST})`;
 
 // Storage & Directory Paths
 export const STORAGE_MOUNT_PATH = import.meta.env.VITE_STORAGE_MOUNT_PATH || '/home/skts/IS Migration';
 export const DOCUMENTS_PATH = import.meta.env.VITE_DOCUMENTS_PATH || '/home/skts/IS Migration/IS Documents';
 export const CASE_MIGRATION_DIR = import.meta.env.VITE_CASE_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/CaseMigration';
 export const IS_MIGRATION_DIR = import.meta.env.VITE_IS_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/TrueMigrator';
-export const CASE_INGESTION_JAR_PATH = import.meta.env.VITE_CASE_INGESTION_JAR_PATH || '/home/skts/IS Migration/Migration_Tools/CaseMigration/caseingestion-0.0.1.jar';
+export const CASE_IMPORT_JAR_PATH = import.meta.env.VITE_CASE_IMPORT_JAR_PATH || '/home/skts/IS Migration/Migration_Tools/CaseMigration/CaseImport/case-import-0.0.1.jar';
 export const FILENET_MIGRATOR_CMD = import.meta.env.VITE_FILENET_MIGRATOR_CMD || 'dotnet TrueMigrator.dll';
-export const IS_EXTRACTION_SCRIPT = import.meta.env.VITE_IS_EXTRACTION_SCRIPT || 'python3 /opt/truemigrate/scripts/extract_is_docs.py';
-export const LOG_DIRECTORY_PATH = import.meta.env.VITE_LOG_DIRECTORY_PATH || '/var/log/truemigrate';
+export const IS_EXTRACTION_SCRIPT = import.meta.env.VITE_IS_EXTRACTION_SCRIPT;
+export const CASE_EXTRACTION_JAR_PATH = import.meta.env.VITE_CASE_EXTRACTION_JAR_PATH;
+export const CASE_TRANSFORMATION_JAR_PATH = import.meta.env.VITE_CASE_TRANSFORMATION_JAR_PATH;
+export const LOG_DIRECTORY_PATH = import.meta.env.VITE_LOG_DIRECTORY_PATH;
 
 // Source Configuration (FileNet Image Services)
 export const SOURCE_SYSTEM = import.meta.env.VITE_SOURCE_SYSTEM || 'FileNet Image Services';
@@ -63,6 +65,6 @@ export const TARGET_DESCRIPTION = import.meta.env.VITE_TARGET_DESCRIPTION || '';
 // Staging Storage (NAS/SAN)
 export const STORAGE_TYPE = import.meta.env.VITE_STORAGE_TYPE || 'NAS';
 export const STORAGE_PROTOCOL = import.meta.env.VITE_STORAGE_PROTOCOL || 'NFS';
-export const STORAGE_HOST = import.meta.env.VITE_STORAGE_HOST || 'ubuntu-server';
+export const STORAGE_HOST = import.meta.env.VITE_STORAGE_HOST || 'linux-server';
 export const STORAGE_CAPACITY = import.meta.env.VITE_STORAGE_CAPACITY || '2048';
 export const STORAGE_THRESHOLD = import.meta.env.VITE_STORAGE_THRESHOLD || '85';
