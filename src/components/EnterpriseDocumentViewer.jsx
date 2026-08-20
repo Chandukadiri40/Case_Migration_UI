@@ -18,7 +18,7 @@ import mammoth from 'mammoth'
 // 4. React Syntax Highlighter for XML / Code
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { SERVER_HOST, DOCUMENTS_PATH } from '../config/envConfig'
+import { DOCUMENTS_PATH } from '../config/envConfig'
 
 // 5. Shared Reusable Excel Grid Viewer (x-data-spreadsheet)
 import ExcelViewer from './viewers/ExcelViewer'
@@ -141,7 +141,7 @@ function createFallbackImageDataUrl(docName, docId, hostIp, docPath, caseId) {
 function createFallbackPdfBlob(docName, docId, hostIp, docPath, caseId) {
   const safeName = (docName || 'Document.pdf').replace(/[()\\]/g, '')
   const safeId = (docId || 'DOC-125123').replace(/[()\\]/g, '')
-  const safeHost = (hostIp || SERVER_HOST).replace(/[()\\]/g, '')
+  const safeHost = (hostIp || 'Linux Host').replace(/[()\\]/g, '')
   const safePath = (docPath || `${DOCUMENTS_PATH}/${docName}`).replace(/[()\\]/g, '')
   const safeDate = new Date().toLocaleString().replace(/[()\\]/g, '')
   const safeCase = (caseId || 'N/A').replace(/[()\\]/g, '')
@@ -199,7 +199,7 @@ export default function EnterpriseDocumentViewer({
   docPath = '',
   viewUrl = '',
   downloadUrl = '',
-  hostIp = SERVER_HOST,
+  hostIp = 'Linux Host',
   fileType = '',
   onDownload = null
 }) {

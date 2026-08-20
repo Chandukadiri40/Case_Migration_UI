@@ -5,7 +5,7 @@ import { useAlert } from '../context/AlertContext'
 import { FileSpreadsheet, Download, Database, Loader2, Search, Plus, X, ChevronDown, Check, Eye, FileText, Copy, RefreshCw } from 'lucide-react'
 import Folders from './Folders'
 import EnterpriseDocumentViewer from './EnterpriseDocumentViewer'
-import { SERVER_HOST } from '../config/envConfig'
+
 
 const labelStyle = {
   fontSize: '11px',
@@ -163,7 +163,7 @@ export default function SearchDocs() {
         setIsPreviewLoading(false)
       })
       .catch(err => {
-        setPreviewContent(`Document Content Stream Verified (Doc ID: ${activeDocId})\nStatus: Active on Linux Host ${SERVER_HOST}`)
+        setPreviewContent(`Document Content Stream Verified (Doc ID: ${activeDocId})\nStatus: Active on Linux Host`)
         setIsPreviewLoading(false)
       })
   }, [activeDocId])
@@ -1483,7 +1483,7 @@ export default function SearchDocs() {
                                             <td style={{ padding: '6px 10px', color: '#64748b' }}>{subIdx + 1}</td>
                                             <td style={{ padding: '6px 10px', fontWeight: 'bold', color: '#1e293b' }}>Doc #{subDocId}</td>
                                             <td style={{ padding: '6px 10px', color: '#64748b' }}>PDF Document</td>
-                                            <td style={{ padding: '6px 10px', color: '#64748b' }}>{SERVER_HOST} (Linux Host)</td>
+                                            <td style={{ padding: '6px 10px', color: '#64748b' }}>Linux Host</td>
                                             <td style={{ padding: '6px 10px', textAlign: 'center' }}>
                                               <div style={{ display: 'inline-flex', gap: '5px', justifyContent: 'center' }}>
                                                 <button

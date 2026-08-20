@@ -2,9 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection, apiGetUISettings } from '../utils/api';
 import { Plus, Trash2, Save, Database, Server, RefreshCw, RotateCw, ArrowLeft, Edit2, ShieldCheck, Zap, Table, Check, X } from 'lucide-react';
 import {
-  SERVER_HOST,
   STORAGE_MOUNT_PATH,
   DOCUMENTS_PATH,
+  CASE_MIGRATION_DIR,
+  IS_MIGRATION_DIR,
+  CASE_IMPORT_JAR_PATH,
+  FILENET_MIGRATOR_CMD,
+  IS_EXTRACTION_SCRIPT,
+  CASE_EXTRACTION_JAR_PATH,
+  CASE_TRANSFORMATION_JAR_PATH,
+  LOG_DIRECTORY_PATH,
+  STORAGE_HOST,
   SOURCE_SYSTEM,
   SOURCE_HOST,
   SOURCE_LIBRARY_NAME,
@@ -1377,8 +1385,52 @@ export default function Configuration() { // NOSONAR
                   {storageTestStatus}
                 </div>
               )}
-            </div>
+          </div>
+        )}
 
+        {mainTab === 'utilityConfig' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={panelStyle}>
+              <div style={sectionLabelStyle}>TrueMigrator Execution Paths (Backend Managed)</div>
+              <div style={{ fontSize: '11.5px', color: '#64748b', margin: '-4px 0 16px 0' }}>
+                These paths define where the extraction, transformation, and import executables are located on the host machine. They are securely managed via <code style={{ background: '#f1f5f9', padding: '2px 4px', borderRadius: '4px' }}>application.properties</code> and cannot be edited from the UI.
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 18px' }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Case Migration Directory</label>
+                  <input type="text" value={CASE_MIGRATION_DIR} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>TrueMigrator / IS Migration Directory</label>
+                  <input type="text" value={IS_MIGRATION_DIR} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>FileNet Migrator Command</label>
+                  <input type="text" value={FILENET_MIGRATOR_CMD} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>IS Extraction Script</label>
+                  <input type="text" value={IS_EXTRACTION_SCRIPT} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Case Extraction JAR Path</label>
+                  <input type="text" value={CASE_EXTRACTION_JAR_PATH} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Case Transformation JAR Path</label>
+                  <input type="text" value={CASE_TRANSFORMATION_JAR_PATH} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Case Import JAR Path</label>
+                  <input type="text" value={CASE_IMPORT_JAR_PATH} readOnly style={readOnlyInputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={labelStyle}>Log Directory Path</label>
+                  <input type="text" value={LOG_DIRECTORY_PATH} readOnly style={readOnlyInputStyle} />
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

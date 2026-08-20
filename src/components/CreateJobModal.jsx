@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save, Upload } from 'lucide-react';
 import { JOB_CATEGORIES } from '../config/jobsConfig';
 import { 
-  SERVER_ENV_NAME, 
   CASE_IMPORT_JAR_PATH, 
   CASE_EXTRACTION_JAR_PATH,
   CASE_TRANSFORMATION_JAR_PATH,
@@ -27,7 +26,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [docIds, setDocIds] = useState(''); // Default empty for Ad-hoc text file pick on server
   const [filterCriteria, setFilterCriteria] = useState('Standard Run');
   // Load server environment paths & settings dynamically from .env / envConfig
-  const serverEnvName = SERVER_ENV_NAME;
+  const serverEnvName = 'Linux Migration Server';
   const caseJarPath = CASE_IMPORT_JAR_PATH;
   const caseExtractJarPath = CASE_EXTRACTION_JAR_PATH;
   const caseTransformJarPath = CASE_TRANSFORMATION_JAR_PATH;

@@ -26,16 +26,17 @@ export default function JobsConfiguration() {
 
   // Resizable Column Widths State (Compact default base widths in pixels)
   const [colWidths, setColWidths] = useState({
-    name: 120,
-    type: 100,
-    source: 90,
-    dateRange: 130,
-    records: 65,
-    status: 90,
-    createdBy: 75,
-    createdDate: 85,
-    actions: 95
+    name: 1.6,
+    type: 1.0,
+    source: 1.0,
+    dateRange: 1.6,
+    records: 90,
+    status: 100,
+    createdBy: 100,
+    createdDate: 110,
+    actions: 110
   });
+  const [isResized, setIsResized] = useState(false);
 
   // Track previous statuses to detect completion transitions for live toast notifications
   const prevJobsRef = useRef({});
@@ -154,8 +155,34 @@ export default function JobsConfiguration() {
   const handleResizeMouseDown = (colKey, e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    let currentWidths = { ...colWidths };
+
+    if (!isResized) {
+      const headerGrid = e.currentTarget.closest('[style*="grid-template-columns"]');
+      if (headerGrid) {
+        const computedCols = window.getComputedStyle(headerGrid).gridTemplateColumns.split(' ');
+        if (computedCols.length >= 10) {
+          const parsedWidths = {
+            name: parseFloat(computedCols[1]) || colWidths.name,
+            type: parseFloat(computedCols[2]) || colWidths.type,
+            source: parseFloat(computedCols[3]) || colWidths.source,
+            dateRange: parseFloat(computedCols[4]) || colWidths.dateRange,
+            records: parseFloat(computedCols[5]) || colWidths.records,
+            status: parseFloat(computedCols[6]) || colWidths.status,
+            createdBy: parseFloat(computedCols[7]) || colWidths.createdBy,
+            createdDate: parseFloat(computedCols[8]) || colWidths.createdDate,
+            actions: parseFloat(computedCols[9]) || colWidths.actions
+          };
+          currentWidths = parsedWidths;
+          setColWidths(parsedWidths);
+        }
+      }
+      setIsResized(true);
+    }
+
     const startX = e.clientX;
-    const startWidth = colWidths[colKey];
+    const startWidth = currentWidths[colKey];
 
     const onMouseMove = (moveEvent) => {
       const delta = moveEvent.clientX - startX;
@@ -180,7 +207,9 @@ export default function JobsConfiguration() {
   };
 
   // Dynamic grid template: Proportional fluid distribution with minimum resize locks
-  const gridTemplate = `36px minmax(${colWidths.name}px, 1.4fr) minmax(${colWidths.type}px, 1.1fr) minmax(${colWidths.source}px, 0.9fr) minmax(${colWidths.dateRange}px, 1.3fr) ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`;
+  const gridTemplate = isResized 
+    ? `36px ${colWidths.name}px ${colWidths.type}px ${colWidths.source}px ${colWidths.dateRange}px ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`
+    : `36px auto auto auto minmax(0, 1fr) ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`;
 
   // Dynamic filter pill counts based on current active tab
   const getPillCount = (pillId) => {
@@ -606,7 +635,7 @@ export default function JobsConfiguration() {
                       style={{ cursor: 'pointer' }}
                     />
                   </div>
-                  {renderHeaderCell('JOB NAME', 'name', 'center')}
+                  {renderHeaderCell('JOB NAME', 'name', 'left')}
                   {renderHeaderCell('JOB TYPE', 'type', 'center')}
                   {renderHeaderCell('TARGET SYSTEM', 'source', 'center')}
                   {renderHeaderCell('CRITERIA', 'dateRange', 'center')}
@@ -651,8 +680,8 @@ export default function JobsConfiguration() {
                           style={{ cursor: 'pointer' }}
                         />
                       </div>
-                      <div style={{ padding: '0 6px', minWidth: 0, overflow: 'hidden', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                      <div style={{ padding: '0 12px', minWidth: 0, overflow: 'hidden', textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start' }}>
                           <span style={{ fontWeight: '400', color: '#1e293b', fontSize: '12.5px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.name}</span>
                           {job.processPid && (
                             <span style={{

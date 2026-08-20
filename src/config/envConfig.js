@@ -4,23 +4,19 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Remote Linux Server
-export const SERVER_HOST = import.meta.env.VITE_SSH_HOST;
-export const SERVER_PORT = import.meta.env.VITE_SSH_PORT || '22';
-export const SERVER_USER = import.meta.env.VITE_SSH_USER;
-export const SERVER_PASS = import.meta.env.VITE_SSH_PASS;
-export const SERVER_ENV_NAME = import.meta.env.VITE_SERVER_ENV_NAME || `Linux Server (${SERVER_HOST})`;
+// SSH connection details removed, now strictly managed by backend properties.
 
 // Storage & Directory Paths
-export const STORAGE_MOUNT_PATH = import.meta.env.VITE_STORAGE_MOUNT_PATH || '/home/skts/IS Migration';
-export const DOCUMENTS_PATH = import.meta.env.VITE_DOCUMENTS_PATH || '/home/skts/IS Migration/IS Documents';
-export const CASE_MIGRATION_DIR = import.meta.env.VITE_CASE_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/CaseMigration';
-export const IS_MIGRATION_DIR = import.meta.env.VITE_IS_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/TrueMigrator';
-export const CASE_IMPORT_JAR_PATH = import.meta.env.VITE_CASE_IMPORT_JAR_PATH || '/home/skts/IS Migration/Migration_Tools/CaseMigration/CaseImport/case-import-0.0.1.jar';
-export const FILENET_MIGRATOR_CMD = import.meta.env.VITE_FILENET_MIGRATOR_CMD || 'dotnet TrueMigrator.dll';
-export const IS_EXTRACTION_SCRIPT = import.meta.env.VITE_IS_EXTRACTION_SCRIPT;
-export const CASE_EXTRACTION_JAR_PATH = import.meta.env.VITE_CASE_EXTRACTION_JAR_PATH;
-export const CASE_TRANSFORMATION_JAR_PATH = import.meta.env.VITE_CASE_TRANSFORMATION_JAR_PATH;
-export const LOG_DIRECTORY_PATH = import.meta.env.VITE_LOG_DIRECTORY_PATH;
+export let STORAGE_MOUNT_PATH = import.meta.env.VITE_STORAGE_MOUNT_PATH || '/home/skts/IS Migration';
+export let DOCUMENTS_PATH = import.meta.env.VITE_DOCUMENTS_PATH || '/home/skts/IS Migration/IS Documents';
+export let CASE_MIGRATION_DIR = import.meta.env.VITE_CASE_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/CaseMigration';
+export let IS_MIGRATION_DIR = import.meta.env.VITE_IS_MIGRATION_DIR || '/home/skts/IS Migration/Migration_Tools/TrueMigrator';
+export let CASE_IMPORT_JAR_PATH = import.meta.env.VITE_CASE_IMPORT_JAR_PATH || '/home/skts/IS Migration/Migration_Tools/CaseMigration/CaseImport/case-import-0.0.1.jar';
+export let FILENET_MIGRATOR_CMD = import.meta.env.VITE_FILENET_MIGRATOR_CMD || 'dotnet TrueMigrator.dll';
+export let IS_EXTRACTION_SCRIPT = import.meta.env.VITE_IS_EXTRACTION_SCRIPT;
+export let CASE_EXTRACTION_JAR_PATH = import.meta.env.VITE_CASE_EXTRACTION_JAR_PATH;
+export let CASE_TRANSFORMATION_JAR_PATH = import.meta.env.VITE_CASE_TRANSFORMATION_JAR_PATH;
+export let LOG_DIRECTORY_PATH = import.meta.env.VITE_LOG_DIRECTORY_PATH;
 
 // Source Configuration (FileNet Image Services)
 export const SOURCE_SYSTEM = import.meta.env.VITE_SOURCE_SYSTEM || 'FileNet Image Services';
@@ -32,10 +28,10 @@ export const SOURCE_CONN_STRING = import.meta.env.VITE_SOURCE_CONN_STRING || '';
 export const SOURCE_DESCRIPTION = import.meta.env.VITE_SOURCE_DESCRIPTION || '';
 
 // Offline Extraction Settings & Paths
-export const OFFLINE_INDEX_DB_TABLE = import.meta.env.VITE_OFFLINE_INDEX_DB_TABLE || 'DOCTABA_STAGING_TABLE';
-export const OFFLINE_MKF_EXPORT_PATH = import.meta.env.VITE_OFFLINE_MKF_EXPORT_PATH || '/mnt/truemigrate/staging/mkf db';
-export const OFFLINE_MSAR_DAT_PATH = import.meta.env.VITE_OFFLINE_MSAR_DAT_PATH || '/mnt/truemigrate/staging/msar-dat';
-export const OFFLINE_FILE_PATTERN = import.meta.env.VITE_OFFLINE_FILE_PATTERN || '*.dat';
+export let OFFLINE_INDEX_DB_TABLE = import.meta.env.VITE_OFFLINE_INDEX_DB_TABLE || 'DOCTABA_STAGING_TABLE';
+export let OFFLINE_MKF_EXPORT_PATH = import.meta.env.VITE_OFFLINE_MKF_EXPORT_PATH || '/mnt/truemigrate/staging/mkf db';
+export let OFFLINE_MSAR_DAT_PATH = import.meta.env.VITE_OFFLINE_MSAR_DAT_PATH || '/mnt/truemigrate/staging/msar-dat';
+export let OFFLINE_FILE_PATTERN = import.meta.env.VITE_OFFLINE_FILE_PATTERN || '*.dat';
 
 // Custom Tables
 export const CUSTOM_CASE_TABLE = import.meta.env.VITE_CUSTOM_CASE_TABLE || 'CLAIMS_CASE_METADATA';
@@ -68,3 +64,29 @@ export const STORAGE_PROTOCOL = import.meta.env.VITE_STORAGE_PROTOCOL || 'NFS';
 export const STORAGE_HOST = import.meta.env.VITE_STORAGE_HOST || 'linux-server';
 export const STORAGE_CAPACITY = import.meta.env.VITE_STORAGE_CAPACITY || '2048';
 export const STORAGE_THRESHOLD = import.meta.env.VITE_STORAGE_THRESHOLD || '85';
+
+export async function loadEnvConfig() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/config/env-paths`);
+    if (res.ok) {
+      const paths = await res.json();
+      STORAGE_MOUNT_PATH = paths.storageMountPath || STORAGE_MOUNT_PATH;
+      DOCUMENTS_PATH = paths.documentsPath || DOCUMENTS_PATH;
+      CASE_MIGRATION_DIR = paths.caseMigrationDir || CASE_MIGRATION_DIR;
+      IS_MIGRATION_DIR = paths.isMigrationDir || IS_MIGRATION_DIR;
+      CASE_IMPORT_JAR_PATH = paths.caseImportJarPath || CASE_IMPORT_JAR_PATH;
+      FILENET_MIGRATOR_CMD = paths.filenetMigratorCmd || FILENET_MIGRATOR_CMD;
+      IS_EXTRACTION_SCRIPT = paths.isExtractionScript || IS_EXTRACTION_SCRIPT;
+      CASE_EXTRACTION_JAR_PATH = paths.caseExtractionJarPath || CASE_EXTRACTION_JAR_PATH;
+      CASE_TRANSFORMATION_JAR_PATH = paths.caseTransformationJarPath || CASE_TRANSFORMATION_JAR_PATH;
+      LOG_DIRECTORY_PATH = paths.logDirectoryPath || LOG_DIRECTORY_PATH;
+
+      OFFLINE_INDEX_DB_TABLE = paths.offlineIndexDbTable || OFFLINE_INDEX_DB_TABLE;
+      OFFLINE_MKF_EXPORT_PATH = paths.offlineMkfExportPath || OFFLINE_MKF_EXPORT_PATH;
+      OFFLINE_MSAR_DAT_PATH = paths.offlineMsarDatPath || OFFLINE_MSAR_DAT_PATH;
+      OFFLINE_FILE_PATTERN = paths.offlineFilePattern || OFFLINE_FILE_PATTERN;
+    }
+  } catch (err) {
+    console.error('Failed to load truemigrate paths from backend, falling back to build env:', err);
+  }
+}
