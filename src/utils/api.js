@@ -155,6 +155,17 @@ export function apiSaveTenantConfig(payload) {
   })
 }
 
+export function apiGetSourceTargetConfigs() {
+  return request('/config/source-target')
+}
+
+export function apiSaveSourceTargetConfigs(payload) {
+  return request('/config/source-target', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 export function apiGetDbMetadata(schema) {
   return request(`/config/db-metadata?schema=${schema}`)
 }
@@ -214,3 +225,33 @@ export function apiGetDocIdViewUrl(docId) {
 export function apiGetDocIdDownloadUrl(docId) {
   return `${BASE}/folders/resolve-by-docid?docId=${encodeURIComponent(docId)}&download=true`
 }
+
+export function apiTestSourceConnection(params) {
+  return request('/config/test-source-connection', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+export function apiTestTargetConnection(params) {
+  return request('/config/test-target-connection', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+export function apiTestStorageMount(params) {
+  return request('/config/test-storage-mount', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+export function apiTestExecutionPaths(params) {
+  return request('/config/test-execution-paths', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  })
+}
+
+
