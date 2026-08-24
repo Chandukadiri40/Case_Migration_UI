@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { apiExecuteQuery } from '../utils/api'
 import { Loader2, RefreshCw } from 'lucide-react'
+import SystemDiscovery from './SystemDiscovery'
 
 export default function DashboardOverview() {
   const [countdown, setCountdown] = useState(30)
   const [loading, setLoading] = useState(true)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeDashTab = searchParams.get('tab') || 'discovery'
+  const setActiveDashTab = (tab) => setSearchParams({ tab })
 
   // ── Source Discovery: Static Configuration as Specified ──
   // Document Migration: Total 978 documents count, metadata fields: 18, image formats: 17, document class: 1 (Policy doc)
@@ -184,14 +189,46 @@ export default function DashboardOverview() {
   return (
     <div style={{ padding: '14px 20px', background: '#f8fafc', height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       
-      {/* ════════════════════════════════════════════════════════════════ */}
-      {/* SECTION 1: SOURCE DISCOVERY (Header & Auto-Refresh inline)       */}
-      {/* ════════════════════════════════════════════════════════════════ */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            SOURCE DISCOVERY
-          </div>
+      {/* Tab Bar */}
+      <div style={{ display: 'flex', gap: '2px', borderBottom: '1px solid #E3E7EE', marginBottom: '8px' }}>
+        <button 
+          onClick={() => setActiveDashTab('discovery')}
+          style={{ 
+            padding: '11px 18px', fontSize: '13px', fontWeight: '600', 
+            color: activeDashTab === 'discovery' ? '#2563EB' : '#6B7280', 
+            borderBottom: `2px solid ${activeDashTab === 'discovery' ? '#2563EB' : 'transparent'}`, 
+            background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer'
+          }}
+        >
+          System Discovery
+        </button>
+        <button 
+          onClick={() => setActiveDashTab('live')}
+          style={{ 
+            padding: '11px 18px', fontSize: '13px', fontWeight: '600', 
+            color: activeDashTab === 'live' ? '#2563EB' : '#6B7280', 
+            borderBottom: `2px solid ${activeDashTab === 'live' ? '#2563EB' : 'transparent'}`, 
+            background: 'none', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer'
+          }}
+        >
+          Live Migration Dashboard
+        </button>
+      </div>
+
+      {activeDashTab === 'discovery' && (
+        <SystemDiscovery />
+      )}
+
+      {activeDashTab === 'live' && (
+        <>
+          {/* ════════════════════════════════════════════════════════════════ */}
+          {/* SECTION 1: SOURCE DISCOVERY (Header & Auto-Refresh inline)       */}
+          {/* ════════════════════════════════════════════════════════════════ */}
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                SOURCE DISCOVERY
+              </div>
           
           <div style={{ 
             display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11.5px', color: '#64748b', 
@@ -502,7 +539,8 @@ export default function DashboardOverview() {
 
         </div>
       </div>
-
+      </>
+      )}
     </div>
   )
 }

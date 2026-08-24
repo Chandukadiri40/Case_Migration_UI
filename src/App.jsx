@@ -12,6 +12,7 @@ const JobsConfiguration = lazy(() => import('./components/JobsConfiguration'))
 const Folders = lazy(() => import('./components/Folders'))
 const Configuration = lazy(() => import('./components/Configuration'))
 const PropertyMapping = lazy(() => import('./components/PropertyMapping'))
+const MigrationDiscovery = lazy(() => import('./components/MigrationDiscovery'))
 
 const PageLoader = () => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -57,6 +58,7 @@ export default function App() {
                 <Route path="folders" element={<Folders />} />
                 <Route path="configuration" element={<Configuration />} />
                 <Route path="property-mapping" element={<PropertyMapping />} />
+                <Route path="migration-discovery" element={<MigrationDiscovery />} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Route>

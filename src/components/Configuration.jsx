@@ -45,7 +45,6 @@ import {
   TARGET_DESCRIPTION,
   STORAGE_TYPE,
   STORAGE_PROTOCOL,
-  STORAGE_HOST,
   STORAGE_CAPACITY,
   STORAGE_THRESHOLD
 } from '../config/envConfig';
@@ -1386,6 +1385,7 @@ export default function Configuration() { // NOSONAR
                 </div>
               )}
           </div>
+        </div>
         )}
 
         {mainTab === 'utilityConfig' && (

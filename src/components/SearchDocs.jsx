@@ -954,7 +954,7 @@ export default function SearchDocs() {
                 From
               </span>
               <input
-                type="date"
+                type="datetime-local"
                 value={selectedFromDate}
                 onChange={e => setSelectedFromDate(e.target.value)}
                 style={{
@@ -977,7 +977,7 @@ export default function SearchDocs() {
                 To
               </span>
               <input
-                type="date"
+                type="datetime-local"
                 value={selectedToDate}
                 onChange={e => setSelectedToDate(e.target.value)}
                 style={{

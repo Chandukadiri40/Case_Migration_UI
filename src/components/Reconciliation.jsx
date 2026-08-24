@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { apiExecuteQuery } from '../utils/api'
 import Exceptions from './Exceptions'
 import * as XLSX from '@e965/xlsx'
@@ -85,7 +86,13 @@ function getChecksumStatus(val, row) {
 export default function Reconciliation({ activeTab = 'is' }) {
   const { showAlert } = useAlert()
   const [subTab, setSubTab] = useState(activeTab)
-  const [reconcileTab, setReconcileTab] = useState('summary') // 'summary' | 'report' | 'exception' | 'checksum'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reconcileTab = searchParams.get('view') || 'summary';
+  const setReconcileTab = (view) => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('view', view);
+    setSearchParams(newParams);
+  }
 
   // Sync prop changes from router
   useEffect(() => {

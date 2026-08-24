@@ -18,6 +18,9 @@ export default function Layout() {
   if (path.startsWith('/configuration')) {
     crumb = 'Configurations'
     pageTitle = 'Configurations'
+  } else if (path.startsWith('/migration-discovery')) {
+    crumb = 'Migration Discovery'
+    pageTitle = 'Migration Discovery Dashboard'
   } else if (path.startsWith('/property-mapping')) {
     crumb = 'Mapping'
     pageTitle = 'Mapping'
@@ -36,6 +39,7 @@ export default function Layout() {
   }
 
   const isDashboardActive = path === '/' || path === '/dashboard'
+  const isMigrationDiscoveryActive = path.startsWith('/migration-discovery')
   const isConfigurationActive = path.startsWith('/configuration')
   const isMappingActive = path.startsWith('/property-mapping')
   const isJobsActive = path.startsWith('/jobs-configuration')
@@ -74,6 +78,21 @@ export default function Layout() {
           >
             <LayoutDashboard size={16} style={{ opacity: isDashboardActive ? 1 : 0.85 }} />
             Dashboard
+          </NavLink>
+
+          <NavLink 
+            to="/migration-discovery" 
+            className={`nav-item ${isMigrationDiscoveryActive ? 'active' : ''}`}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 20px', margin: '1px 8px', borderRadius: '6px',
+              color: isMigrationDiscoveryActive ? '#FFFFFF' : '#93A4BD',
+              fontSize: '13px', fontWeight: '500', cursor: 'pointer',
+              background: isMigrationDiscoveryActive ? '#2563EB' : 'transparent',
+              textDecoration: 'none'
+            }}
+          >
+            <Search size={16} style={{ opacity: isMigrationDiscoveryActive ? 1 : 0.85 }} />
+            Migration Discovery
           </NavLink>
 
           <NavLink 

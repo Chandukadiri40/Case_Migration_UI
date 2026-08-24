@@ -10,18 +10,32 @@ export const AlertProvider = ({ children }) => {
         isOpen: false,
         message: '',
         title: 'Notification',
-        type: 'info', // 'info' or 'error'
+        type: 'info', // 'info', 'error', 'confirm'
+        resolve: null
     });
 
     const showAlert = useCallback((message, title = 'Notification', type = 'info') => {
-        setAlert({ isOpen: true, message, title, type });
+        return new Promise(resolve => {
+            setAlert({ isOpen: true, message, title, type, resolve });
+        });
     }, []);
+
+    const showConfirm = useCallback((message, title = 'Confirm Action') => {
+        return new Promise(resolve => {
+            setAlert({ isOpen: true, message, title, type: 'confirm', resolve });
+        });
+    }, []);
+
+    const handleConfirm = useCallback((result) => {
+        if (alert.resolve) alert.resolve(result);
+        setAlert(prev => ({ ...prev, isOpen: false, resolve: null }));
+    }, [alert]);
 
     const closeAlert = useCallback(() => {
-        setAlert(prev => ({ ...prev, isOpen: false }));
-    }, []);
+        handleConfirm(false);
+    }, [handleConfirm]);
 
-    const contextValue = React.useMemo(() => ({ showAlert }), [showAlert]);
+    const contextValue = React.useMemo(() => ({ showAlert, showConfirm }), [showAlert, showConfirm]);
 
     return (
         <AlertContext.Provider value={contextValue}>
@@ -100,10 +114,30 @@ export const AlertProvider = ({ children }) => {
                             padding: '12px 16px',
                             background: '#f8fafc',
                             display: 'flex',
-                            justifyContent: 'flex-end'
+                            justifyContent: 'flex-end',
+                            gap: '8px'
                         }}>
+                            {alert.type === 'confirm' && (
+                                <button
+                                    onClick={() => handleConfirm(false)}
+                                    style={{
+                                        background: 'white',
+                                        color: '#475569',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 14px',
+                                        borderRadius: '5px',
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        cursor: 'pointer'
+                                    }}
+                                    onMouseOver={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                                    onMouseOut={e => e.currentTarget.style.backgroundColor = 'white'}
+                                >
+                                    Cancel
+                                </button>
+                            )}
                             <button
-                                onClick={closeAlert}
+                                onClick={() => handleConfirm(true)}
                                 style={{
                                     background: alert.type === 'error' ? '#ef4444' : '#4f46e5',
                                     color: 'white',
@@ -118,7 +152,7 @@ export const AlertProvider = ({ children }) => {
                                 onMouseOver={e => e.currentTarget.style.filter = 'brightness(1.1)'}
                                 onMouseOut={e => e.currentTarget.style.filter = 'brightness(1)'}
                             >
-                                OK
+                                {alert.type === 'confirm' ? 'Confirm' : 'OK'}
                             </button>
                         </div>
                     </div>

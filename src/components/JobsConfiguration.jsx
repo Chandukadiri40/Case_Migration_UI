@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, Play, Square, Pause, RotateCw, Terminal, CheckCircle2, 
   XCircle, Clock, AlertCircle, RefreshCw, Trash2, Send, Timer, Layers, Sliders, Calendar, ArrowRight, Edit2
@@ -9,11 +10,13 @@ import CreateJobModal from './CreateJobModal';
 import { useAlert } from '../context/AlertContext';
 
 export default function JobsConfiguration() {
-  const { showAlert } = useAlert();
+  const { showAlert, showConfirm } = useAlert();
   const [jobs, setJobs] = useState(INITIAL_JOBS);
   
   // Top phase navigation tab: 'extraction', 'transformation', 'import' (default active), 'scheduling'
-  const [activeTab, setActiveTab] = useState('import');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'import';
+  const setActiveTab = (tab) => setSearchParams({ tab });
   
   // Active Filter Pill
   const [activeFilterPill, setActiveFilterPill] = useState('all');
@@ -29,12 +32,10 @@ export default function JobsConfiguration() {
     name: 1.6,
     type: 1.0,
     source: 1.0,
-    dateRange: 1.6,
-    records: 90,
     status: 100,
     createdBy: 100,
-    createdDate: 110,
-    actions: 110
+    createdDate: 150,
+    actions: 140
   });
   const [isResized, setIsResized] = useState(false);
 
@@ -92,19 +93,9 @@ export default function JobsConfiguration() {
     return j.category === activeTab;
   });
   
-  // Helper to get the display type for a job (matches JOB TYPE column)
   const getJobDisplayType = (j) => {
-    if (j.runTypeDisplay) return j.runTypeDisplay;
-    
-    // Fallbacks for older records
-    if (j.importTarget === 'is' || j.source === 'IBM Image Services') {
-        if (j.type === 'Bulk') return 'Standard';
-        if (j.type === 'Ad-hoc') return 'Ad-hoc';
-    } else {
-        if (j.type === 'Ad-hoc') return 'Standard';
-        if (j.type === 'Bulk') return 'Ad-hoc';
-    }
-    return j.type;
+    if (j.type === 'Bulk') return 'Legacy (Bulk)'; // Fallback for very old records
+    return j.type || 'Standard';
   };
 
   const getFilteredJobs = () => {
@@ -167,12 +158,10 @@ export default function JobsConfiguration() {
             name: parseFloat(computedCols[1]) || colWidths.name,
             type: parseFloat(computedCols[2]) || colWidths.type,
             source: parseFloat(computedCols[3]) || colWidths.source,
-            dateRange: parseFloat(computedCols[4]) || colWidths.dateRange,
-            records: parseFloat(computedCols[5]) || colWidths.records,
-            status: parseFloat(computedCols[6]) || colWidths.status,
-            createdBy: parseFloat(computedCols[7]) || colWidths.createdBy,
-            createdDate: parseFloat(computedCols[8]) || colWidths.createdDate,
-            actions: parseFloat(computedCols[9]) || colWidths.actions
+            status: parseFloat(computedCols[4]) || colWidths.status,
+            createdBy: parseFloat(computedCols[5]) || colWidths.createdBy,
+            createdDate: parseFloat(computedCols[6]) || colWidths.createdDate,
+            actions: parseFloat(computedCols[7]) || colWidths.actions
           };
           currentWidths = parsedWidths;
           setColWidths(parsedWidths);
@@ -208,8 +197,8 @@ export default function JobsConfiguration() {
 
   // Dynamic grid template: Proportional fluid distribution with minimum resize locks
   const gridTemplate = isResized 
-    ? `36px ${colWidths.name}px ${colWidths.type}px ${colWidths.source}px ${colWidths.dateRange}px ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`
-    : `36px auto auto auto minmax(0, 1fr) ${colWidths.records}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`;
+    ? `36px ${colWidths.name}px ${colWidths.type}px ${colWidths.source}px ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`
+    : `36px minmax(120px, 2fr) minmax(100px, 1fr) minmax(120px, 1fr) ${colWidths.status}px ${colWidths.createdBy}px ${colWidths.createdDate}px ${colWidths.actions}px`;
 
   // Dynamic filter pill counts based on current active tab
   const getPillCount = (pillId) => {
@@ -382,7 +371,8 @@ export default function JobsConfiguration() {
 
   const handleDeleteJob = async (jobId, e) => {
     e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this job configuration?")) return;
+    const isConfirmed = await showConfirm("Are you sure you want to delete this job configuration?", "Confirm Delete");
+    if (!isConfirmed) return;
     try {
       await axios.delete(`/api/jobs/${jobId}`);
       setJobs(prev => prev.filter(j => j.id !== jobId));
@@ -400,7 +390,8 @@ export default function JobsConfiguration() {
   };
 
   // Styling helper for status badges
-  const renderStatusBadge = (statusVal) => {
+  const renderStatusBadge = (job) => {
+    const statusVal = job.status;
     let background = '#f3f4f6';
     let color = '#4b5563';
     let icon = <Clock size={11} />;
@@ -432,10 +423,13 @@ export default function JobsConfiguration() {
     }
 
     return (
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px',
-        borderRadius: '20px', background, color, fontSize: '11px', fontWeight: '700'
-      }}>
+      <span 
+        title={statusVal === 'Failed' && job.failureReason ? `Failure Reason: ${job.failureReason}` : ''}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 9px',
+          borderRadius: '20px', background, color, fontSize: '11px', fontWeight: '700',
+          cursor: statusVal === 'Failed' && job.failureReason ? 'help' : 'default'
+        }}>
         {icon}
         {statusVal}
       </span>
@@ -603,7 +597,7 @@ export default function JobsConfiguration() {
             position: 'relative'
           }}>
             <div style={{
-              minWidth: 'max-content',
+              minWidth: isResized ? 'max-content' : '100%',
               width: '100%'
             }}>
               
@@ -638,8 +632,6 @@ export default function JobsConfiguration() {
                   {renderHeaderCell('JOB NAME', 'name', 'left')}
                   {renderHeaderCell('JOB TYPE', 'type', 'center')}
                   {renderHeaderCell('TARGET SYSTEM', 'source', 'center')}
-                  {renderHeaderCell('CRITERIA', 'dateRange', 'center')}
-                  {renderHeaderCell('RECORDS', 'records', 'center')}
                   {renderHeaderCell('STATUS', 'status', 'center')}
                   {renderHeaderCell('CREATED BY', 'createdBy', 'center')}
                   {renderHeaderCell('CREATED DATE', 'createdDate', 'center')}
@@ -698,17 +690,13 @@ export default function JobsConfiguration() {
                         {getJobDisplayType(job)}
                       </div>
                       <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.source || 'FileNet P8'}</div>
-                      <div style={{ padding: '0 6px', color: displayCriteria !== '—' ? '#334155' : '#94a3b8', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }} title={displayCriteria}>
-                        {displayCriteria}
-                      </div>
-                      <div style={{ padding: '0 6px', textAlign: 'center', fontWeight: '600', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
-                        {(job.records || 0).toLocaleString()}
-                      </div>
                       <div style={{ padding: '0 6px', overflow: 'hidden', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
-                        {renderStatusBadge(job.status)}
+                        {renderStatusBadge(job)}
                       </div>
                       <div style={{ padding: '0 6px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{job.createdBy}</div>
-                      <div style={{ padding: '0 6px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>{job.createdDate}</div>
+                      <div style={{ padding: '0 6px', color: '#64748b', fontSize: '11px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>
+                        {job.createdAt ? new Date(job.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/,/, '') : ''}
+                      </div>
                       <div style={{ padding: '0 6px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                           <button

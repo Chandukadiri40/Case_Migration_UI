@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   apiGetPropertyMappings, 
   apiSavePropertyMapping, 
@@ -170,8 +171,10 @@ const AVAILABLE_SOURCE_CLASSES = [CUSTOM_CASE_TABLE, 'policydocs'];
 const AVAILABLE_TARGET_CLASSES = ['PolicyDocument', 'Claim'];
 
 export default function PropertyMapping() {
-  const { showAlert } = useAlert();
-  const [activeTab, setActiveTab] = useState('view');
+  const { showAlert, showConfirm } = useAlert();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'view';
+  const setActiveTab = (tab) => setSearchParams({ tab });
   const [viewMode, setViewMode] = useState('visual');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -657,7 +660,8 @@ export default function PropertyMapping() {
   };
 
   const handleDelete = async (templateId) => {
-    if (!window.confirm('Are you sure you want to delete this mapping template?')) return;
+    const isConfirmed = await showConfirm('Are you sure you want to delete this mapping template?', 'Confirm Delete');
+    if (!isConfirmed) return;
     try {
       setLoading(true);
       try {
