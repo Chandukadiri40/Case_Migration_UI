@@ -20,17 +20,17 @@ export let LOG_DIRECTORY_PATH = import.meta.env.VITE_LOG_DIRECTORY_PATH;
 
 // Source Configuration (FileNet Image Services)
 export const SOURCE_SYSTEM = import.meta.env.VITE_SOURCE_SYSTEM || 'FileNet Image Services';
-export const SOURCE_HOST = import.meta.env.VITE_SOURCE_HOST || 'FNIS';
-export const SOURCE_LIBRARY_NAME = import.meta.env.VITE_SOURCE_LIBRARY_NAME || 'FNIS';
-export const SOURCE_USERNAME = import.meta.env.VITE_SOURCE_USERNAME || 'SysAdmin';
-export const SOURCE_PASSWORD = import.meta.env.VITE_SOURCE_PASSWORD || 'SysAdmin';
+export const SOURCE_HOST = import.meta.env.VITE_SOURCE_HOST || '';
+export const SOURCE_LIBRARY_NAME = import.meta.env.VITE_SOURCE_LIBRARY_NAME || '';
+export const SOURCE_USERNAME = import.meta.env.VITE_SOURCE_USERNAME || '';
+export const SOURCE_PASSWORD = import.meta.env.VITE_SOURCE_PASSWORD || '';
 export const SOURCE_CONN_STRING = import.meta.env.VITE_SOURCE_CONN_STRING || '';
 export const SOURCE_DESCRIPTION = import.meta.env.VITE_SOURCE_DESCRIPTION || '';
 
 // Offline Extraction Settings & Paths
-export let OFFLINE_INDEX_DB_TABLE = import.meta.env.VITE_OFFLINE_INDEX_DB_TABLE || 'DOCTABA_STAGING_TABLE';
-export let OFFLINE_MKF_EXPORT_PATH = import.meta.env.VITE_OFFLINE_MKF_EXPORT_PATH || '/mnt/truemigrate/staging/mkf db';
-export let OFFLINE_MSAR_DAT_PATH = import.meta.env.VITE_OFFLINE_MSAR_DAT_PATH || '/mnt/truemigrate/staging/msar-dat';
+export let OFFLINE_INDEX_DB_TABLE = import.meta.env.VITE_OFFLINE_INDEX_DB_TABLE || '';
+export let OFFLINE_MKF_EXPORT_PATH = import.meta.env.VITE_OFFLINE_MKF_EXPORT_PATH || '';
+export let OFFLINE_MSAR_DAT_PATH = import.meta.env.VITE_OFFLINE_MSAR_DAT_PATH || '';
 export let OFFLINE_FILE_PATTERN = import.meta.env.VITE_OFFLINE_FILE_PATTERN || '*.dat';
 
 // Custom Tables
@@ -38,22 +38,22 @@ export const CUSTOM_CASE_TABLE = import.meta.env.VITE_CUSTOM_CASE_TABLE || 'CLAI
 export const CUSTOM_DOCTABA_TABLE = import.meta.env.VITE_CUSTOM_DOCTABA_TABLE || 'DOCTABA_STAGING_TABLE';
 
 // Migration Database (RDBMS Staging) Configuration
-export const DB_HOST = import.meta.env.VITE_DB_HOST || 'SKTS-LPTP-IN03';
+export const DB_HOST = import.meta.env.VITE_DB_HOST || '';
 export const DB_PORT = import.meta.env.VITE_DB_PORT || '5432';
-export const DB_NAME = import.meta.env.VITE_DB_NAME || 'migration_db';
-export const DB_USER = import.meta.env.VITE_DB_USER || 'postgres';
-export const DB_PASS = import.meta.env.VITE_DB_PASS || 'password';
+export const DB_NAME = import.meta.env.VITE_DB_NAME || '';
+export const DB_USER = import.meta.env.VITE_DB_USER || '';
+export const DB_PASS = import.meta.env.VITE_DB_PASS || '';
 export const DB_TYPE = import.meta.env.VITE_DB_TYPE || 'postgres';
-export const DB_JDBC_URL = import.meta.env.VITE_DB_JDBC_URL || `jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}`;
+export const DB_JDBC_URL = import.meta.env.VITE_DB_JDBC_URL || '';
 
 // Target Configuration (IBM FileNet P8 / BAW)
 export const TARGET_SYSTEM = import.meta.env.VITE_TARGET_SYSTEM || 'FileNet P8';
-export const TARGET_HOST = import.meta.env.VITE_TARGET_HOST || 'bawvm.skts.com';
+export const TARGET_HOST = import.meta.env.VITE_TARGET_HOST || '';
 export const TARGET_PORT = import.meta.env.VITE_TARGET_PORT || '9443';
 export const TARGET_PROTOCOL = import.meta.env.VITE_TARGET_PROTOCOL || 'https';
-export const TARGET_USERNAME = import.meta.env.VITE_TARGET_USERNAME || 'p8admin';
-export const TARGET_PASSWORD = import.meta.env.VITE_TARGET_PASSWORD || 'Skts@123';
-export const TARGET_OBJECT_STORE = import.meta.env.VITE_TARGET_OBJECT_STORE || 'FNOS';
+export const TARGET_USERNAME = import.meta.env.VITE_TARGET_USERNAME || '';
+export const TARGET_PASSWORD = import.meta.env.VITE_TARGET_PASSWORD || '';
+export const TARGET_OBJECT_STORE = import.meta.env.VITE_TARGET_OBJECT_STORE || '';
 export const TARGET_TIMEOUT = import.meta.env.VITE_TARGET_TIMEOUT || '30';
 export const TARGET_BATCH_IMPORT = import.meta.env.VITE_TARGET_BATCH_IMPORT || 'yes';
 export const TARGET_DESCRIPTION = import.meta.env.VITE_TARGET_DESCRIPTION || '';
@@ -61,8 +61,8 @@ export const TARGET_DESCRIPTION = import.meta.env.VITE_TARGET_DESCRIPTION || '';
 // Staging Storage (NAS/SAN)
 export const STORAGE_TYPE = import.meta.env.VITE_STORAGE_TYPE || 'NAS';
 export const STORAGE_PROTOCOL = import.meta.env.VITE_STORAGE_PROTOCOL || 'NFS';
-export const STORAGE_HOST = import.meta.env.VITE_STORAGE_HOST || 'linux-server';
-export const STORAGE_CAPACITY = import.meta.env.VITE_STORAGE_CAPACITY || '2048';
+export const STORAGE_HOST = import.meta.env.VITE_STORAGE_HOST || '';
+export const STORAGE_CAPACITY = import.meta.env.VITE_STORAGE_CAPACITY || '';
 export const STORAGE_THRESHOLD = import.meta.env.VITE_STORAGE_THRESHOLD || '85';
 
 export async function loadEnvConfig() {
