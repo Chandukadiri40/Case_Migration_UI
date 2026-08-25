@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BASE, apiGetTenantConfig } from '../utils/api';
 import { Download } from 'lucide-react';
+import appMapping from '../config/appMapping.json';
+
+const APP_MAPPING = appMapping;
 
 export default function DataExplorer() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   
   // Filters
+  const [appFilter, setAppFilter] = useState('All Departments');
   const [classFilter, setClassFilter] = useState('All Document Classes');
   const [yearFilter, setYearFilter] = useState('All Years');
   const [searchFilter, setSearchFilter] = useState('');
@@ -43,6 +47,10 @@ export default function DataExplorer() {
 
   // Filter Data
   let filteredData = data.filter(row => {
+    if (appFilter !== 'All Departments') {
+      const allowedClasses = APP_MAPPING[appFilter] || [];
+      if (!allowedClasses.some(c => c.toLowerCase() === row.className.toLowerCase())) return false;
+    }
     if (classFilter !== 'All Document Classes' && row.className !== classFilter) return false;
     if (yearFilter !== 'All Years' && String(row.year) !== yearFilter) return false;
     if (searchFilter && !row.className.toLowerCase().includes(searchFilter.toLowerCase()) && !String(row.year).includes(searchFilter)) return false;
@@ -65,8 +73,16 @@ export default function DataExplorer() {
   }
 
   // Extract unique filter options
-  const classes = ['All Document Classes', ...new Set(data.map(d => d.className))].sort();
+  const availableDataForClasses = data.filter(row => {
+    if (appFilter !== 'All Departments') {
+      const allowedClasses = APP_MAPPING[appFilter] || [];
+      if (!allowedClasses.some(c => c.toLowerCase() === row.className.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const classes = ['All Document Classes', ...new Set(availableDataForClasses.map(d => d.className))].sort();
   const years = ['All Years', ...new Set(data.map(d => String(d.year)))].sort((a,b) => b.localeCompare(a)); // Newest first
+  const apps = ['All Departments', ...Object.keys(APP_MAPPING)];
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -119,8 +135,19 @@ export default function DataExplorer() {
             placeholder="Search classes or years..." 
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E3E7EE', fontSize: '13px', outline: 'none', minWidth: '220px' }}
+            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E3E7EE', fontSize: '13px', outline: 'none', minWidth: '180px' }}
           />
+          
+          <select 
+            value={appFilter} 
+            onChange={(e) => {
+              setAppFilter(e.target.value);
+              setClassFilter('All Document Classes'); // Reset class when department changes
+            }}
+            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #E3E7EE', fontSize: '13px', outline: 'none', background: '#fff', cursor: 'pointer' }}
+          >
+            {apps.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
           
           <select 
             value={yearFilter} 

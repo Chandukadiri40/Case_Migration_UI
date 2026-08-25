@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BASE, apiGetTenantConfig } from '../utils/api';
 import { ChevronRight, RefreshCw, Download } from 'lucide-react';
+import appMapping from '../config/appMapping.json';
+
+const APP_MAPPING = appMapping;
 
 export default function DrillDownView() {
   const [drillLevel, setDrillLevel] = useState(0); // 0: Class, 1: Year, 2: Month
@@ -9,6 +12,9 @@ export default function DrillDownView() {
   const [drillData, setDrillData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [totalDocs, setTotalDocs] = useState(0);
+
+  const [appFilter, setAppFilter] = useState('All Departments');
+  const apps = ['All Departments', ...Object.keys(APP_MAPPING)];
 
   const [drillCache, setDrillCache] = useState({});
 
@@ -123,11 +129,22 @@ export default function DrillDownView() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const filteredDrillData = drillLevel === 0 && appFilter !== 'All Departments' 
+    ? drillData.filter(row => {
+        const allowedClasses = APP_MAPPING[appFilter] || [];
+        return allowedClasses.some(c => c.toLowerCase() === row.name.toLowerCase());
+      })
+    : drillData;
+
+  const currentTotalDocs = drillLevel === 0 && appFilter !== 'All Departments'
+    ? filteredDrillData.reduce((sum, row) => sum + row.documents, 0)
+    : totalDocs;
+
   const exportCSV = () => {
     const headers = ['DOCUMENT TYPE', 'Total Documents', 'Total Size in MB', 'Total Size in GB'];
     const csvContent = [
       headers.join(','),
-      ...drillData.map(row => {
+      ...filteredDrillData.map(row => {
         return `"${row.name}",${row.documents},${(row.sizeBytes / (1024 * 1024)).toFixed(2)},${(row.sizeBytes / (1024 * 1024 * 1024)).toFixed(2)}`;
       })
     ].join('\n');
@@ -147,9 +164,21 @@ export default function DrillDownView() {
       {/* Header controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: '500' }}>Drill by:</span>
-          <select style={{ padding: '4px 10px', border: '1px solid #E3E7EE', borderRadius: '6px', fontSize: '13px', color: '#111827', outline: 'none' }}>
-            <option>Document Type</option>
+          {drillLevel === 0 && (
+            <>
+              <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: '500' }}>Department:</span>
+              <select 
+                value={appFilter}
+                onChange={(e) => setAppFilter(e.target.value)}
+                style={{ padding: '4px 10px', border: '1px solid #E3E7EE', borderRadius: '6px', fontSize: '13px', color: '#111827', outline: 'none' }}>
+                {apps.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </>
+          )}
+
+          <span style={{ fontSize: '13px', color: '#6B7280', fontWeight: '500', marginLeft: drillLevel === 0 ? '12px' : '0' }}>Grouping:</span>
+          <select disabled style={{ padding: '4px 10px', border: '1px solid #E3E7EE', borderRadius: '6px', fontSize: '13px', color: '#111827', outline: 'none', background: '#F9FAFB' }}>
+            <option>{drillLevel === 0 ? 'By Document Class' : drillLevel === 1 ? 'By Year' : 'By Month'}</option>
           </select>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -183,7 +212,7 @@ export default function DrillDownView() {
               }}
             >
               {crumb.label}
-              {idx === 0 && idx === drillPath.length - 1 && ` (${totalDocs.toLocaleString()})`}
+              {idx === 0 && idx === drillPath.length - 1 && ` (${currentTotalDocs.toLocaleString()})`}
             </span>
             {idx < drillPath.length - 1 && <ChevronRight size={14} color="#9CA3AF" />}
           </React.Fragment>
@@ -208,13 +237,13 @@ export default function DrillDownView() {
               <tr>
                 <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: '#6B7280' }}>Loading data...</td>
               </tr>
-            ) : drillData.length === 0 ? (
+            ) : filteredDrillData.length === 0 ? (
               <tr>
                 <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: '#6B7280' }}>No data available for this selection.</td>
               </tr>
             ) : (
-              drillData.map((row, i) => {
-                const pct = totalDocs > 0 ? (row.documents / totalDocs) * 100 : 0;
+              filteredDrillData.map((row, i) => {
+                const pct = currentTotalDocs > 0 ? (row.documents / currentTotalDocs) * 100 : 0;
                 const isClickable = drillLevel < 2;
                 return (
                   <tr 

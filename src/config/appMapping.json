@@ -1,0 +1,6 @@
+{
+  "Account Digital": ["CCOL"],
+  "Digital Transactions": ["GenProc", "Genprox"],
+  "Lynx": ["Lynx_BSS", "Lynx_LS", "Lynx_OAF"],
+  "Pronto": ["Pronto_CLO", "Pronto_IO", "Pronto_TULO", "Pronto_USL"]
+}

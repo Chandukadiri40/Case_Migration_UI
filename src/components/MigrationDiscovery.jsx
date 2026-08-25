@@ -6,6 +6,7 @@ import { Search, Database, HardDrive, Cpu, Archive, Star, Loader2 } from 'lucide
 import SystemDiscovery from './SystemDiscovery';
 import DrillDownView from './DrillDownView';
 import DataExplorer from './DataExplorer';
+import MigrationWaves from './MigrationWaves';
 
 export default function MigrationDiscovery() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -177,7 +178,13 @@ export default function MigrationDiscovery() {
           </div>
         )}
 
-        {activeTab !== 'sql' && activeTab !== 'summary' && activeTab !== 'drilldown' && activeTab !== 'explorer' && (
+        {activeTab === 'waves' && (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <MigrationWaves />
+          </div>
+        )}
+
+        {activeTab !== 'sql' && activeTab !== 'summary' && activeTab !== 'drilldown' && activeTab !== 'explorer' && activeTab !== 'waves' && (
           <div style={{ background: '#fff', border: '1px solid #E3E7EE', borderRadius: '8px', padding: '18px 20px' }}>
             <div style={{ padding: '40px', textAlign: 'center', color: '#9CA3AF' }}>{tabs.find(t => t.id === activeTab)?.label} Content Area</div>
           </div>

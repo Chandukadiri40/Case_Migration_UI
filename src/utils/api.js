@@ -254,4 +254,8 @@ export function apiTestExecutionPaths(params) {
   })
 }
 
+export function apiGetMigrationProperties() {
+  return request('/config/migration-properties')
+}
+
 
