@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Cpu, Terminal, Sliders, AlertTriangle, Info, Play, Save, Upload } from 'lucide-react';
 import { useAlert } from '../context/AlertContext';
+import { useConfig } from '../context/ConfigContext';
 import { JOB_CATEGORIES } from '../config/jobsConfig';
 import {
   CASE_IMPORT_JAR_PATH,
@@ -13,6 +14,7 @@ import {
 
 export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCategory = 'import', existingJobs = [], jobToEdit = null }) {
   const { showAlert } = useAlert();
+  const { activeExecPath, sourceTargetConfigs } = useConfig();
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(initialCategory || 'import');
@@ -26,14 +28,15 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
   const [endDate, setEndDate] = useState('');
   const [docIds, setDocIds] = useState(''); // Default empty for Ad-hoc text file pick on server
   const [filterCriteria, setFilterCriteria] = useState('Standard Run');
-  // Load server environment paths & settings dynamically from .env / envConfig
+  
+  // Load server environment paths & settings dynamically from ConfigContext (with envConfig fallbacks)
   const serverEnvName = 'Linux Migration Server';
-  const caseJarPath = CASE_IMPORT_JAR_PATH;
-  const caseExtractJarPath = CASE_EXTRACTION_JAR_PATH;
-  const caseTransformJarPath = CASE_TRANSFORMATION_JAR_PATH;
-  const filenetCmd = FILENET_MIGRATOR_CMD;
-  const isExtractScript = IS_EXTRACTION_SCRIPT;
-  const logDir = LOG_DIRECTORY_PATH;
+  const caseJarPath = activeExecPath?.caseImportJar || CASE_IMPORT_JAR_PATH;
+  const caseExtractJarPath = activeExecPath?.caseExtractionJar || CASE_EXTRACTION_JAR_PATH;
+  const caseTransformJarPath = activeExecPath?.caseTransformationJar || CASE_TRANSFORMATION_JAR_PATH;
+  const filenetCmd = activeExecPath?.filenetMigratorCmd || FILENET_MIGRATOR_CMD;
+  const isExtractScript = activeExecPath?.isExtractionScript || IS_EXTRACTION_SCRIPT;
+  const logDir = activeExecPath?.logDirectoryPath || LOG_DIRECTORY_PATH;
 
   const [env, setEnv] = useState(serverEnvName);
 
@@ -446,7 +449,7 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Target System</label>
+                  <label style={labelStyle}>Source System</label>
                   <select
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
@@ -454,6 +457,11 @@ export default function CreateJobModal({ isOpen, onClose, onCreateJob, initialCa
                   >
                     <option value="FileNet P8">FileNet P8</option>
                     <option value="IBM Image Services">IBM Image Services</option>
+                    <option value="SharePoint">SharePoint</option>
+                    <option value="Custom Repository">Custom Repository</option>
+                    {(sourceTargetConfigs?.sourceConfigurations || []).map(sc => (
+                      <option key={sc.id} value={sc.name}>{sc.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>

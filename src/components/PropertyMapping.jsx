@@ -14,6 +14,7 @@ import {
   Filter, Grid, Columns, Database
 } from 'lucide-react';
 import { useAlert } from '../context/AlertContext';
+import { useConfig } from '../context/ConfigContext';
 import defaultDocClassesData from '../config/documentClasses.json';
 import { CUSTOM_CASE_TABLE } from '../config/envConfig';
 
@@ -112,19 +113,11 @@ export const getTargetFieldDisplayName = (propName) => {
   const lower = propName.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   
   const targetDict = {
-    // PolicyDoc target mappings
     'acountnumber': 'Account Num',
     'accountnumber': 'Account Num',
     'accountnum': 'Account Num',
     'customerid': 'Cust ID',
     'custid': 'Cust ID',
-    'fdocnumber': 'Document ID',
-    'documentnumber': 'Document ID',
-    'docnumber': 'Document ID',
-    'docid': 'Document ID',
-    'fentrydate': 'Created On',
-    'isentrydate': 'Created On',
-    'createddate': 'Created On',
     'createdon': 'Created On',
 
     // Claim target mappings
@@ -218,8 +211,8 @@ export default function PropertyMapping() {
     }
   };
 
-  // When source object store is entered (e.g. FNIS), load the source document classes
-  const handleSourceObjectStoreChange = (val) => {
+  // When source object store is entered (e.g. FilenetDB or FNIS), load the source document classes
+  const handleSourceObjectStoreChange = async (val) => {
     setSourceObjectStore(val);
     if (!val.trim()) {
       setSourceClasses([]);
@@ -227,12 +220,20 @@ export default function PropertyMapping() {
       setMappings([]);
       return;
     }
-    // Loads the 2 document classes: PolicyDoc and Claim
-    setSourceClasses(AVAILABLE_SOURCE_CLASSES);
+    try {
+      const classes = await apiGetDocumentClasses('', 'source');
+      if (classes && Array.isArray(classes) && classes.length > 0) {
+        setSourceClasses(classes);
+      } else {
+        setSourceClasses(AVAILABLE_SOURCE_CLASSES);
+      }
+    } catch (e) {
+      setSourceClasses(AVAILABLE_SOURCE_CLASSES);
+    }
   };
 
   // When target object store is entered (e.g. FNOS), load the target document classes
-  const handleTargetObjectStoreChange = (val) => {
+  const handleTargetObjectStoreChange = async (val) => {
     setTargetObjectStore(val);
     if (!val.trim()) {
       setTargetClasses([]);
@@ -240,8 +241,16 @@ export default function PropertyMapping() {
       setTargetProperties([]);
       return;
     }
-    // Loads the 2 target document classes: PolicyDocument and Claim
-    setTargetClasses(AVAILABLE_TARGET_CLASSES);
+    try {
+      const classes = await apiGetDocumentClasses('', 'target');
+      if (classes && Array.isArray(classes) && classes.length > 0) {
+        setTargetClasses(classes);
+      } else {
+        setTargetClasses(AVAILABLE_TARGET_CLASSES);
+      }
+    } catch (e) {
+      setTargetClasses(AVAILABLE_TARGET_CLASSES);
+    }
   };
 
   const handleSourceClassChange = async (docClass) => {
@@ -1051,7 +1060,7 @@ export default function PropertyMapping() {
                 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Source Class/Table <span style={{ color: '#ef4444' }}>*</span>
+                    Source Document Class <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select 
                     value={selectedSourceClass}
@@ -1065,7 +1074,7 @@ export default function PropertyMapping() {
                       boxSizing: 'border-box' 
                     }}
                   >
-                    <option value="">{sourceObjectStore.trim() ? '-- Select Source Class/Table --' : '-- Enter Source Repository --'}</option>
+                    <option value="">{sourceObjectStore.trim() ? '-- Select Source Document Class --' : '-- Enter Source Repository --'}</option>
                     {sourceClasses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
@@ -1087,7 +1096,7 @@ export default function PropertyMapping() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '5px' }}>
-                    Target Class/Table <span style={{ color: '#ef4444' }}>*</span>
+                    Target Document Class <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select 
                     value={selectedTargetClass}
@@ -1101,7 +1110,7 @@ export default function PropertyMapping() {
                       boxSizing: 'border-box' 
                     }}
                   >
-                    <option value="">{targetObjectStore.trim() ? '-- Select Target Class/Table --' : '-- Enter Target Repository --'}</option>
+                    <option value="">{targetObjectStore.trim() ? '-- Select Target Document Class --' : '-- Enter Target Repository --'}</option>
                     {targetClasses.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>

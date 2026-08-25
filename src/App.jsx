@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { AlertProvider } from './context/AlertContext'
+import { ConfigProvider } from './context/ConfigContext'
 import Login from './components/Login'
 import Layout from './components/Layout'
 
@@ -41,30 +42,32 @@ export default function App() {
   return (
     <AlertProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-              
-              <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<DashboardOverview />} />
-                <Route path="dashboard" element={<DashboardOverview />} />
-                <Route path="search" element={<SearchDocs />} />
-                <Route path="reconciliation" element={<Navigate to="reconciliation/is" replace />} />
-                <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
-                <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
+        <ConfigProvider>
+          <BrowserRouter>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 
-                <Route path="jobs-configuration" element={<JobsConfiguration />} />
-                <Route path="folders" element={<Folders />} />
-                <Route path="configuration" element={<Configuration />} />
-                <Route path="property-mapping" element={<PropertyMapping />} />
-                <Route path="migration-discovery" element={<MigrationDiscovery />} />
+                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                  <Route index element={<DashboardOverview />} />
+                  <Route path="dashboard" element={<DashboardOverview />} />
+                  <Route path="search" element={<SearchDocs />} />
+                  <Route path="reconciliation" element={<Navigate to="reconciliation/is" replace />} />
+                  <Route path="reconciliation/is" element={<Reconciliation activeTab="is" />} />
+                  <Route path="reconciliation/case" element={<Reconciliation activeTab="case_metadata" />} />
+                  
+                  <Route path="jobs-configuration" element={<JobsConfiguration />} />
+                  <Route path="folders" element={<Folders />} />
+                  <Route path="configuration" element={<Configuration />} />
+                  <Route path="property-mapping" element={<PropertyMapping />} />
+                  <Route path="migration-discovery" element={<MigrationDiscovery />} />
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </ConfigProvider>
       </AuthProvider>
     </AlertProvider>
   )

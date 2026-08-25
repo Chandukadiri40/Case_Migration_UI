@@ -170,6 +170,14 @@ export function apiGetDbMetadata(schema) {
   return request(`/config/db-metadata?schema=${schema}`)
 }
 
+export function apiGetFilenetDbMetadata(schema = 'public') {
+  return request(`/config/filenet-db-metadata?schema=${schema}`)
+}
+
+export function apiGetTargetTables() {
+  return request('/config/target-tables')
+}
+
 // ── Property Mapping ──────────────────────────────────────────────────────────
 export function apiGetPropertyMappings() {
   return request('/property-mappings')

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection, apiGetUISettings, apiGetSourceTargetConfigs, apiSaveSourceTargetConfigs, apiTestSourceConnection, apiTestTargetConnection, apiTestStorageMount, apiTestExecutionPaths } from '../utils/api';
+import { apiGetTenantConfig, apiSaveTenantConfig, apiGetDbMetadata, apiGetFilenetDbMetadata, apiGetTargetTables, apiGetDbConfig, apiSaveDbConfig, apiTestDbConnection, apiGetUISettings, apiGetSourceTargetConfigs, apiSaveSourceTargetConfigs, apiTestSourceConnection, apiTestTargetConnection, apiTestStorageMount, apiTestExecutionPaths } from '../utils/api';
 import { Plus, Trash2, Save, Database, Server, RefreshCw, RotateCw, ArrowLeft, Edit2, ShieldCheck, Zap, Table, Check, X, AlertTriangle } from 'lucide-react';
 import {
   STORAGE_MOUNT_PATH,
@@ -359,6 +359,8 @@ export default function Configuration() { // NOSONAR
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [selectedStorageId, setSelectedStorageId] = useState('');
   const [selectedExecPathId, setSelectedExecPathId] = useState('');
+  const [activeSourceId, setActiveSourceId] = useState('');
+  const [activeTargetId, setActiveTargetId] = useState('');
 
   // Read-Only vs Edit Mode for configuration sections
   const [isEditingSource, setIsEditingSource] = useState(false);
@@ -375,7 +377,70 @@ export default function Configuration() { // NOSONAR
   // Add Configuration Modal States
   const [showAddConfigModal, setShowAddConfigModal] = useState(false);
   const [showAddStorageModal, setShowAddStorageModal] = useState(false);
-  const [showAddExecPathModal, setShowAddExecPathModal] = useState(false);
+  const [showAddExecPathModal, setShowAddExecPathModal] = useState(false);  
+  const [testingModalSource, setTestingModalSource] = useState(false);
+  const [modalSourceTestStatus, setModalSourceTestStatus] = useState('');
+  const [testingModalTarget, setTestingModalTarget] = useState(false);
+  const [modalTargetTestStatus, setModalTargetTestStatus] = useState('');
+
+  // Table to Table Migration Configurations
+  const [tableConfigsList, setTableConfigsList] = useState([
+    {
+      id: 'tbl_cfg_1',
+      name: 'Claims Metadata Table Mapping',
+      sourceTable: 'CLAIMS_CASE_METADATA',
+      targetTable: 'docversion',
+      targetSchema: 'public',
+      description: 'Source claims database metadata table mapped to target staging table'
+    }
+  ]);
+  const [filenetDbTables, setFilenetDbTables] = useState([
+    'CLAIMS_CASE_METADATA',
+    'CASE_FOLDER_INDEX',
+    'DOCUMENT_MIGRATION_LOG',
+    'FNIS_DOC_INDEX'
+  ]);
+  const [targetTablesList, setTargetTablesList] = useState([
+    { tableName: 'classdefinition', tableSchema: 'public' },
+    { tableName: 'columndefinition', tableSchema: 'public' },
+    { tableName: 'migration_jobs', tableSchema: 'public' },
+    { tableName: 'globalpropertydef', tableSchema: 'public' },
+    { tableName: 'docversion', tableSchema: 'public' },
+    { tableName: 'propertydefinition', tableSchema: 'public' }
+  ]);
+  const [showAddTableModal, setShowAddTableModal] = useState(false);
+  const [newTableConfigData, setNewTableConfigData] = useState({
+    name: '',
+    sourceTable: '',
+    targetTable: '',
+    targetSchema: 'public',
+    description: ''
+  });
+
+  useEffect(() => {
+    fetchConfig();
+    loadSourceTargetConfigs();
+    // Dynamically fetch Source Tables directly from FilenetDB (jdbc:postgresql://192.168.1.143:5432/FilenetDB)
+    apiGetFilenetDbMetadata('public')
+      .then(data => {
+        if (data && typeof data === 'object') {
+          const keys = Object.keys(data);
+          if (keys.length > 0) {
+            setFilenetDbTables(keys);
+          }
+        }
+      })
+      .catch(err => console.warn('Could not fetch FilenetDB metadata, using fallback source tables list', err));
+
+    // Dynamically fetch Target Tables directly from target-tables.json
+    apiGetTargetTables()
+      .then(res => {
+        if (res && res.tables && Array.isArray(res.tables)) {
+          setTargetTablesList(res.tables);
+        }
+      })
+      .catch(err => console.warn('Could not fetch target tables config, using fallback target tables list', err));
+  }, []);
 
   const [newConfigData, setNewConfigData] = useState({
     profileName: '',
@@ -453,8 +518,23 @@ export default function Configuration() { // NOSONAR
   useEffect(() => {
     fetchConfig();
     loadSourceTargetConfigs();
-  }, []);
+    apiGetFilenetDbMetadata('public')
+      .then(data => {
+        if (data && typeof data === 'object') {
+          const keys = Object.keys(data);
+          if (keys.length > 0) setFilenetDbTables(keys);
+        }
+      })
+      .catch(err => console.warn('Could not fetch FilenetDB metadata', err));
 
+    apiGetTargetTables()
+      .then(res => {
+        if (res && res.tables && Array.isArray(res.tables)) {
+          setTargetTablesList(res.tables);
+        }
+      })
+      .catch(err => console.warn('Could not fetch target tables config', err));
+  }, []);
   const populateSourceFields = (src) => {
     if (!src) return;
     setSourceMode(src.mode || 'offline');
@@ -563,14 +643,15 @@ export default function Configuration() { // NOSONAR
 
   const saveToLocalStorageAndAPI = async (payload) => {
     const fullPayload = {
-      activeSourceId: selectedSourceId,
-      activeTargetId: selectedTargetId,
+      activeSourceId: activeSourceId || selectedSourceId,
+      activeTargetId: activeTargetId || selectedTargetId,
       activeStorageId: selectedStorageId,
       activeExecPathId: selectedExecPathId,
       sourceConfigurations: sourceConfigsList,
       targetConfigurations: targetConfigsList,
       storageConfigurations: storageConfigsList,
       executionPathConfigurations: execPathConfigsList,
+      tableConfigurations: tableConfigsList,
       ...payload
     };
     try {
@@ -607,11 +688,27 @@ export default function Configuration() { // NOSONAR
     const targets = (res && res.targetConfigurations) ? res.targetConfigurations : [];
     const storages = (res && res.storageConfigurations) ? res.storageConfigurations : [];
     const execPaths = (res && res.executionPathConfigurations) ? res.executionPathConfigurations : [];
+    const tables = (res && res.tableConfigurations) ? res.tableConfigurations : [
+      {
+        id: 'tbl_cfg_1',
+        name: 'Claims Metadata Table Mapping',
+        sourceTable: 'CLAIMS_CASE_METADATA',
+        targetTable: 'DOCTABA_STAGING_TABLE',
+        targetSchema: 'public',
+        description: 'Source claims database metadata table mapped to target staging table'
+      }
+    ];
     
     setSourceConfigsList(sources);
     setTargetConfigsList(targets);
     setStorageConfigsList(storages);
     setExecPathConfigsList(execPaths);
+    setTableConfigsList(tables);
+
+    const actSrc = (res && res.activeSourceId) ? res.activeSourceId : (sources[0]?.id || '');
+    const actTgt = (res && res.activeTargetId) ? res.activeTargetId : (targets[0]?.id || '');
+    setActiveSourceId(actSrc);
+    setActiveTargetId(actTgt);
 
     // Keep dropdown selection blank by default until user selects one
     setSelectedSourceId('');
@@ -1257,6 +1354,55 @@ export default function Configuration() { // NOSONAR
     }
   };
 
+  const handleTestModalSourceConnection = async () => {
+    setTestingModalSource(true);
+    setModalSourceTestStatus('');
+    try {
+      const res = await apiTestSourceConnection({
+        mode: newConfigData.sourceMode,
+        sourceSystem: newConfigData.sourceSystem,
+        host: newConfigData.sourceHost,
+        username: newConfigData.sourceUsername,
+        connectionString: newConfigData.sourceConnString,
+        mkfExportPath: newConfigData.mkfExportPath,
+        msarDatPath: newConfigData.msarDatPath
+      });
+      if (res && res.success) {
+        setModalSourceTestStatus(res.message || 'Source connection test successful!');
+      } else {
+        setModalSourceTestStatus('[Error] ' + (res?.message || 'Source connection test failed. Please check host/paths.'));
+      }
+    } catch (err) {
+      setModalSourceTestStatus('[Error] Connection test failed: ' + (err.message || 'Host unreachable'));
+    } finally {
+      setTestingModalSource(false);
+    }
+  };
+
+  const handleTestModalTargetConnection = async () => {
+    setTestingModalTarget(true);
+    setModalTargetTestStatus('');
+    try {
+      const res = await apiTestTargetConnection({
+        targetSystem: newConfigData.targetSystem,
+        host: newConfigData.targetHost,
+        port: newConfigData.targetPort,
+        protocol: newConfigData.targetProtocol,
+        username: newConfigData.targetUsername,
+        objectStore: newConfigData.targetObjectStore
+      });
+      if (res && res.success) {
+        setModalTargetTestStatus(res.message || 'Target connection test successful!');
+      } else {
+        setModalTargetTestStatus('[Error] ' + (res?.message || 'Target connection test failed. Please check host/port.'));
+      }
+    } catch (err) {
+      setModalTargetTestStatus('[Error] Connection test failed: ' + (err.message || 'Target host unreachable'));
+    } finally {
+      setTestingModalTarget(false);
+    }
+  };
+
   const handleTestExecPathConnection = async () => {
     setTestingExecPath(true);
     setExecPathTestStatus('');
@@ -1453,14 +1599,15 @@ export default function Configuration() { // NOSONAR
         {/* ==================================================== */}
         {mainTab === 'sourceConfig' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Top Selector & Edit Control Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Select Source Configuration:</span>
-                <select 
-                  value={selectedSourceId} 
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '4px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                  SELECT SOURCE CONFIGURATION:
+                </span>
+                <select
+                  value={selectedSourceId}
                   onChange={handleSourceSelect}
-                  style={{ padding: '6px 12px', fontSize: '13px', fontWeight: '600', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: selectedSourceId ? '#1e293b' : '#94a3b8', outline: 'none', cursor: 'pointer', minWidth: '280px' }}
+                  style={{ flex: 1, padding: '6px 12px', fontSize: '13px', fontWeight: '600', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: selectedSourceId ? '#1e293b' : '#94a3b8', outline: 'none', cursor: 'pointer', minWidth: '280px' }}
                 >
                   <option value="">-- Select Source Configuration --</option>
                   {sourceConfigsList.map(s => (
@@ -1469,29 +1616,40 @@ export default function Configuration() { // NOSONAR
                 </select>
               </div>
 
-              {selectedSourceId && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {selectedSourceId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingSource(!isEditingSource)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 14px', background: isEditingSource ? '#fef2f2' : 'white',
+                      border: isEditingSource ? '1px solid #fecaca' : '1px solid #cbd5e1',
+                      borderRadius: '6px', fontSize: '12.5px', fontWeight: '700',
+                      color: isEditingSource ? '#ef4444' : '#2563eb', cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <Edit2 size={13} /> {isEditingSource ? 'Cancel Edit' : 'Edit Configuration'}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setIsEditingSource(!isEditingSource)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 14px', background: isEditingSource ? '#fef2f2' : 'white',
-                    border: isEditingSource ? '1px solid #fecaca' : '1px solid #cbd5e1',
-                    borderRadius: '6px', fontSize: '12.5px', fontWeight: '700',
-                    color: isEditingSource ? '#ef4444' : '#2563eb', cursor: 'pointer',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                  }}
+                  onClick={() => setShowAddConfigModal(true)}
+                  style={{ padding: '6px 14px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
-                  <Edit2 size={13} /> {isEditingSource ? 'Cancel Edit' : 'Edit Configuration'}
+                  <Plus size={14} /> Add Configuration
                 </button>
-              )}
+              </div>
             </div>
 
             {!selectedSourceId ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center', background: 'white', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-                <Server size={38} style={{ color: '#94a3b8', marginBottom: '12px' }} />
-                <h4 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '15px', fontWeight: '700' }}>No Source Selected</h4>
-                <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Please select a Source Configuration from the dropdown above to view or edit its details, or click <strong>+ Add Configuration</strong> to create a new profile.</p>
+              <div style={{ padding: '48px 24px', textAlign: 'center', background: 'white', borderRadius: '8px', border: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <Server size={36} style={{ color: '#94a3b8', marginBottom: '12px' }} />
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#334155' }}>No Source Selected</div>
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px', maxWidth: '450px', lineHeight: '1.5' }}>
+                  Please select a Source Configuration from the dropdown above to view or edit its details, or click <b>+ Add Configuration</b> to create a new profile.
+                </div>
               </div>
             ) : (
               <div style={panelStyle}>
@@ -1898,7 +2056,7 @@ export default function Configuration() { // NOSONAR
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setSelectedDbIndex(null); setTestSuccess(false); }}
+                    onClick={() => { setSelectedDbIndex(null); setTestSuccess(false); }}
                       style={{ padding: '7px 14px', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}
                     >
                       Cancel
@@ -1906,94 +2064,6 @@ export default function Configuration() { // NOSONAR
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* Custom Table */}
-            <div style={panelStyle}>
-              <div style={{ ...sectionLabelStyle, margin: '0 0 14px 0' }}>Custom Table</div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 340px))', gap: '14px 24px' }}>
-                
-                {/* Case Tables Field */}
-                <div style={{ maxWidth: '340px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '24px', marginBottom: '6px' }}>
-                    <label style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', lineHeight: 1 }}>Case Tables</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCaseTablesList(['']);
-                        setTimeout(() => caseInputRef.current?.focus(), 50);
-                      }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', lineHeight: 1 }}
-                      title="Add new table name (replaces current)"
-                    >
-                      <Plus size={12} /> Add
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <input
-                      ref={caseInputRef}
-                      type="text"
-                      value={caseTablesList[0] ?? ''}
-                      onChange={e => setCaseTablesList([e.target.value])}
-                      placeholder="Enter case table name..."
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-
-                {/* IS DocTaba Tables Field */}
-                <div style={{ maxWidth: '340px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '24px', marginBottom: '6px' }}>
-                    <label style={{ ...labelStyle, margin: 0, display: 'flex', alignItems: 'center', lineHeight: 1 }}>IS DocTaba Tables</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDoctabaTablesList(['']);
-                        setTimeout(() => doctabaInputRef.current?.focus(), 50);
-                      }}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', lineHeight: 1 }}
-                      title="Add new table name (replaces current)"
-                    >
-                      <Plus size={12} /> Add
-                    </button>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <input
-                      ref={doctabaInputRef}
-                      type="text"
-                      value={doctabaTablesList[0] ?? ''}
-                      onChange={e => setDoctabaTablesList([e.target.value])}
-                      placeholder="Enter DocTaba table name..."
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSuccess('Custom Table configuration saved successfully!');
-                    setTimeout(() => setSuccess(''), 3000);
-                  }}
-                  style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white', fontSize: '12.5px' }}
-                >
-                  Save Configuration
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCaseTablesList([CUSTOM_CASE_TABLE]);
-                    setDoctabaTablesList([CUSTOM_DOCTABA_TABLE]);
-                  }}
-                  style={{ padding: '8px 16px', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold', color: '#64748b', fontSize: '12.5px' }}
-                >
-                  Reset
-                </button>
-              </div>
             </div>
 
             {/* Staging Storage Configuration (JSON-Managed) */}
@@ -2316,14 +2386,15 @@ export default function Configuration() { // NOSONAR
         {/* ==================================================== */}
         {mainTab === 'targetConfig' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* Top Selector & Edit Control Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Select Target Configuration:</span>
-                <select 
-                  value={selectedTargetId} 
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '4px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                  SELECT TARGET CONFIGURATION:
+                </span>
+                <select
+                  value={selectedTargetId}
                   onChange={handleTargetSelect}
-                  style={{ padding: '6px 12px', fontSize: '13px', fontWeight: '600', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: selectedTargetId ? '#1e293b' : '#94a3b8', outline: 'none', cursor: 'pointer', minWidth: '280px' }}
+                  style={{ flex: 1, padding: '6px 12px', fontSize: '13px', fontWeight: '600', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white', color: selectedTargetId ? '#1e293b' : '#94a3b8', outline: 'none', cursor: 'pointer', minWidth: '280px' }}
                 >
                   <option value="">-- Select Target Configuration --</option>
                   {targetConfigsList.map(t => (
@@ -2332,29 +2403,40 @@ export default function Configuration() { // NOSONAR
                 </select>
               </div>
 
-              {selectedTargetId && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {selectedTargetId && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTarget(!isEditingTarget)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      padding: '6px 14px', background: isEditingTarget ? '#fef2f2' : 'white',
+                      border: isEditingTarget ? '1px solid #fecaca' : '1px solid #cbd5e1',
+                      borderRadius: '6px', fontSize: '12.5px', fontWeight: '700',
+                      color: isEditingTarget ? '#ef4444' : '#2563eb', cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                    }}
+                  >
+                    <Edit2 size={13} /> {isEditingTarget ? 'Cancel Edit' : 'Edit Configuration'}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setIsEditingTarget(!isEditingTarget)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: '6px',
-                    padding: '6px 14px', background: isEditingTarget ? '#fef2f2' : 'white',
-                    border: isEditingTarget ? '1px solid #fecaca' : '1px solid #cbd5e1',
-                    borderRadius: '6px', fontSize: '12.5px', fontWeight: '700',
-                    color: isEditingTarget ? '#ef4444' : '#2563eb', cursor: 'pointer',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                  }}
+                  onClick={() => setShowAddConfigModal(true)}
+                  style={{ padding: '6px 14px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' }}
                 >
-                  <Edit2 size={13} /> {isEditingTarget ? 'Cancel Edit' : 'Edit Configuration'}
+                  <Plus size={14} /> Add Configuration
                 </button>
-              )}
+              </div>
             </div>
 
             {!selectedTargetId ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center', background: 'white', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-                <Database size={38} style={{ color: '#94a3b8', marginBottom: '12px' }} />
-                <h4 style={{ margin: '0 0 6px 0', color: '#1e293b', fontSize: '15px', fontWeight: '700' }}>No Target Selected</h4>
-                <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>Please select a Target Configuration from the dropdown above to view or edit its details, or click <strong>+ Add Configuration</strong> to create a new profile.</p>
+              <div style={{ padding: '48px 24px', textAlign: 'center', background: 'white', borderRadius: '8px', border: '1px dashed #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <Server size={36} style={{ color: '#94a3b8', marginBottom: '12px' }} />
+                <div style={{ fontSize: '14px', fontWeight: '700', color: '#334155' }}>No Target Selected</div>
+                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px', maxWidth: '450px', lineHeight: '1.5' }}>
+                  Please select a Target Configuration from the dropdown above to view or edit its details, or click <b>+ Add Configuration</b> to create a new profile.
+                </div>
               </div>
             ) : (
               <div style={panelStyle}>
@@ -2599,7 +2681,18 @@ export default function Configuration() { // NOSONAR
 
               {/* Source Details Section */}
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#fafafa' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase' }}>Source Configuration Details</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase' }}>Source Configuration Details</h4>
+                  <button
+                    type="button"
+                    onClick={handleTestModalSourceConnection}
+                    disabled={testingModalSource}
+                    style={{ padding: '4px 12px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11.5px', fontWeight: 'bold', color: '#3b82f6', cursor: testingModalSource ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    {testingModalSource ? <RotateCw size={12} className="animate-spin" /> : null}
+                    Test Source Connection
+                  </button>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>Extraction Mode</label>
@@ -2649,11 +2742,35 @@ export default function Configuration() { // NOSONAR
                     </>
                   )}
                 </div>
+
+                {modalSourceTestStatus && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '6px',
+                    background: modalSourceTestStatus.includes('[Error]') ? '#fef2f2' : '#ecfdf5',
+                    color: modalSourceTestStatus.includes('[Error]') ? '#ef4444' : '#10b981',
+                    border: modalSourceTestStatus.includes('[Error]') ? '1px solid #fecaca' : '1px solid #a7f3d0',
+                    fontSize: '11.5px', fontWeight: '600', marginTop: '12px'
+                  }}>
+                    {modalSourceTestStatus.includes('[Error]') ? <AlertTriangle size={14} /> : <Check size={14} />}
+                    {modalSourceTestStatus}
+                  </div>
+                )}
               </div>
 
               {/* Target Details Section */}
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px', background: '#fafafa' }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase' }}>Target Configuration Details</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <h4 style={{ margin: 0, fontSize: '13px', color: '#2563eb', fontWeight: '700', textTransform: 'uppercase' }}>Target Configuration Details</h4>
+                  <button
+                    type="button"
+                    onClick={handleTestModalTargetConnection}
+                    disabled={testingModalTarget}
+                    style={{ padding: '4px 12px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '5px', fontSize: '11.5px', fontWeight: 'bold', color: '#3b82f6', cursor: testingModalTarget ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    {testingModalTarget ? <RotateCw size={12} className="animate-spin" /> : null}
+                    Test Target Connection
+                  </button>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>Target System</label>
@@ -2688,9 +2805,22 @@ export default function Configuration() { // NOSONAR
                     <input type="text" value={newConfigData.targetObjectStore} onChange={e => setNewConfigData({ ...newConfigData, targetObjectStore: e.target.value })} style={inputStyle} />
                   </div>
                 </div>
+
+                {modalTargetTestStatus && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '6px',
+                    background: modalTargetTestStatus.includes('[Error]') ? '#fef2f2' : '#ecfdf5',
+                    color: modalTargetTestStatus.includes('[Error]') ? '#ef4444' : '#10b981',
+                    border: modalTargetTestStatus.includes('[Error]') ? '1px solid #fecaca' : '1px solid #a7f3d0',
+                    fontSize: '11.5px', fontWeight: '600', marginTop: '12px'
+                  }}>
+                    {modalTargetTestStatus.includes('[Error]') ? <AlertTriangle size={14} /> : <Check size={14} />}
+                    {modalTargetTestStatus}
+                  </div>
+                )}
               </div>
             </div>
-
+            
             <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: '#f8fafc' }}>
               <button onClick={() => setShowAddConfigModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
               <button onClick={handleCreateNewConfiguration} style={{ padding: '8px 20px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Save Configuration</button>
@@ -2819,6 +2949,300 @@ export default function Configuration() { // NOSONAR
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
                   <label style={labelStyle}>Local Mount Path</label>
+                  <input type="text" value={newStorageData.mountPath} onChange={e => setNewStorageData({ ...newStorageData, mountPath: e.target.value })} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Total Capacity (GB)</label>
+                  <label style={labelStyle}>Case Transformation JAR Path</label>
+                  <input type="text" value={newExecPathData.caseTransformationJar} onChange={e => setNewExecPathData({ ...newExecPathData, caseTransformationJar: e.target.value })} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Case Import JAR Path</label>
+                  <input type="text" value={newExecPathData.caseImportJar} onChange={e => setNewExecPathData({ ...newExecPathData, caseImportJar: e.target.value })} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Log Directory Path</label>
+                  <input type="text" value={newExecPathData.logDirectoryPath} onChange={e => setNewExecPathData({ ...newExecPathData, logDirectoryPath: e.target.value })} style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: '#f8fafc' }}>
+              <button onClick={() => setShowAddExecPathModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
+              <button onClick={handleCreateNewExecPathConfiguration} style={{ padding: '8px 20px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Save Execution Profile</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD TABLE TO TABLE CONFIGURATION MODAL */}
+      {showAddTableModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '640px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            
+            {/* Modal Header */}
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} style={{ color: '#2563eb' }} />
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Add Table to Table Configuration</h3>
+              </div>
+              <button onClick={() => setShowAddTableModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* Mapping Name */}
+              <div>
+                <label style={labelStyle}>MAPPING NAME <span style={{ color: '#ef4444' }}>*</span></label>
+                <input
+                  type="text"
+                  value={newTableConfigData.name}
+                  onChange={e => setNewTableConfigData({ ...newTableConfigData, name: e.target.value })}
+                  placeholder="e.g. Claims Metadata to Staging Table"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Template 1: Source Database Configuration */}
+              <div style={{ border: '1px solid #bfdbfe', borderRadius: '8px', padding: '16px', background: '#eff6ff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#1e40af', fontWeight: '700', fontSize: '13px', textTransform: 'uppercase' }}>
+                  <Database size={15} />
+                  <span>1. SOURCE DATABASE CONFIGURATION</span>
+                </div>
+                <div>
+                  <label style={labelStyle}>SOURCE TABLE <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select
+                    value={newTableConfigData.sourceTable}
+                    onChange={e => setNewTableConfigData({ ...newTableConfigData, sourceTable: e.target.value })}
+                    style={{ ...inputStyle, background: 'white', fontFamily: 'monospace', fontWeight: '600' }}
+                  >
+                    <option value="">-- Select Source Table --</option>
+                    {filenetDbTables.map((tName) => (
+                      <option key={tName} value={tName}>{tName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Template 2: Target Database Configuration */}
+              <div style={{ border: '1px solid #a7f3d0', borderRadius: '8px', padding: '16px', background: '#ecfdf5' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#065f46', fontWeight: '700', fontSize: '13px', textTransform: 'uppercase' }}>
+                  <Table size={15} />
+                  <span>2. TARGET TABLES CONFIGURATION</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>TARGET TABLE NAME <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      value={newTableConfigData.targetTable}
+                      onChange={e => {
+                        const selName = e.target.value;
+                        const matched = targetTablesList.find(t => t.tableName === selName);
+                        setNewTableConfigData({
+                          ...newTableConfigData,
+                          targetTable: selName,
+                          targetSchema: matched ? matched.tableSchema : 'public'
+                        });
+                      }}
+                      style={{ ...inputStyle, background: 'white', fontFamily: 'monospace', fontWeight: '600' }}
+                    >
+                      <option value="">-- Select Target Table --</option>
+                      {targetTablesList.map((tObj) => {
+                        const name = tObj.tableName || tObj;
+                        return (
+                          <option key={name} value={name}>{name}</option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>TARGET SCHEMA</label>
+                    <input
+                      type="text"
+                      value={newTableConfigData.targetSchema || 'public'}
+                      onChange={e => setNewTableConfigData({ ...newTableConfigData, targetSchema: e.target.value })}
+                      style={{ ...inputStyle, background: 'white' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label style={labelStyle}>DESCRIPTION</label>
+                <input
+                  type="text"
+                  value={newTableConfigData.description}
+                  onChange={e => setNewTableConfigData({ ...newTableConfigData, description: e.target.value })}
+                  placeholder="Mapping notes or table description"
+                  style={inputStyle}
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: '#f8fafc' }}>
+              <button
+                type="button"
+                onClick={() => setShowAddTableModal(false)}
+                style={{ padding: '8px 16px', background: 'white', border: '1.5px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!newTableConfigData.name.trim() || !newTableConfigData.sourceTable || !newTableConfigData.targetTable) {
+                    alert('Please fill out Mapping Name, Source Table, and Target Table.');
+                    return;
+                  }
+                  const newItem = {
+                    id: 'tbl_cfg_' + Date.now(),
+                    name: newTableConfigData.name,
+                    sourceTable: newTableConfigData.sourceTable,
+                    targetTable: newTableConfigData.targetTable,
+                    targetSchema: newTableConfigData.targetSchema || 'public',
+                    description: newTableConfigData.description
+                  };
+                  const updated = [...tableConfigsList, newItem];
+                  setTableConfigsList(updated);
+                  await saveToLocalStorageAndAPI({ tableConfigurations: updated });
+                  setShowAddTableModal(false);
+                  setSuccess('New Table Mapping added successfully!');
+                  setTimeout(() => setSuccess(''), 3000);
+                }}
+                style={{ padding: '8px 20px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}
+              >
+                Save Table Mapping
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOURCE EDIT CONFIRMATION MODAL */}
+      {showSourceEditConfirmModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '10px', width: '420px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <AlertTriangle size={22} style={{ color: '#f59e0b' }} />
+              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Confirm Edit Changes</h3>
+            </div>
+            <p style={{ color: '#475569', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+              Are you sure you want to edit these configuration changes for the selected Source profile? The updated configuration will be saved in the JSON store.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setShowSourceEditConfirmModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
+              <button onClick={executeSaveSourceEdit} style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Yes, Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TARGET EDIT CONFIRMATION MODAL */}
+      {showTargetEditConfirmModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '10px', width: '420px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <AlertTriangle size={22} style={{ color: '#f59e0b' }} />
+              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Confirm Edit Changes</h3>
+            </div>
+            <p style={{ color: '#475569', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+              Are you sure you want to edit these configuration changes for the selected Target profile? The updated configuration will be saved in the JSON store.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setShowTargetEditConfirmModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
+              <button onClick={executeSaveTargetEdit} style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Yes, Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STORAGE EDIT CONFIRMATION MODAL */}
+      {showStorageEditConfirmModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '10px', width: '420px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <AlertTriangle size={22} style={{ color: '#f59e0b' }} />
+              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Confirm Storage Edit Changes</h3>
+            </div>
+            <p style={{ color: '#475569', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+              Are you sure you want to edit these configuration changes for the selected Staging Storage profile? The updated configuration will be saved in the backend JSON store.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setShowStorageEditConfirmModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
+              <button onClick={executeSaveStorageEdit} style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Yes, Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EXECUTION PATH EDIT CONFIRMATION MODAL */}
+      {showExecPathEditConfirmModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '10px', width: '420px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <AlertTriangle size={22} style={{ color: '#f59e0b' }} />
+              <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Confirm Execution Paths Edit</h3>
+            </div>
+            <p style={{ color: '#475569', marginBottom: '24px', fontSize: '14px', lineHeight: '1.5' }}>
+              Are you sure you want to edit these configuration changes for the selected Execution Path profile? The updated configuration will be saved in the backend JSON store.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button onClick={() => setShowExecPathEditConfirmModal(false)} style={{ padding: '8px 16px', background: 'white', border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#475569' }}>Cancel</button>
+              <button onClick={executeSaveExecPathEdit} style={{ padding: '8px 18px', background: '#2563eb', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: 'white' }}>Yes, Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD STORAGE CONFIGURATION MODAL */}
+      {showAddStorageModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15,23,42,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', width: '100%', maxWidth: '600px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} style={{ color: '#2563eb' }} />
+                <h3 style={{ margin: 0, color: '#0f172a', fontSize: '16px', fontWeight: '700' }}>Create Staging Storage Configuration</h3>
+              </div>
+              <button onClick={() => setShowAddStorageModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><X size={18} /></button>
+            </div>
+
+            <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={labelStyle}>Profile Name <span style={{ color: '#ef4444' }}>*</span></label>
+                <input type="text" value={newStorageData.name} onChange={e => setNewStorageData({ ...newStorageData, name: e.target.value })} placeholder="e.g. Primary Staging NAS Storage" style={inputStyle} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div>
+                  <label style={labelStyle}>Storage Type</label>
+                  <select value={newStorageData.storageType} onChange={e => setNewStorageData({ ...newStorageData, storageType: e.target.value })} style={inputStyle}>
+                    <option>NAS</option>
+                    <option>SAN</option>
+                    <option>Local Disk</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Protocol</label>
+                  <select value={newStorageData.protocol} onChange={e => setNewStorageData({ ...newStorageData, protocol: e.target.value })} style={inputStyle}>
+                    <option>NFS</option>
+                    <option>CIFS</option>
+                    <option>SMB</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Storage Host / Server</label>
+                  <input type="text" value={newStorageData.host} onChange={e => setNewStorageData({ ...newStorageData, host: e.target.value })} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Export / Share Name</label>
+                  <input type="text" value={newStorageData.shareName} onChange={e => setNewStorageData({ ...newStorageData, shareName: e.target.value })} style={inputStyle} />
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                <label style={labelStyle}>Local Mount Path</label>
                   <input type="text" value={newStorageData.mountPath} onChange={e => setNewStorageData({ ...newStorageData, mountPath: e.target.value })} style={{ ...inputStyle, fontFamily: 'monospace' }} />
                 </div>
                 <div>
